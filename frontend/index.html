@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DualMind | Hybrid RAG Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- ========== AUTH SECTION (Visible when logged out) ========== -->
+    <div id="auth-section" class="auth-section">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <span class="logo-icon">🧠</span>
+                <h2>DualMind</h2>
+            </div>
+            <p class="auth-tagline">Hybrid RAG Assistant — Your Documents + Live Web</p>
+            
+            <!-- Sign In Form -->
+            <div id="signin-form" class="auth-form">
+                <h3>Welcome Back</h3>
+                <input type="email" id="signin-email" placeholder="Email address" class="auth-input">
+                <input type="password" id="signin-password" placeholder="Password" class="auth-input">
+                <button id="signin-submit" class="auth-btn">Sign In</button>
+                <p class="auth-switch">
+                    Don't have an account? <a href="#" id="show-signup">Create account</a>
+                </p>
+            </div>
+            
+            <!-- Sign Up Form (Hidden initially) -->
+            <div id="signup-form" class="auth-form hidden">
+                <h3>Create Account</h3>
+                <input type="text" id="signup-fullname" placeholder="Full name" class="auth-input">
+                <input type="email" id="signup-email" placeholder="Email address" class="auth-input">
+                <input type="password" id="signup-password" placeholder="Password (min 6 characters)" class="auth-input">
+                <button id="signup-submit" class="auth-btn">Sign Up</button>
+                <p class="auth-switch">
+                    Already have an account? <a href="#" id="show-signin">Sign in</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MAIN APP SECTION (Visible when logged in) ========== -->
+    <div id="app-section" class="app-section hidden">
+        <div class="container">
+            <!-- Header -->
+            <div class="app-header">
+                <div class="logo-area">
+                    <span class="logo-icon-small">🧠</span>
+                    <h1>DualMind</h1>
+                </div>
+                <div class="user-area">
+                    <span class="user-email" id="user-email"></span>
+                    <button id="logout-btn" class="logout-btn">Logout</button>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">📄</span>
+                        <h3>Upload Document</h3>
+                    </div>
+                    <p class="card-desc">Upload PDFs to build your private knowledge base. Your documents are stored securely and used only for your queries.</p>
+                    <label for="file-upload" class="upload-btn">
+                        <span>📁 Choose PDF</span>
+                    </label>
+                    <input type="file" id="file-upload" accept=".pdf" hidden>
+                    <div id="upload-status" class="upload-status"></div>
+                    <div id="uploaded-files" class="uploaded-files">
+                        <div class="loading-placeholder">No documents uploaded yet</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Query Section -->
+            <div class="query-section">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">💬</span>
+                        <h3>Ask Anything</h3>
+                    </div>
+                    
+                    <!-- Search Type Selector -->
+                    <div class="search-type">
+                        <label class="radio-card">
+                            <input type="radio" name="search-type" value="closed" checked>
+                            <div class="radio-content">
+                                <span class="radio-icon">📁</span>
+                                <span class="radio-title">My Documents</span>
+                                <span class="radio-desc">Search only your uploaded PDFs</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="search-type" value="open">
+                            <div class="radio-content">
+                                <span class="radio-icon">🌐</span>
+                                <span class="radio-title">Live Web</span>
+                                <span class="radio-desc">Search the internet in real-time</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="search-type" value="hybrid">
+                            <div class="radio-content">
+                                <span class="radio-icon">🔗</span>
+                                <span class="radio-title">Hybrid</span>
+                                <span class="radio-desc">Combine both sources for best answer</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <!-- Question Input -->
+                    <div class="input-group">
+                        <textarea id="question" placeholder="Ask your question... (e.g., 'Compare our company policy with industry standards')" rows="4"></textarea>
+                        <button id="ask-btn" class="ask-btn">
+                            <span class="btn-text">Ask DualMind</span>
+                            <span class="spinner hidden"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Response Section -->
+            <div id="response-section" class="response-section hidden">
+                <div class="card response-card">
+                    <div class="card-header">
+                        <span class="card-icon">✨</span>
+                        <h3>Answer</h3>
+                    </div>
+                    <div id="answer" class="answer-content">
+                        <!-- Answer will appear here -->
+                    </div>
+                    
+                    <div id="sources" class="sources-section hidden">
+                        <div class="sources-header">
+                            <span class="sources-icon">📚</span>
+                            <h4>Sources</h4>
+                        </div>
+                        <div id="sources-list" class="sources-list">
+                            <!-- Sources will appear here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <footer>
+                <p>Powered by Groq LLM • ChromaDB Vector Search • Tavily Web Search</p>
+                <p class="footer-note">Your data is private. Documents are stored per user with secure authentication.</p>
+            </footer>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+env/
+
+# Backend
+backend/uploads/
+backend/chroma_db/
+backend/.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Docker
+*.log
