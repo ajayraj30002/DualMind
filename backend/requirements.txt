@@ -2,7 +2,7 @@ fastapi==0.115.0
 uvicorn==0.30.0
 python-multipart==0.0.12
 pypdf==4.0.0
-groq==0.9.0 
+groq==0.9.0
 tavily-python==0.3.0
 python-dotenv==1.0.0
 pytest==8.0.0
@@ -11,4 +11,5 @@ bcrypt==4.1.0
 supabase==2.5.0
 PyJWT==2.8.0
 email-validator==2.1.0
+sentence-transformers==2.2.2
 numpy<2.0
