@@ -29,42 +29,41 @@ def generate_answer(question: str, sources: List[Dict]) -> str:
     """Generate an answer using Groq LLM based on retrieved sources"""
     
     if not sources:
-        # No sources found - ask LLM to answer from its knowledge
         prompt = f"""You are DualMind, a helpful AI assistant. Answer the following question based on your knowledge. If you don't know, say so honestly.
 
 Question: {question}
 
 Answer:"""
     else:
-        # Format sources for prompt
+        # Format sources without citing source numbers
         context_parts = []
-        for i, source in enumerate(sources, 1):
-            context_parts.append(f"[Source {i} - {source.get('source_type', 'Source')}]\n{source['content']}\n")
+        for source in sources:
+            context_parts.append(source['content'])
         
-        context = "\n".join(context_parts)
+        context = "\n\n---\n\n".join(context_parts)
         
-        prompt = f"""You are DualMind, a helpful AI assistant that answers questions based on the provided sources.
+        prompt = f"""You are DualMind, a helpful AI assistant that answers questions based on the provided information.
 
-Here are the relevant sources:
+Here are the relevant information from the documents:
 
 {context}
 
 Question: {question}
 
 Instructions:
-1. Answer based ONLY on the provided sources
-2. Cite which source numbers you used
-3. If sources conflict, mention the discrepancy
-4. If the answer isn't in sources, say "The provided sources don't contain this information"
+1. Answer based ONLY on the provided information
+2. Do NOT mention "Source 1", "Source 2", or any source numbers
+3. Do NOT say "According to the sources" or similar phrases
+4. Just give a clean, natural answer as if you know the information
+5. If the answer isn't in the information, say "I don't have enough information to answer that"
 
 Answer:"""
 
     try:
-        # Call Groq API
         completion = groq_client.chat.completions.create(
             model=Config.LLM_MODEL,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that provides accurate, source-based answers."},
+                {"role": "system", "content": "You are a helpful assistant that provides clean, natural answers without citing sources or mentioning that you're reading from documents."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
