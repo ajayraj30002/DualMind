@@ -7,11 +7,11 @@ from supabase import create_client
 from .config import Config
 
 # ============================================
-# LOAD LOCAL EMBEDDING MODEL (no external API)
+# LOAD SMALLER MODEL (faster, less memory)
 # ============================================
-print("🔄 Loading embedding model (all-MiniLM-L6-v2)...", flush=True)
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-print("✅ Model loaded successfully", flush=True)
+print("🔄 Loading small embedding model (all-MiniLM-L3-v2)...", flush=True)
+embedding_model = SentenceTransformer('all-MiniLM-L3-v2')
+print("✅ Small model loaded successfully", flush=True)
 
 # Initialize Supabase client
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
