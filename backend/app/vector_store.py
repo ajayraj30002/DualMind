@@ -6,30 +6,36 @@ from sentence_transformers import SentenceTransformer
 from supabase import create_client
 from .config import Config
 
-# Load model
-print("🔄 Loading embedding model...", flush=True)
+# ============================================
+# LOAD LOCAL EMBEDDING MODEL (no external API)
+# ============================================
+print("🔄 Loading embedding model (all-MiniLM-L6-v2)...", flush=True)
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-print("✅ Model loaded", flush=True)
+print("✅ Model loaded successfully", flush=True)
 
+# Initialize Supabase client
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
-def get_embedding(text: str):
-    """Generate embedding"""
+def get_embedding(text: str) -> list:
+    """Generate embedding using local sentence-transformers model"""
     try:
-        text = text.replace("\n", " ").strip()[:1000]  # Limit text length
+        # Clean text
+        text = text.replace("\n", " ").strip()
+        if not text:
+            return None
+        # Generate embedding (returns list of floats)
         embedding = embedding_model.encode(text).tolist()
-        print(f"✅ Generated embedding (dimensions: {len(embedding)})", flush=True)
         return embedding
     except Exception as e:
         print(f"❌ Embedding error: {e}", flush=True)
         return None
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF and store chunks"""
+    """Process PDF, chunk it, generate embeddings locally, store in Supabase"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
-    # Extract text
+    # Extract text from PDF
     try:
         reader = PdfReader(file_path)
         text = ""
@@ -48,7 +54,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         print(f"❌ PDF read error: {e}", flush=True)
         return 0
     
-    # Split into chunks
+    # Split into chunks (500 chars with 100 overlap)
     chunks = []
     chunk_size = 500
     overlap = 100
@@ -73,7 +79,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                 supabase.table("document_chunks").insert({
                     "user_id": user_id,
                     "filename": filename,
-                    "chunk_text": chunk[:500],  # Store first 500 chars
+                    "chunk_text": chunk,
                     "chunk_index": i,
                     "embedding": embedding
                 }).execute()
@@ -81,6 +87,8 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                 print(f"    ✅ Stored in Supabase", flush=True)
             except Exception as e:
                 print(f"    ❌ Supabase error: {e}", flush=True)
+        else:
+            print(f"    ❌ Embedding failed", flush=True)
     
     # Record in user_documents
     if successful > 0:
@@ -90,7 +98,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                 "filename": filename,
                 "chunk_count": successful
             }).execute()
-            print(f"✅ Successfully stored {successful} chunks", flush=True)
+            print(f"✅ Successfully stored {successful}/{len(chunks)} chunks", flush=True)
         except Exception as e:
             print(f"❌ Failed to record document: {e}", flush=True)
     else:
@@ -99,15 +107,17 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
     return successful
 
 def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
-    """Search for similar chunks"""
+    """Search for similar chunks using cosine similarity"""
     
     print(f"🔍 Searching for: {question[:50]}...", flush=True)
     
+    # Generate embedding for the question
     question_embedding = get_embedding(question)
     if not question_embedding:
         print("❌ Failed to generate question embedding", flush=True)
         return []
     
+    # Query Supabase for similar chunks using the match_documents function
     try:
         response = supabase.rpc(
             'match_documents',
@@ -137,7 +147,7 @@ def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[D
         return []
 
 def delete_user_documents(user_id: str, filename: str = None):
-    """Delete documents"""
+    """Delete a user's documents"""
     try:
         if filename:
             supabase.table("document_chunks").delete().eq("user_id", user_id).eq("filename", filename).execute()
