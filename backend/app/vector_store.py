@@ -1,35 +1,38 @@
 import os
+import sys
 from typing import List, Dict, Any
 from pypdf import PdfReader
-from groq import Groq
+from sentence_transformers import SentenceTransformer
 from supabase import create_client
-from .config import Config 
+from .config import Config
 
-# Initialize Groq client
-groq_client = Groq(api_key=Config.GROQ_API_KEY)
+# ============================================
+# LOAD MODEL ONCE at module startup (not per request)
+# This prevents memory spikes and repeated downloads
+# ============================================
+print("🔄 Loading lightweight embedding model (all-MiniLM-L6-v2)...", file=sys.stderr)
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+print("✅ Model loaded successfully (approx 80-100MB)", file=sys.stderr)
 
 # Initialize Supabase client
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
 def get_embedding(text: str) -> list:
-    """Get embedding from Groq API using nomic-embed-text model"""
+    """Generate embedding using the loaded model"""
     try:
-        # Clean the text - remove newlines and extra spaces
+        # Clean text
         text = text.replace("\n", " ").strip()
-        
-        # Call Groq's embeddings API
-        response = groq_client.embeddings.create(
-            model="nomic-embed-text-v1.5",  # Groq's embedding model
-            input=text,
-            encoding_format="float"
-        )
-        return response.data[0].embedding
+        if not text:
+            return None
+        # Generate embedding (returns list of floats)
+        embedding = embedding_model.encode(text).tolist()
+        return embedding
     except Exception as e:
-        print(f"Embedding error for text '{text[:50]}...': {e}")
+        print(f"Embedding error: {e}")
         return None
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF, chunk it, get embeddings via Groq API, store in Supabase"""
+    """Process PDF, chunk it, generate embeddings, store in Supabase"""
     
     # Extract text from PDF
     reader = PdfReader(file_path)
@@ -55,34 +58,41 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
     if not chunks:
         return 0
     
-    # Get embeddings for each chunk via Groq API
+    # Generate embeddings for each chunk and store
     successful_chunks = 0
     for i, chunk in enumerate(chunks):
         print(f"Processing chunk {i+1}/{len(chunks)}...")
         embedding = get_embedding(chunk)
         if embedding:
-            supabase.table("document_chunks").insert({
-                "user_id": user_id,
-                "filename": filename,
-                "chunk_text": chunk,
-                "chunk_index": i,
-                "embedding": embedding
-            }).execute()
-            successful_chunks += 1
+            try:
+                supabase.table("document_chunks").insert({
+                    "user_id": user_id,
+                    "filename": filename,
+                    "chunk_text": chunk,
+                    "chunk_index": i,
+                    "embedding": embedding
+                }).execute()
+                successful_chunks += 1
+            except Exception as e:
+                print(f"Supabase insert error: {e}")
     
     # Record in user_documents table
-    supabase.table("user_documents").insert({
-        "user_id": user_id,
-        "filename": filename,
-        "chunk_count": successful_chunks
-    }).execute()
+    if successful_chunks > 0:
+        try:
+            supabase.table("user_documents").insert({
+                "user_id": user_id,
+                "filename": filename,
+                "chunk_count": successful_chunks
+            }).execute()
+        except Exception as e:
+            print(f"Failed to record document: {e}")
     
     return successful_chunks
 
 def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
-    """Search for similar chunks using Groq API for question embedding"""
+    """Search for similar chunks using cosine similarity"""
     
-    # Get embedding for the question via Groq API
+    # Generate embedding for the question
     question_embedding = get_embedding(question)
     if not question_embedding:
         return []
