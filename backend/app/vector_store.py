@@ -7,10 +7,17 @@ from supabase import create_client
 from .config import Config
 
 # ============================================
-# LOAD SMALLER MODEL (faster, less memory)
+# LOAD MODEL WITHOUT AUTHENTICATION
 # ============================================
-print("🔄 Loading small embedding model (all-MiniLM-L3-v2)...", flush=True)
-embedding_model = SentenceTransformer('all-MiniLM-L3-v2')
+print("🔄 Loading embedding model (paraphrase-MiniLM-L3-v2)...", flush=True)
+
+# Load model without requiring authentication
+# The `use_auth=False` prevents the library from trying to authenticate
+embedding_model = SentenceTransformer(
+    'paraphrase-MiniLM-L3-v2',
+    token=False  # Disable authentication - this is a public model
+)
+
 print("✅ Small model loaded successfully", flush=True)
 
 # Initialize Supabase client
