@@ -3,7 +3,7 @@ version: '3.8'
 services:
   backend:
     build: ./backend
-    ports:
+    ports: 
       - "8000:8000"
     volumes:
       - ./backend/uploads:/app/uploads
