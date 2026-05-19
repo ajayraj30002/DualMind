@@ -17,31 +17,65 @@ print("✅ Model loaded successfully", flush=True)
 # Initialize Supabase client
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
-def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> List[str]:
+def lightweight_semantic_chunking(text: str, chunk_size: int = 1000, overlap: int = 150) -> List[str]:
     """
-    Memory-efficient text chunking with smaller chunk size
+    Lightweight semantic chunking:
+    - Splits by paragraphs first
+    - Merges small paragraphs
+    - Preserves natural boundaries
+    - Memory efficient
     """
-    chunks = []
-    start = 0
-    text_length = len(text)
+    # Split by double newlines (paragraphs)
+    paragraphs = re.split(r'\n\s*\n', text)
     
-    while start < text_length:
-        end = min(start + chunk_size, text_length)
-        chunk = text[start:end]
+    chunks = []
+    current_chunk = []
+    current_size = 0
+    
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
         
-        # Try to break at a sentence boundary
-        if end < text_length:
-            last_period = chunk.rfind('.')
-            last_newline = chunk.rfind('\n')
-            break_point = max(last_period, last_newline)
-            if break_point > chunk_size // 2:
-                end = start + break_point + 1
-                chunk = text[start:end]
+        para_size = len(para)
         
-        if chunk.strip():
-            chunks.append(chunk.strip())
+        # If this paragraph alone exceeds chunk_size, split it
+        if para_size > chunk_size:
+            # Save current chunk if exists
+            if current_chunk:
+                chunks.append(' '.join(current_chunk))
+                current_chunk = []
+                current_size = 0
+            
+            # Split large paragraph into sentences
+            sentences = re.split(r'(?<=[.!?])\s+', para)
+            temp_chunk = []
+            temp_size = 0
+            
+            for sent in sentences:
+                if temp_size + len(sent) > chunk_size and temp_chunk:
+                    chunks.append(' '.join(temp_chunk))
+                    temp_chunk = [sent]
+                    temp_size = len(sent)
+                else:
+                    temp_chunk.append(sent)
+                    temp_size += len(sent)
+            
+            if temp_chunk:
+                chunks.append(' '.join(temp_chunk))
         
-        start = end - overlap
+        # Normal paragraph - try to add to current chunk
+        elif current_size + para_size > chunk_size and current_chunk:
+            chunks.append('\n\n'.join(current_chunk))
+            current_chunk = [para]
+            current_size = para_size
+        else:
+            current_chunk.append(para)
+            current_size += para_size
+    
+    # Add last chunk
+    if current_chunk:
+        chunks.append('\n\n'.join(current_chunk))
     
     return chunks
 
@@ -52,13 +86,12 @@ def extract_text_simple(file_path: str) -> str:
     for page in reader.pages:
         page_text = page.extract_text()
         if page_text:
-            text += page_text + "\n"
+            text += page_text + "\n\n"
     return text
 
 def get_embedding(text: str) -> list:
-    """Generate embedding using local sentence-transformers model"""
+    """Generate embedding"""
     try:
-        # Limit text length to prevent memory spikes
         text = text.replace("\n", " ").strip()[:2000]
         if not text:
             return None
@@ -69,37 +102,35 @@ def get_embedding(text: str) -> list:
         return None
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF with memory-efficient settings"""
+    """Process PDF with lightweight semantic chunking"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
-    # Extract text simply (no layout preservation)
+    # Extract text
     try:
         text = extract_text_simple(file_path)
-        
         if not text.strip():
-            print("❌ No text extracted from PDF", flush=True)
+            print("❌ No text extracted", flush=True)
             return 0
-        
         print(f"📝 Total text: {len(text)} chars", flush=True)
     except Exception as e:
         print(f"❌ PDF read error: {e}", flush=True)
         return 0
     
-    # Use smaller chunk size
-    chunks = chunk_text(text, chunk_size=800, overlap=100)
-    print(f"📦 Created {len(chunks)} chunks", flush=True)
+    # Apply lightweight semantic chunking
+    chunks = lightweight_semantic_chunking(text)
+    print(f"📦 Created {len(chunks)} semantic chunks", flush=True)
     
     if not chunks:
         return 0
     
-    # Process each chunk one by one (not all at once)
+    # Process chunks
     successful = 0
     for i, chunk in enumerate(chunks):
         print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
         
-        # Clear memory occasionally
-        if i % 5 == 0 and i > 0:
+        # Free memory every 5 chunks
+        if i > 0 and i % 5 == 0:
             import gc
             gc.collect()
         
@@ -109,16 +140,14 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                 supabase.table("document_chunks").insert({
                     "user_id": user_id,
                     "filename": filename,
-                    "chunk_text": chunk[:1000],  # Store limited text
+                    "chunk_text": chunk[:1000],
                     "chunk_index": i,
                     "embedding": embedding
                 }).execute()
                 successful += 1
-                print(f"    ✅ Stored in Supabase", flush=True)
+                print(f"    ✅ Stored", flush=True)
             except Exception as e:
-                print(f"    ❌ Supabase error: {e}", flush=True)
-        else:
-            print(f"    ❌ Embedding failed", flush=True)
+                print(f"    ❌ DB error: {e}", flush=True)
     
     # Record in user_documents
     if successful > 0:
@@ -128,26 +157,21 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                 "filename": filename,
                 "chunk_count": successful
             }).execute()
-            print(f"✅ Successfully stored {successful}/{len(chunks)} chunks", flush=True)
+            print(f"✅ Stored {successful}/{len(chunks)} chunks", flush=True)
         except Exception as e:
-            print(f"❌ Failed to record document: {e}", flush=True)
-    else:
-        print("❌ No chunks were successfully stored", flush=True)
+            print(f"❌ Record error: {e}", flush=True)
     
     return successful
 
-def search_similar_chunks(question: str, user_id: str, top_k: int = 4) -> List[Dict[str, Any]]:
-    """Search for similar chunks (reduced top_k for memory)"""
+def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    """Search for similar chunks"""
     
-    print(f"🔍 Searching for: {question[:50]}...", flush=True)
+    print(f"🔍 Searching...", flush=True)
     
-    # Generate embedding for the question
     question_embedding = get_embedding(question)
     if not question_embedding:
-        print("❌ Failed to generate question embedding", flush=True)
         return []
     
-    # Query Supabase
     try:
         response = supabase.rpc(
             'match_documents',
@@ -168,8 +192,6 @@ def search_similar_chunks(question: str, user_id: str, top_k: int = 4) -> List[D
                     "type": "closed_domain"
                 })
             print(f"✅ Found {len(results)} results", flush=True)
-        else:
-            print("❌ No results found", flush=True)
         
         return results
     except Exception as e:
@@ -177,7 +199,7 @@ def search_similar_chunks(question: str, user_id: str, top_k: int = 4) -> List[D
         return []
 
 def delete_user_documents(user_id: str, filename: str = None):
-    """Delete a user's documents"""
+    """Delete documents"""
     try:
         if filename:
             supabase.table("document_chunks").delete().eq("user_id", user_id).eq("filename", filename).execute()
