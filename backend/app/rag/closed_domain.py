@@ -3,34 +3,18 @@ import hashlib
 from typing import List, Dict, Any
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
-import chromadb
-from chromadb.config import Settings
+from supabase import create_client
 from ..config import Config
 
 # Initialize embedding model
 embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL)
 
-# Initialize ChromaDB client (persistent storage)
-chroma_client = chromadb.Client(Settings(
-    chroma_db_impl="duckdb+parquet",
-    persist_directory=Config.CHROMA_PERSIST_DIR,
-    anonymized_telemetry=False
-))
+# Initialize Supabase client
+supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
-def get_or_create_collection(user_id: str):
-    """Get or create a ChromaDB collection for a specific user"""
-    collection_name = f"user_{user_id}_docs"
-    
-    try:
-        collection = chroma_client.get_collection(name=collection_name)
-    except:
-        collection = chroma_client.create_collection(name=collection_name)
-    
-    return collection
-
-def process_pdf(file_path: str, user_id: str) -> int:
+def process_pdf(file_path: str, user_id: str, filename: str) -> int:
     """
-    Process a PDF file: extract text, chunk it, embed it, and store in ChromaDB
+    Process a PDF file: extract text, chunk it, embed it, and store in Supabase pgvector
     Returns number of chunks created
     """
     
@@ -59,78 +43,73 @@ def process_pdf(file_path: str, user_id: str) -> int:
     # Create embeddings for each chunk
     embeddings = embedding_model.encode(chunks).tolist()
     
-    # Create unique IDs for each chunk
-    file_hash = hashlib.md5(file_path.encode()).hexdigest()[:8]
-    ids = [f"{file_hash}_{i}" for i in range(len(chunks))]
-    
-    # Metadatas for each chunk
-    metadatas = [
-        {
-            "filename": os.path.basename(file_path),
+    # Store each chunk in Supabase
+    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+        supabase.table("document_chunks").insert({
+            "user_id": user_id,
+            "filename": filename,
+            "chunk_text": chunk,
             "chunk_index": i,
-            "user_id": user_id
-        }
-        for i in range(len(chunks))
-    ]
+            "embedding": embedding
+        }).execute()
     
-    # Store in ChromaDB
-    collection = get_or_create_collection(user_id)
-    
-    # Add in batches to avoid issues
-    batch_size = 100
-    for i in range(0, len(chunks), batch_size):
-        batch_end = min(i + batch_size, len(chunks))
-        collection.add(
-            embeddings=embeddings[i:batch_end],
-            documents=chunks[i:batch_end],
-            metadatas=metadatas[i:batch_end],
-            ids=ids[i:batch_end]
-        )
+    # Also record in user_documents table
+    supabase.table("user_documents").insert({
+        "user_id": user_id,
+        "filename": filename,
+        "chunk_count": len(chunks)
+    }).execute()
     
     return len(chunks)
 
 def search_closed_domain(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
     """
-    Search user's uploaded documents for relevant chunks
+    Search user's uploaded documents for relevant chunks using pgvector
     Returns list of relevant chunks with metadata
     """
-    collection = get_or_create_collection(user_id)
     
-    # Check if collection has any documents
+    # Generate embedding for the question
+    question_embedding = embedding_model.encode([question]).tolist()[0]
+    
+    # Query Supabase for similar chunks using the match_documents function
     try:
-        count = collection.count()
-        if count == 0:
-            return []
-    except:
+        response = supabase.rpc(
+            'match_documents',
+            {
+                'query_embedding': question_embedding,
+                'match_user_id': user_id,
+                'match_count': top_k
+            }
+        ).execute()
+    except Exception as e:
+        print(f"Search error: {e}")
         return []
-    
-    # Encode the question
-    question_embedding = embedding_model.encode([question]).tolist()
-    
-    # Query ChromaDB
-    results = collection.query(
-        query_embeddings=question_embedding,
-        n_results=min(top_k, count)
-    )
     
     # Format results
     documents = []
-    if results['documents'] and results['documents'][0]:
-        for i, doc in enumerate(results['documents'][0]):
+    if response.data:
+        for row in response.data:
             documents.append({
-                "content": doc,
-                "score": results['distances'][0][i] if results['distances'] else 0,
-                "filename": results['metadatas'][0][i].get('filename', 'unknown') if results['metadatas'] else 'unknown',
+                "content": row['chunk_text'],
+                "similarity": row.get('similarity', 0),
+                "filename": row['filename'],
                 "type": "closed_domain"
             })
     
     return documents
 
-def delete_user_collection(user_id: str):
-    """Delete a user's entire collection (when user deletes account)"""
-    collection_name = f"user_{user_id}_docs"
+def delete_user_collection(user_id: str, filename: str = None):
+    """Delete a user's documents"""
     try:
-        chroma_client.delete_collection(name=collection_name)
+        if filename:
+            # Delete specific file
+            supabase.table("document_chunks").delete().eq("user_id", user_id).eq("filename", filename).execute()
+            supabase.table("user_documents").delete().eq("user_id", user_id).eq("filename", filename).execute()
+        else:
+            # Delete all user documents
+            supabase.table("document_chunks").delete().eq("user_id", user_id).execute()
+            supabase.table("user_documents").delete().eq("user_id", user_id).execute()
         return True
-    except:
+    except Exception as e:
+        print(f"Error deleting: {e}")
         return False
