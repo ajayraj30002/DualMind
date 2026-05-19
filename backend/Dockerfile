@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the smaller model during build (caches it)
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L3-v2')"
+# REMOVE the pre-download line - it's causing build failures
+# The model will download at runtime on first use
 
 COPY ./app ./app
 
