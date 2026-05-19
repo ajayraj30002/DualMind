@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from pypdf import PdfReader
 from groq import Groq
 from supabase import create_client
-from .config import Config
+from .config import Config 
 
 # Initialize Groq client
 groq_client = Groq(api_key=Config.GROQ_API_KEY)
