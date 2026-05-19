@@ -1,5 +1,5 @@
 // Backend URL
-const BACKEND_URL = 'https://dualmind.onrender.com/';
+const BACKEND_URL = 'https://dualmind.onrender.com';
 
 // State
 let authToken = null;
