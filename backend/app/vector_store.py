@@ -7,16 +7,12 @@ from supabase import create_client
 from .config import Config
 
 # ============================================
-# LOAD MODEL WITHOUT AUTHENTICATION
+# LOAD MODEL WITHOUT TOKEN PARAMETER
 # ============================================
 print("🔄 Loading embedding model (paraphrase-MiniLM-L3-v2)...", flush=True)
 
-# Load model without requiring authentication
-# The `use_auth=False` prevents the library from trying to authenticate
-embedding_model = SentenceTransformer(
-    'paraphrase-MiniLM-L3-v2',
-    token=False  # Disable authentication - this is a public model
-)
+# Load model normally - no token parameter needed for public models
+embedding_model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
 
 print("✅ Small model loaded successfully", flush=True)
 
