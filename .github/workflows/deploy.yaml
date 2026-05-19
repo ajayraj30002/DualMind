@@ -10,11 +10,10 @@ on:
     branches: [ main ]
     paths:
       - 'backend/**'
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
 
 env:
   DOCKER_IMAGE_NAME: dualmind-backend
-  DOCKER_REGISTRY: docker.io
 
 jobs:
   # JOB 1: Run tests
@@ -45,7 +44,7 @@ jobs:
       run: |
         cd backend
         pytest tests/ -v --cov=app --cov-report=xml --ignore=rag/
-      continue-on-error: true  # Don't fail pipeline if no tests yet
+      continue-on-error: true
     
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -119,7 +118,7 @@ jobs:
         echo "❌ Deployment verification failed"
         exit 1
 
-  # JOB 4: Deploy frontend to Vercel (optional)
+  # JOB 4: Deploy frontend to Vercel
   deploy-vercel:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -129,11 +128,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
+    - name: Install Vercel CLI
+      run: npm install -g vercel@latest
+    
     - name: Deploy to Vercel
-      uses: amondnet/vercel-action@v25
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-        vercel-args: '--prod'
-        working-directory: ./frontend
+      run: |
+        cd frontend
+        vercel --token ${{ secrets.VERCEL_TOKEN }} --prod --yes
+      env:
+        VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
