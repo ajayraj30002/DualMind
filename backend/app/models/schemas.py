@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 
 # ========== AUTH SCHEMAS ==========
-class SignUpRequest(BaseModel):
+class SignUpRequest(BaseModel): 
     email: EmailStr
     password: str
     full_name: Optional[str] = None
