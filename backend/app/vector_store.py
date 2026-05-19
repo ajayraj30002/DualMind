@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 from typing import List, Dict, Any
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
@@ -7,17 +8,80 @@ from supabase import create_client
 from .config import Config
 
 # ============================================
-# LOAD MODEL WITHOUT TOKEN PARAMETER
+# LOAD MODEL
 # ============================================
 print("🔄 Loading embedding model (paraphrase-MiniLM-L3-v2)...", flush=True)
-
-# Load model normally - no token parameter needed for public models
 embedding_model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
-
-print("✅ Small model loaded successfully", flush=True)
+print("✅ Model loaded successfully", flush=True)
 
 # Initialize Supabase client
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
+
+def semantic_chunking(text: str, max_chunk_size: int = 1500) -> List[str]:
+    """
+    Split text semantically by paragraphs and sections.
+    Preserves natural boundaries instead of arbitrary character splits.
+    """
+    # Split by double newlines (paragraphs)
+    paragraphs = re.split(r'\n\s*\n', text)
+    
+    chunks = []
+    current_chunk = []
+    current_size = 0
+    
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+            
+        para_size = len(para)
+        
+        # If single paragraph is too large, split it
+        if para_size > max_chunk_size:
+            # Split long paragraph into sentences
+            sentences = re.split(r'(?<=[.!?])\s+', para)
+            for sentence in sentences:
+                if current_size + len(sentence) > max_chunk_size and current_chunk:
+                    chunks.append(' '.join(current_chunk))
+                    current_chunk = [sentence]
+                    current_size = len(sentence)
+                else:
+                    current_chunk.append(sentence)
+                    current_size += len(sentence)
+        else:
+            # Add paragraph to current chunk
+            if current_size + para_size > max_chunk_size and current_chunk:
+                chunks.append('\n\n'.join(current_chunk))
+                current_chunk = [para]
+                current_size = para_size
+            else:
+                current_chunk.append(para)
+                current_size += para_size
+    
+    # Add last chunk
+    if current_chunk:
+        chunks.append('\n\n'.join(current_chunk))
+    
+    return chunks
+
+def extract_structured_text(file_path: str) -> str:
+    """Extract text from PDF while preserving structure"""
+    reader = PdfReader(file_path)
+    text = ""
+    
+    for page_num, page in enumerate(reader.pages):
+        try:
+            # Try to extract with layout preservation
+            page_text = page.extract_text(extraction_mode="layout")
+            if not page_text:
+                page_text = page.extract_text()
+            text += f"\n--- Page {page_num + 1} ---\n"
+            text += page_text
+        except:
+            # Fallback to simple extraction
+            text += page.extract_text()
+    
+    return text
 
 def get_embedding(text: str) -> list:
     """Generate embedding using local sentence-transformers model"""
@@ -26,7 +90,7 @@ def get_embedding(text: str) -> list:
         text = text.replace("\n", " ").strip()
         if not text:
             return None
-        # Generate embedding (returns list of floats)
+        # Generate embedding
         embedding = embedding_model.encode(text).tolist()
         return embedding
     except Exception as e:
@@ -34,19 +98,13 @@ def get_embedding(text: str) -> list:
         return None
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF, chunk it, generate embeddings locally, store in Supabase"""
+    """Process PDF with semantic chunking and store in Supabase"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
-    # Extract text from PDF
+    # Extract structured text
     try:
-        reader = PdfReader(file_path)
-        text = ""
-        for page_num, page in enumerate(reader.pages):
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text
-                print(f"  Page {page_num + 1}: {len(page_text)} chars", flush=True)
+        text = extract_structured_text(file_path)
         
         if not text.strip():
             print("❌ No text extracted from PDF", flush=True)
@@ -57,17 +115,9 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         print(f"❌ PDF read error: {e}", flush=True)
         return 0
     
-    # Split into chunks (500 chars with 100 overlap)
-    chunks = []
-    chunk_size = 1000
-    overlap = 200
-    
-    for i in range(0, len(text), chunk_size - overlap):
-        chunk = text[i:i + chunk_size]
-        if chunk.strip():
-            chunks.append(chunk)
-    
-    print(f"📦 Created {len(chunks)} chunks", flush=True)
+    # Use semantic chunking instead of fixed-size chunks
+    chunks = semantic_chunking(text)
+    print(f"📦 Created {len(chunks)} semantic chunks", flush=True)
     
     if not chunks:
         return 0
@@ -120,14 +170,14 @@ def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[D
         print("❌ Failed to generate question embedding", flush=True)
         return []
     
-    # Query Supabase for similar chunks using the match_documents function
+    # Query Supabase for similar chunks
     try:
         response = supabase.rpc(
             'match_documents',
             {
                 'query_embedding': question_embedding,
                 'match_user_id': user_id,
-                'match_count': top_k
+                'match_count': top_k * 2  # Get more for reranking
             }
         ).execute()
         
