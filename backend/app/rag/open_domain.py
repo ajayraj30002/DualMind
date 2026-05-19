@@ -11,7 +11,7 @@ def search_open_domain(question: str, top_k: int = 5) -> List[Dict[str, Any]]:
     Returns list of relevant results with content and URLs
     """
     try:
-        # Search with Tavily
+        # Search with Tavily 
         response = tavily_client.search(
             query=question,
             search_depth="basic",  # or "advanced" for more thorough search
