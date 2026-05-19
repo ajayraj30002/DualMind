@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .rag.hybrid import hybrid_search
 import os
 import shutil
+from .vector_store import process_and_store_pdf
 from supabase import create_client, Client
 import bcrypt
 from .config import Config
@@ -108,39 +109,24 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "email": current_user["email"]
     }
 
-# ========== RAG ENDPOINTS ==========
-@app.post("/upload", response_model=UploadResponse)
+@app.post("/upload")
 async def upload_pdf(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """Upload a PDF document for closed-domain RAG (protected)"""
     if not file.filename.endswith('.pdf'):
         raise HTTPException(400, "Only PDF files are supported")
     
-    # Create user-specific folder
     user_folder = os.path.join(Config.UPLOAD_DIR, current_user["user_id"])
     os.makedirs(user_folder, exist_ok=True)
     
     file_path = os.path.join(user_folder, file.filename)
     
-    # Save file
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    # Process PDF and store in ChromaDB
-    from .rag.closed_domain import process_pdf
-    chunk_count = process_pdf(file_path, current_user["user_id"])
-    
-    # Store in Supabase for tracking
-    try:
-        supabase.table("user_documents").insert({
-            "user_id": current_user["user_id"],
-            "filename": file.filename,
-            "chunk_count": chunk_count
-        }).execute()
-    except Exception as e:
-        print(f"Failed to log document: {e}")
+    # Process and store in Supabase pgvector
+    chunk_count = process_and_store_pdf(file_path, current_user["user_id"], file.filename)
     
     return UploadResponse(
         message="File uploaded and processed successfully",
