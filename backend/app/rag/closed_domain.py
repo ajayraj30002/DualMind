@@ -5,7 +5,7 @@ def search_closed_domain(question: str, user_id: str, top_k: int = 5) -> List[Di
     """
     Search user's uploaded documents for relevant chunks.
     
-    Args:
+    Args: 
         question: User's question string
         user_id: UUID of the authenticated user  
         top_k: Number of top results to return (default: 5)
