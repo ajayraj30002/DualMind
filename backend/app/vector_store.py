@@ -6,46 +6,49 @@ from sentence_transformers import SentenceTransformer
 from supabase import create_client
 from .config import Config
 
-# ============================================
-# LOAD MODEL ONCE at module startup (not per request)
-# This prevents memory spikes and repeated downloads
-# ============================================
-print("🔄 Loading lightweight embedding model (all-MiniLM-L6-v2)...", file=sys.stderr)
+# Load model
+print("🔄 Loading embedding model...", flush=True)
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-print("✅ Model loaded successfully (approx 80-100MB)", file=sys.stderr)
+print("✅ Model loaded", flush=True)
 
-# Initialize Supabase client
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
-def get_embedding(text: str) -> list:
-    """Generate embedding using the loaded model"""
+def get_embedding(text: str):
+    """Generate embedding"""
     try:
-        # Clean text
-        text = text.replace("\n", " ").strip()
-        if not text:
-            return None
-        # Generate embedding (returns list of floats)
+        text = text.replace("\n", " ").strip()[:1000]  # Limit text length
         embedding = embedding_model.encode(text).tolist()
+        print(f"✅ Generated embedding (dimensions: {len(embedding)})", flush=True)
         return embedding
     except Exception as e:
-        print(f"Embedding error: {e}")
+        print(f"❌ Embedding error: {e}", flush=True)
         return None
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF, chunk it, generate embeddings, store in Supabase"""
+    """Process PDF and store chunks"""
     
-    # Extract text from PDF
-    reader = PdfReader(file_path)
-    text = ""
-    for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text
+    print(f"📄 Processing PDF: {filename}", flush=True)
     
-    if not text.strip():
+    # Extract text
+    try:
+        reader = PdfReader(file_path)
+        text = ""
+        for page_num, page in enumerate(reader.pages):
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text
+                print(f"  Page {page_num + 1}: {len(page_text)} chars", flush=True)
+        
+        if not text.strip():
+            print("❌ No text extracted from PDF", flush=True)
+            return 0
+        
+        print(f"📝 Total text: {len(text)} chars", flush=True)
+    except Exception as e:
+        print(f"❌ PDF read error: {e}", flush=True)
         return 0
     
-    # Split into chunks (500 chars with 100 overlap)
+    # Split into chunks
     chunks = []
     chunk_size = 500
     overlap = 100
@@ -55,49 +58,56 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         if chunk.strip():
             chunks.append(chunk)
     
+    print(f"📦 Created {len(chunks)} chunks", flush=True)
+    
     if not chunks:
         return 0
     
-    # Generate embeddings for each chunk and store
-    successful_chunks = 0
+    # Process each chunk
+    successful = 0
     for i, chunk in enumerate(chunks):
-        print(f"Processing chunk {i+1}/{len(chunks)}...")
+        print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
         embedding = get_embedding(chunk)
         if embedding:
             try:
                 supabase.table("document_chunks").insert({
                     "user_id": user_id,
                     "filename": filename,
-                    "chunk_text": chunk,
+                    "chunk_text": chunk[:500],  # Store first 500 chars
                     "chunk_index": i,
                     "embedding": embedding
                 }).execute()
-                successful_chunks += 1
+                successful += 1
+                print(f"    ✅ Stored in Supabase", flush=True)
             except Exception as e:
-                print(f"Supabase insert error: {e}")
+                print(f"    ❌ Supabase error: {e}", flush=True)
     
-    # Record in user_documents table
-    if successful_chunks > 0:
+    # Record in user_documents
+    if successful > 0:
         try:
             supabase.table("user_documents").insert({
                 "user_id": user_id,
                 "filename": filename,
-                "chunk_count": successful_chunks
+                "chunk_count": successful
             }).execute()
+            print(f"✅ Successfully stored {successful} chunks", flush=True)
         except Exception as e:
-            print(f"Failed to record document: {e}")
+            print(f"❌ Failed to record document: {e}", flush=True)
+    else:
+        print("❌ No chunks were successfully stored", flush=True)
     
-    return successful_chunks
+    return successful
 
 def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
-    """Search for similar chunks using cosine similarity"""
+    """Search for similar chunks"""
     
-    # Generate embedding for the question
+    print(f"🔍 Searching for: {question[:50]}...", flush=True)
+    
     question_embedding = get_embedding(question)
     if not question_embedding:
+        print("❌ Failed to generate question embedding", flush=True)
         return []
     
-    # Query Supabase for similar chunks using the match_documents function
     try:
         response = supabase.rpc(
             'match_documents',
@@ -107,25 +117,27 @@ def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[D
                 'match_count': top_k
             }
         ).execute()
+        
+        results = []
+        if response.data:
+            for row in response.data:
+                results.append({
+                    "content": row['chunk_text'],
+                    "similarity": row.get('similarity', 0),
+                    "filename": row['filename'],
+                    "type": "closed_domain"
+                })
+            print(f"✅ Found {len(results)} results", flush=True)
+        else:
+            print("❌ No results found", flush=True)
+        
+        return results
     except Exception as e:
-        print(f"Search error: {e}")
+        print(f"❌ Search error: {e}", flush=True)
         return []
-    
-    # Format results
-    results = []
-    if response.data:
-        for row in response.data:
-            results.append({
-                "content": row['chunk_text'],
-                "similarity": row.get('similarity', 0),
-                "filename": row['filename'],
-                "type": "closed_domain"
-            })
-    
-    return results
 
 def delete_user_documents(user_id: str, filename: str = None):
-    """Delete a user's documents"""
+    """Delete documents"""
     try:
         if filename:
             supabase.table("document_chunks").delete().eq("user_id", user_id).eq("filename", filename).execute()
