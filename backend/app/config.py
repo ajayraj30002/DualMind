@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
- 
+
 class Config:
     # API Keys
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -23,7 +23,8 @@ class Config:
     CHROMA_PERSIST_DIR = "./chroma_db"
     
     # Model settings
-    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-    LLM_MODEL = "llama-3.3-70b-versatile"  # Groq model
+    EMBEDDING_MODEL = "paraphrase-MiniLM-L3-v2"
+    LLM_MODEL = "llama-3.3-70b-versatile"
     
-    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+    # CORS
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,https://dual-mind-iota.vercel.app,https://dualmind.vercel.app").split(",")
