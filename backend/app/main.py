@@ -17,15 +17,20 @@ from .auth import create_access_token, get_current_user, supabase
 
 app = FastAPI(title="DualMind API", version="1.0.0")
 
-# CORS for frontend (Vercel)
+# Configure CORS properly
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=Config.ALLOWED_ORIGINS,
+    allow_origins=[
+        "https://dual-mind-iota.vercel.app",
+        "https://dualmind.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:8000"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
-
 # Ensure upload directory exists
 os.makedirs(Config.UPLOAD_DIR, exist_ok=True)
 
