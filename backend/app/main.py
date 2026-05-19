@@ -170,3 +170,4 @@ async def delete_document(filename: str, current_user: dict = Depends(get_curren
         return {"message": f"Document {filename} deleted"}
     except Exception as e:
         raise HTTPException(500, f"Failed to delete: {str(e)}")
+# Test trigger - delete this line    
