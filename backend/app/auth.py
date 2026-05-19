@@ -7,7 +7,7 @@ from .config import Config
 
 security = HTTPBearer()
 
-# Initialize Supabase client
+# Initialize Supabase client 
 supabase: Client = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
 def create_access_token(data: dict) -> str:
