@@ -5,7 +5,7 @@ from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 from supabase import create_client
 from .config import Config
-
+ 
 # ============================================
 # CRITICAL FIX: Load model ONCE at startup
 # This prevents out-of-memory errors on Render
