@@ -1,5 +1,4 @@
-// Backend URL (Update with your Render URL after deployment)
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = process.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
 // State
 let authToken = null;
