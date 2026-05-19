@@ -3,7 +3,7 @@ from groq import Groq
 from .closed_domain import search_closed_domain
 from .open_domain import search_open_domain
 from ..config import Config
-
+ 
 # Initialize Groq client
 groq_client = Groq(api_key=Config.GROQ_API_KEY)
 
