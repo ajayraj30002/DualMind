@@ -11,4 +11,5 @@ bcrypt==4.1.0
 supabase==2.5.0
 PyJWT==2.8.0
 sentence-transformers==2.2.2
-numpy==1.26.3
+huggingface-hub==0.20.3
+numpy<2.0
