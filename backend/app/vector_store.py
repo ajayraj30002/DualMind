@@ -3,84 +3,67 @@ import sys
 import re
 from typing import List, Dict, Any
 from pypdf import PdfReader
-from sentence_transformers import SentenceTransformer
+import cohere
 from supabase import create_client
 from .config import Config
 
 # ============================================
-# LOAD MODEL
+# INITIALIZE COHERE CLIENT (Cloud API - no local model!)
 # ============================================
-print("🔄 Loading embedding model (paraphrase-MiniLM-L3-v2)...", flush=True)
-embedding_model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
-print("✅ Model loaded successfully", flush=True)
+print("🔄 Initializing Cohere API client...", flush=True)
+cohere_client = cohere.Client(api_key=Config.COHERE_API_KEY)
+print("✅ Cohere client ready (using cloud embeddings)", flush=True)
 
 # Initialize Supabase client
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
-def lightweight_semantic_chunking(text: str, chunk_size: int = 1000, overlap: int = 150) -> List[str]:
-    """
-    Lightweight semantic chunking:
-    - Splits by paragraphs first
-    - Merges small paragraphs
-    - Preserves natural boundaries
-    - Memory efficient
-    """
-    # Split by double newlines (paragraphs)
-    paragraphs = re.split(r'\n\s*\n', text)
-    
+def get_embedding(text: str) -> list:
+    """Get embedding from Cohere API (cloud, no RAM usage)"""
+    try:
+        # Clean and truncate text (Cohere has 512 token limit)
+        text = text.replace("\n", " ").strip()[:2000]
+        if not text:
+            return None
+        
+        # Call Cohere API
+        response = cohere_client.embed(
+            texts=[text],
+            model="embed-english-v4.0",
+            input_type="search_document"  # For documents being indexed
+        )
+        
+        embedding = response.embeddings[0]
+        print(f"✅ Got embedding (dimensions: {len(embedding)})", flush=True)
+        return embedding
+    except Exception as e:
+        print(f"❌ Cohere embedding error: {e}", flush=True)
+        return None
+
+def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 150) -> List[str]:
+    """Simple, memory-efficient chunking"""
     chunks = []
-    current_chunk = []
-    current_size = 0
+    start = 0
     
-    for para in paragraphs:
-        para = para.strip()
-        if not para:
-            continue
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        chunk = text[start:end]
         
-        para_size = len(para)
+        # Try to break at a sentence boundary
+        if end < len(text):
+            last_period = chunk.rfind('.')
+            if last_period > chunk_size // 2:
+                end = start + last_period + 1
+                chunk = text[start:end]
         
-        # If this paragraph alone exceeds chunk_size, split it
-        if para_size > chunk_size:
-            # Save current chunk if exists
-            if current_chunk:
-                chunks.append(' '.join(current_chunk))
-                current_chunk = []
-                current_size = 0
-            
-            # Split large paragraph into sentences
-            sentences = re.split(r'(?<=[.!?])\s+', para)
-            temp_chunk = []
-            temp_size = 0
-            
-            for sent in sentences:
-                if temp_size + len(sent) > chunk_size and temp_chunk:
-                    chunks.append(' '.join(temp_chunk))
-                    temp_chunk = [sent]
-                    temp_size = len(sent)
-                else:
-                    temp_chunk.append(sent)
-                    temp_size += len(sent)
-            
-            if temp_chunk:
-                chunks.append(' '.join(temp_chunk))
+        if chunk.strip():
+            chunks.append(chunk.strip())
         
-        # Normal paragraph - try to add to current chunk
-        elif current_size + para_size > chunk_size and current_chunk:
-            chunks.append('\n\n'.join(current_chunk))
-            current_chunk = [para]
-            current_size = para_size
-        else:
-            current_chunk.append(para)
-            current_size += para_size
-    
-    # Add last chunk
-    if current_chunk:
-        chunks.append('\n\n'.join(current_chunk))
+        start = end - overlap
     
     return chunks
 
 def extract_text_simple(file_path: str) -> str:
-    """Simple text extraction (memory efficient)"""
+    """Simple text extraction"""
     reader = PdfReader(file_path)
     text = ""
     for page in reader.pages:
@@ -89,20 +72,8 @@ def extract_text_simple(file_path: str) -> str:
             text += page_text + "\n\n"
     return text
 
-def get_embedding(text: str) -> list:
-    """Generate embedding"""
-    try:
-        text = text.replace("\n", " ").strip()[:2000]
-        if not text:
-            return None
-        embedding = embedding_model.encode(text).tolist()
-        return embedding
-    except Exception as e:
-        print(f"❌ Embedding error: {e}", flush=True)
-        return None
-
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF with lightweight semantic chunking"""
+    """Process PDF using Cohere API for embeddings"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
@@ -117,23 +88,19 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         print(f"❌ PDF read error: {e}", flush=True)
         return 0
     
-    # Apply lightweight semantic chunking
-    chunks = lightweight_semantic_chunking(text)
-    print(f"📦 Created {len(chunks)} semantic chunks", flush=True)
+    # Chunk text
+    chunks = chunk_text(text)
+    print(f"📦 Created {len(chunks)} chunks", flush=True)
     
     if not chunks:
         return 0
     
-    # Process chunks
+    # Process chunks one by one
     successful = 0
     for i, chunk in enumerate(chunks):
         print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
         
-        # Free memory every 5 chunks
-        if i > 0 and i % 5 == 0:
-            import gc
-            gc.collect()
-        
+        # Get embedding from Cohere API
         embedding = get_embedding(chunk)
         if embedding:
             try:
@@ -145,7 +112,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                     "embedding": embedding
                 }).execute()
                 successful += 1
-                print(f"    ✅ Stored", flush=True)
+                print(f"    ✅ Stored in Supabase", flush=True)
             except Exception as e:
                 print(f"    ❌ DB error: {e}", flush=True)
     
@@ -164,14 +131,23 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
     return successful
 
 def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
-    """Search for similar chunks"""
+    """Search using Cohere API for query embedding"""
     
-    print(f"🔍 Searching...", flush=True)
+    print(f"🔍 Searching: {question[:50]}...", flush=True)
     
-    question_embedding = get_embedding(question)
-    if not question_embedding:
+    # Get embedding for question (using search_query type)
+    try:
+        response = cohere_client.embed(
+            texts=[question],
+            model="embed-english-v4.0",
+            input_type="search_query"
+        )
+        question_embedding = response.embeddings[0]
+    except Exception as e:
+        print(f"❌ Query embedding error: {e}", flush=True)
         return []
     
+    # Query Supabase
     try:
         response = supabase.rpc(
             'match_documents',
