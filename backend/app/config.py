@@ -26,5 +26,4 @@ class Config:
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"
     LLM_MODEL = "llama-3.3-70b-versatile"  # Groq model
     
-    # CORS
     ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
