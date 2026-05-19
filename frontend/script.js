@@ -1,31 +1,67 @@
-const BACKEND_URL = process.env.VITE_BACKEND_URL || 'http://localhost:8000';
+// Backend URL
+const BACKEND_URL = 'https://dualmind.onrender.com/';
 
-// Stat 
+// State
 let authToken = null;
 let currentUser = null;
 
-// DOM Elements
-const fileInput = document.getElementById('file-upload');
-const uploadStatus = document.getElementById('upload-status');
-const uploadedFilesDiv = document.getElementById('uploaded-files');
-const questionInput = document.getElementById('question');
-const askBtn = document.getElementById('ask-btn');
-const responseSection = document.getElementById('response-section');
-const answerDiv = document.getElementById('answer');
-const sourcesDiv = document.getElementById('sources');
-const sourcesList = document.getElementById('sources-list');
+// Wait for DOM to load
+document.addEventListener('DOMContentLoaded', () => {
+    setupEventListeners();
+    checkAuth();
+});
 
-// Auth UI Elements
-const authSection = document.getElementById('auth-section');
-const appSection = document.getElementById('app-section');
-const signupForm = document.getElementById('signup-form');
-const signinForm = document.getElementById('signin-form');
-const logoutBtn = document.getElementById('logout-btn');
-const userEmailSpan = document.getElementById('user-email');
+function setupEventListeners() {
+    // Auth buttons
+    const showSignupBtn = document.getElementById('show-signup');
+    const showSigninBtn = document.getElementById('show-signin');
+    const signupSubmit = document.getElementById('signup-submit');
+    const signinSubmit = document.getElementById('signin-submit');
+    const logoutBtn = document.getElementById('logout-btn');
+    
+    if (showSignupBtn) showSignupBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        showSignup();
+    });
+    
+    if (showSigninBtn) showSigninBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        showSignin();
+    });
+    
+    if (signupSubmit) signupSubmit.addEventListener('click', () => {
+        const email = document.getElementById('signup-email').value;
+        const password = document.getElementById('signup-password').value;
+        const fullName = document.getElementById('signup-fullname').value;
+        signup(email, password, fullName);
+    });
+    
+    if (signinSubmit) signinSubmit.addEventListener('click', () => {
+        const email = document.getElementById('signin-email').value;
+        const password = document.getElementById('signin-password').value;
+        signin(email, password);
+    });
+    
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+    
+    // Query button
+    const askBtn = document.getElementById('ask-btn');
+    if (askBtn) askBtn.addEventListener('click', handleQuery);
+}
 
 // ========== AUTH FUNCTIONS ==========
 
 async function signup(email, password, fullName) {
+    if (!email || !password) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    if (password.length < 6) {
+        alert('Password must be at least 6 characters');
+        return;
+    }
+    
     try {
         const response = await fetch(`${BACKEND_URL}/auth/signup`, {
             method: 'POST',
@@ -36,21 +72,26 @@ async function signup(email, password, fullName) {
         const data = await response.json();
         
         if (response.ok) {
-            alert('Signup successful! Please sign in.');
+            alert('✅ Signup successful! Please sign in.');
             showSignin();
         } else {
-            alert('Signup failed: ' + data.detail);
+            alert('❌ Signup failed: ' + (data.detail || 'Unknown error'));
         }
     } catch (error) {
-        alert('Connection error: ' + error.message);
+        alert('❌ Connection error: ' + error.message);
     }
 }
 
 async function signin(email, password) {
+    if (!email || !password) {
+        alert('Please enter email and password');
+        return;
+    }
+    
     try {
         const response = await fetch(`${BACKEND_URL}/auth/signin`, {
             method: 'POST',
-            headers: { 'Content-Type':application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
         
@@ -64,10 +105,10 @@ async function signin(email, password) {
             showApp();
             loadDocuments();
         } else {
-            alert('Signin failed: ' + data.detail);
+            alert('❌ Signin failed: ' + (data.detail || 'Invalid credentials'));
         }
     } catch (error) {
-        alert('Connection error: ' + error.message);
+        alert('❌ Connection error: ' + error.message);
     }
 }
 
@@ -93,146 +134,102 @@ function checkAuth() {
     }
 }
 
-// ========== UI FUNCTIONS ==========
-
 function showAuth() {
+    const authSection = document.getElementById('auth-section');
+    const appSection = document.getElementById('app-section');
     if (authSection) authSection.classList.remove('hidden');
     if (appSection) appSection.classList.add('hidden');
 }
 
 function showApp() {
+    const authSection = document.getElementById('auth-section');
+    const appSection = document.getElementById('app-section');
+    const userEmailSpan = document.getElementById('user-email');
+    
     if (authSection) authSection.classList.add('hidden');
     if (appSection) appSection.classList.remove('hidden');
     if (userEmailSpan && currentUser) userEmailSpan.textContent = currentUser.email;
 }
 
 function showSignup() {
+    const signupForm = document.getElementById('signup-form');
+    const signinForm = document.getElementById('signin-form');
     if (signupForm) signupForm.classList.remove('hidden');
     if (signinForm) signinForm.classList.add('hidden');
 }
 
 function showSignin() {
+    const signupForm = document.getElementById('signup-form');
+    const signinForm = document.getElementById('signin-form');
     if (signupForm) signupForm.classList.add('hidden');
     if (signinForm) signinForm.classList.remove('hidden');
 }
 
-// ========== API FUNCTIONS (with auth) ==========
-
-async function apiCall(endpoint, options = {}) {
-    const headers = {
-        'Content-Type': 'application/json',
-        ...options.headers
-    };
-    
-    if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-    }
-    
-    const response = await fetch(`${BACKEND_URL}${endpoint}`, {
-        ...options,
-        headers
-    });
-    
-    if (response.status === 401) {
-        logout();
-        throw new Error('Session expired. Please sign in again.');
-    }
-    
-    return response;
-}
-
-// File upload handler
-fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    uploadStatus.innerHTML = '📤 Uploading and processing...';
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    try {
-        const response = await fetch(`${BACKEND_URL}/upload`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${authToken}` },
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            uploadStatus.innerHTML = '✅ Upload successful!';
-            loadDocuments();
-            setTimeout(() => { uploadStatus.innerHTML = ''; }, 3000);
-        } else {
-            uploadStatus.innerHTML = '❌ Upload failed: ' + data.detail;
-        }
-    } catch (error) {
-        uploadStatus.innerHTML = '❌ Connection error';
-        console.error('Upload error:', error);
-    }
-    
-    fileInput.value = '';
-});
+// ========== DOCUMENT FUNCTIONS ==========
 
 async function loadDocuments() {
+    if (!authToken) return;
+    
     try {
-        const response = await apiCall('/documents');
+        const response = await fetch(`${BACKEND_URL}/documents`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
         const data = await response.json();
         
-        if (response.ok && data.documents) {
-            displayUploadedFiles(data.documents);
+        const uploadedFilesDiv = document.getElementById('uploaded-files');
+        if (uploadedFilesDiv && data.documents && data.documents.length > 0) {
+            uploadedFilesDiv.innerHTML = data.documents.map(doc => `
+                <div class="file-badge">
+                    📄 ${doc.filename}
+                    <span class="chunk-count">${doc.chunk_count || 0} chunks</span>
+                </div>
+            `).join('');
         }
     } catch (error) {
         console.error('Load documents error:', error);
     }
 }
 
-function displayUploadedFiles(documents) {
-    if (!uploadedFilesDiv) return;
-    
-    if (!documents || documents.length === 0) {
-        uploadedFilesDiv.innerHTML = '<p class="no-files">No documents uploaded yet</p>';
-        return;
-    }
-    
-    uploadedFilesDiv.innerHTML = documents.map(doc => `
-        <div class="file-badge">
-            📄 ${doc.filename}
-            <span class="chunk-count">(${doc.chunk_count} chunks)</span>
-        </div>
-    `).join('');
-}
+// ========== QUERY FUNCTIONS ==========
 
-// Query handler
-askBtn.addEventListener('click', async () => {
-    const question = questionInput.value.trim();
+async function handleQuery() {
+    const questionInput = document.getElementById('question');
+    const question = questionInput?.value.trim();
+    
     if (!question) {
         alert('Please enter a question');
         return;
     }
     
-    const searchType = document.querySelector('input[name="search-type"]:checked').value;
+    const searchType = document.querySelector('input[name="search-type"]:checked')?.value || 'hybrid';
+    const askBtn = document.getElementById('ask-btn');
+    const responseSection = document.getElementById('response-section');
+    const answerDiv = document.getElementById('answer');
+    const sourcesDiv = document.getElementById('sources');
+    const sourcesList = document.getElementById('sources-list');
     
-    askBtn.disabled = true;
-    const spinner = askBtn.querySelector('.spinner');
-    const btnText = askBtn.querySelector('span:first-child');
-    if (spinner) spinner.classList.remove('hidden');
-    btnText.textContent = 'Thinking';
+    if (askBtn) {
+        askBtn.disabled = true;
+        askBtn.textContent = 'Thinking...';
+    }
     
     try {
-        const response = await apiCall('/query', {
+        const response = await fetch(`${BACKEND_URL}/query`, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
             body: JSON.stringify({ question, search_type: searchType, include_sources: true })
         });
         
         const data = await response.json();
         
-        if (response.ok) {
+        if (response.ok && responseSection && answerDiv) {
             responseSection.classList.remove('hidden');
             answerDiv.textContent = data.answer;
             
-            if (data.sources && data.sources.length > 0) {
+            if (sourcesDiv && sourcesList && data.sources && data.sources.length > 0) {
                 sourcesDiv.classList.remove('hidden');
                 sourcesList.innerHTML = data.sources.map(source => `
                     <div class="source-item">
@@ -240,48 +237,56 @@ askBtn.addEventListener('click', async () => {
                         <div class="source-content">${source.content.substring(0, 300)}...</div>
                     </div>
                 `).join('');
-            } else {
-                sourcesDiv.classList.add('hidden');
             }
-        } else {
+        } else if (answerDiv) {
             answerDiv.textContent = 'Error: ' + (data.detail || 'Something went wrong');
         }
     } catch (error) {
         console.error('Query error:', error);
-        answerDiv.textContent = 'Connection error. Make sure backend is running.';
-        responseSection.classList.remove('hidden');
+        if (answerDiv) answerDiv.textContent = 'Connection error. Make sure backend is running.';
     } finally {
-        askBtn.disabled = false;
-        if (spinner) spinner.classList.add('hidden');
-        btnText.textContent = 'Ask';
+        if (askBtn) {
+            askBtn.disabled = false;
+            askBtn.textContent = 'Ask DualMind';
+        }
     }
-});
+}
 
-// Enter to submit
-questionInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        askBtn.click();
-    }
-});
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    checkAuth();
-    
-    // Event listeners for auth buttons
-    document.getElementById('show-signup')?.addEventListener('click', showSignup);
-    document.getElementById('show-signin')?.addEventListener('click', showSignin);
-    document.getElementById('signup-submit')?.addEventListener('click', () => {
-        const email = document.getElementById('signup-email').value;
-        const password = document.getElementById('signup-password').value;
-        const fullName = document.getElementById('signup-fullname').value;
-        signup(email, password, fullName);
+// File upload handler
+const fileInput = document.getElementById('file-upload');
+if (fileInput) {
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const uploadStatus = document.getElementById('upload-status');
+        if (uploadStatus) uploadStatus.innerHTML = '📤 Uploading and processing...';
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            const response = await fetch(`${BACKEND_URL}/upload`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${authToken}` },
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                if (uploadStatus) uploadStatus.innerHTML = '✅ Upload successful!';
+                loadDocuments();
+                setTimeout(() => {
+                    if (uploadStatus) uploadStatus.innerHTML = '';
+                }, 3000);
+            } else {
+                if (uploadStatus) uploadStatus.innerHTML = '❌ Upload failed: ' + (data.detail || 'Unknown error');
+            }
+        } catch (error) {
+            if (uploadStatus) uploadStatus.innerHTML = '❌ Connection error';
+        }
+        
+        fileInput.value = '';
     });
-    document.getElementById('signin-submit')?.addEventListener('click', () => {
-        const email = document.getElementById('signin-email').value;
-        const password = document.getElementById('signin-password').value;
-        signin(email, password);
-    });
-    logoutBtn?.addEventListener('click', logout);
-});
+}
