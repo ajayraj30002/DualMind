@@ -8,7 +8,7 @@ import cohere
 from supabase import create_client
 from .config import Config
 
-# ============================================
+# ============================================ 
 # INITIALIZE COHERE CLIENT
 # ============================================
 print("🔄 Initializing Cohere API client...", flush=True)
