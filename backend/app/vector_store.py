@@ -1,168 +1,97 @@
 import os
 import sys
-import re
-import gc
 from typing import List, Dict, Any
-import pypdfium2 as pdfium
-import cohere
+from pypdf import PdfReader
+from sentence_transformers import SentenceTransformer
 from supabase import create_client
 from .config import Config
 
 # ============================================
-# INITIALIZE COHERE CLIENT
+# LOAD MODEL WITHOUT TOKEN PARAMETER
 # ============================================
-print("🔄 Initializing Cohere API client...", flush=True)
-cohere_client = cohere.Client(api_key=Config.COHERE_API_KEY)
-print("✅ Cohere client ready", flush=True)
+print("🔄 Loading embedding model (paraphrase-MiniLM-L3-v2)...", flush=True)
+
+# Load model normally - no token parameter needed for public models
+embedding_model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
+
+print("✅ Small model loaded successfully", flush=True)
 
 # Initialize Supabase client
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
 def get_embedding(text: str) -> list:
-    """Get embedding from Cohere API"""
+    """Generate embedding using local sentence-transformers model"""
     try:
-        text = text.replace("\n", " ").strip()[:2000]
+        # Clean text
+        text = text.replace("\n", " ").strip()
         if not text:
             return None
-        
-        response = cohere_client.embed(
-            texts=[text],
-            model="embed-english-v3.0",
-            input_type="search_document"
-        )
-        
-        return response.embeddings[0]
+        # Generate embedding (returns list of floats)
+        embedding = embedding_model.encode(text).tolist()
+        return embedding
     except Exception as e:
-        print(f"❌ Cohere error: {e}", flush=True)
+        print(f"❌ Embedding error: {e}", flush=True)
         return None
 
-def extract_text_safe(file_path: str) -> str:
-    """
-    Extract text with PROPER cleanup order to avoid "Parent closed before child"
-    Order: Close TextPage → Close Page → Close Document
-    """
-    text = ""
-    pdf = None
-    
-    try:
-        pdf = pdfium.PdfDocument(file_path)
-        total_pages = len(pdf)
-        print(f"📄 PDF has {total_pages} pages", flush=True)
-        
-        for page_num in range(total_pages):
-            page = pdf[page_num]
-            text_page = None
-            
-            try:
-                # Get text page
-                text_page = page.get_textpage()
-                page_text = text_page.get_text_range()
-                if page_text:
-                    text += page_text + "\n\n"
-                
-            except Exception as e:
-                print(f"  ⚠️ Page {page_num + 1} error: {e}", flush=True)
-                
-            finally:
-                # CRITICAL: Clean up in correct order
-                if text_page:
-                    text_page.close()
-                del page
-            
-            # Force GC every page
-            if page_num % 5 == 0:
-                gc.collect()
-            
-            if (page_num + 1) % 10 == 0:
-                print(f"  Processed {page_num + 1}/{total_pages} pages", flush=True)
-        
-        return text
-        
-    except Exception as e:
-        print(f"❌ PDF error: {e}", flush=True)
-        return ""
-        
-    finally:
-        if pdf:
-            pdf.close()
-        gc.collect()
-
-def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]:
-    """Split text into overlapping chunks"""
-    if not text:
-        return []
-    
-    chunks = []
-    start = 0
-    text_length = len(text)
-    
-    while start < text_length:
-        end = min(start + chunk_size, text_length)
-        chunk = text[start:end]
-        
-        # Try to break at a sentence boundary
-        if end < text_length:
-            for sep in ['. ', '? ', '! ', '\n\n', '\n']:
-                last_sep = chunk.rfind(sep)
-                if last_sep > chunk_size // 2:
-                    end = start + last_sep + len(sep)
-                    chunk = text[start:end]
-                    break
-        
-        if chunk.strip():
-            chunks.append(chunk.strip())
-        
-        start = end - overlap
-    
-    return chunks
-
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF and store chunks"""
+    """Process PDF, chunk it, generate embeddings locally, store in Supabase"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
-    # Extract text safely
-    text = extract_text_safe(file_path)
-    
-    if not text.strip():
-        print("❌ No text extracted", flush=True)
+    # Extract text from PDF
+    try:
+        reader = PdfReader(file_path)
+        text = ""
+        for page_num, page in enumerate(reader.pages):
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text
+                print(f"  Page {page_num + 1}: {len(page_text)} chars", flush=True)
+        
+        if not text.strip():
+            print("❌ No text extracted from PDF", flush=True)
+            return 0
+        
+        print(f"📝 Total text: {len(text)} chars", flush=True)
+    except Exception as e:
+        print(f"❌ PDF read error: {e}", flush=True)
         return 0
     
-    print(f"📝 Total text: {len(text)} chars", flush=True)
+    # Split into chunks (500 chars with 100 overlap)
+    chunks = []
+    chunk_size = 500
+    overlap = 100
     
-    # Split into chunks
-    chunks = chunk_text(text)
+    for i in range(0, len(text), chunk_size - overlap):
+        chunk = text[i:i + chunk_size]
+        if chunk.strip():
+            chunks.append(chunk)
+    
     print(f"📦 Created {len(chunks)} chunks", flush=True)
     
     if not chunks:
         return 0
     
-    # Process chunks
+    # Process each chunk
     successful = 0
     for i, chunk in enumerate(chunks):
         print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
-        
         embedding = get_embedding(chunk)
         if embedding:
             try:
                 supabase.table("document_chunks").insert({
                     "user_id": user_id,
                     "filename": filename,
-                    "chunk_text": chunk[:1000],
+                    "chunk_text": chunk,
                     "chunk_index": i,
                     "embedding": embedding
                 }).execute()
                 successful += 1
-                print(f"    ✅ Stored", flush=True)
+                print(f"    ✅ Stored in Supabase", flush=True)
             except Exception as e:
-                print(f"    ❌ DB error: {e}", flush=True)
-        
-        # Clean up
-        del embedding
-        gc.collect()
-        
-        if (i + 1) % 5 == 0:
-            print(f"  📊 Processed {i+1}/{len(chunks)} chunks", flush=True)
+                print(f"    ❌ Supabase error: {e}", flush=True)
+        else:
+            print(f"    ❌ Embedding failed", flush=True)
     
     # Record in user_documents
     if successful > 0:
@@ -172,31 +101,26 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                 "filename": filename,
                 "chunk_count": successful
             }).execute()
-            print(f"✅ Stored {successful}/{len(chunks)} chunks", flush=True)
+            print(f"✅ Successfully stored {successful}/{len(chunks)} chunks", flush=True)
         except Exception as e:
-            print(f"❌ Record error: {e}", flush=True)
+            print(f"❌ Failed to record document: {e}", flush=True)
     else:
-        print("❌ No chunks stored", flush=True)
+        print("❌ No chunks were successfully stored", flush=True)
     
-    gc.collect()
     return successful
 
-def search_similar_chunks(question: str, user_id: str, top_k: int = 4) -> List[Dict[str, Any]]:
-    """Search for similar chunks using Cohere"""
+def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    """Search for similar chunks using cosine similarity"""
     
-    print(f"🔍 Searching...", flush=True)
+    print(f"🔍 Searching for: {question[:50]}...", flush=True)
     
-    try:
-        response = cohere_client.embed(
-            texts=[question],
-            model="embed-english-v3.0",
-            input_type="search_query"
-        )
-        question_embedding = response.embeddings[0]
-    except Exception as e:
-        print(f"❌ Query error: {e}", flush=True)
+    # Generate embedding for the question
+    question_embedding = get_embedding(question)
+    if not question_embedding:
+        print("❌ Failed to generate question embedding", flush=True)
         return []
     
+    # Query Supabase for similar chunks using the match_documents function
     try:
         response = supabase.rpc(
             'match_documents',
@@ -217,6 +141,8 @@ def search_similar_chunks(question: str, user_id: str, top_k: int = 4) -> List[D
                     "type": "closed_domain"
                 })
             print(f"✅ Found {len(results)} results", flush=True)
+        else:
+            print("❌ No results found", flush=True)
         
         return results
     except Exception as e:
@@ -224,7 +150,7 @@ def search_similar_chunks(question: str, user_id: str, top_k: int = 4) -> List[D
         return []
 
 def delete_user_documents(user_id: str, filename: str = None):
-    """Delete user documents"""
+    """Delete a user's documents"""
     try:
         if filename:
             supabase.table("document_chunks").delete().eq("user_id", user_id).eq("filename", filename).execute()
@@ -234,5 +160,5 @@ def delete_user_documents(user_id: str, filename: str = None):
             supabase.table("user_documents").delete().eq("user_id", user_id).execute()
         return True
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error deleting: {e}")
         return False
