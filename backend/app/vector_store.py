@@ -1,8 +1,9 @@
 import os
 import sys
 import re
+import gc
 from typing import List, Dict, Any
-import fitz  # PyMuPDF - NO pypdf import
+import fitz  # PyMuPDF
 import cohere
 from supabase import create_client
 from .config import Config
@@ -35,36 +36,58 @@ def get_embedding(text: str) -> list:
         print(f"❌ Cohere error: {e}", flush=True)
         return None
 
-def extract_text_memory_efficient(file_path: str) -> str:
+def extract_text_with_pymupdf(file_path: str) -> str:
     """
-    Extract text using PyMuPDF - memory efficient
+    Extract text using PyMuPDF with aggressive memory cleanup
+    Based on memory optimization techniques from PyMuPDF docs [citation:10]
     """
     text = ""
+    doc = None
+    
     try:
+        # Open PDF
         doc = fitz.open(file_path)
         total_pages = len(doc)
         print(f"📄 PDF has {total_pages} pages", flush=True)
         
         for page_num in range(total_pages):
             page = doc[page_num]
+            
+            # Extract text from page
             page_text = page.get_text()
             if page_text:
                 text += page_text + "\n\n"
             
-            # Free page from memory
+            # CRITICAL: Clear page from memory immediately
             del page
+            
+            # Force garbage collection every page
+            if page_num % 5 == 0 and page_num > 0:
+                gc.collect()
+                # Shrink PyMuPDF's internal storage cache [citation:1][citation:10]
+                fitz.TOOLS.store_shrink(100)
             
             if (page_num + 1) % 10 == 0:
                 print(f"  Processed {page_num + 1}/{total_pages} pages", flush=True)
         
-        doc.close()
         return text
+        
     except Exception as e:
         print(f"❌ PyMuPDF error: {e}", flush=True)
         return ""
+        
+    finally:
+        # CRITICAL: Always close document and clear cache [citation:10]
+        if doc:
+            doc.close()
+        # Shrink storage cache to release memory
+        fitz.TOOLS.store_shrink(100)
+        gc.collect()
 
-def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> List[str]:
-    """Memory-efficient text chunking"""
+def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]:
+    """
+    Memory-efficient text chunking with smaller chunks
+    """
     chunks = []
     start = 0
     text_length = len(text)
@@ -75,9 +98,15 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> List[str
         
         # Try to break at a sentence boundary
         if end < text_length:
-            last_period = max(chunk.rfind('.'), chunk.rfind('?'), chunk.rfind('!'), chunk.rfind('\n'))
-            if last_period > chunk_size // 2:
-                end = start + last_period + 1
+            # Find last period, question mark, exclamation, or newline
+            last_boundary = max(
+                chunk.rfind('.'),
+                chunk.rfind('?'),
+                chunk.rfind('!'),
+                chunk.rfind('\n')
+            )
+            if last_boundary > chunk_size // 2:
+                end = start + last_boundary + 1
                 chunk = text[start:end]
         
         if chunk.strip():
@@ -88,27 +117,27 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> List[str
     return chunks
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF using PyMuPDF"""
+    """Process PDF with aggressive memory management"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
-    # Extract text
-    text = extract_text_memory_efficient(file_path)
+    # Extract text with memory optimization
+    text = extract_text_with_pymupdf(file_path)
     
     if not text.strip():
-        print("❌ No text extracted", flush=True)
+        print("❌ No text extracted from PDF", flush=True)
         return 0
     
     print(f"📝 Total text: {len(text)} chars", flush=True)
     
-    # Chunk text
+    # Chunk text with smaller chunks
     chunks = chunk_text(text)
     print(f"📦 Created {len(chunks)} chunks", flush=True)
     
     if not chunks:
         return 0
     
-    # Process chunks
+    # Process chunks one by one with memory cleanup
     successful = 0
     for i, chunk in enumerate(chunks):
         print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
@@ -119,7 +148,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                 supabase.table("document_chunks").insert({
                     "user_id": user_id,
                     "filename": filename,
-                    "chunk_text": chunk[:1000],
+                    "chunk_text": chunk[:800],  # Store less text
                     "chunk_index": i,
                     "embedding": embedding
                 }).execute()
@@ -128,10 +157,22 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
             except Exception as e:
                 print(f"    ❌ DB error: {e}", flush=True)
         
-        # Garbage collection every 5 chunks
-        if i > 0 and i % 5 == 0:
-            import gc
-            gc.collect()
+        # Aggressive cleanup every chunk
+        gc.collect()
+        
+        # Clear any remaining references
+        del embedding
+        
+        # Print memory usage every 5 chunks
+        if (i + 1) % 5 == 0:
+            import psutil
+            process = psutil.Process()
+            mem_mb = process.memory_info().rss / 1024 / 1024
+            print(f"  📊 Memory usage: {mem_mb:.0f} MB", flush=True)
+    
+    # Final cleanup
+    gc.collect()
+    fitz.TOOLS.store_shrink(100)
     
     # Record in user_documents
     if successful > 0:
@@ -144,6 +185,8 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
             print(f"✅ Stored {successful}/{len(chunks)} chunks", flush=True)
         except Exception as e:
             print(f"❌ Record error: {e}", flush=True)
+    else:
+        print("❌ No chunks stored", flush=True)
     
     return successful
 
