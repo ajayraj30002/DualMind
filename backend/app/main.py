@@ -114,6 +114,177 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "email": current_user["email"]
     }
 
+# ========== CHAT SESSION ENDPOINTS ==========
+
+@app.get("/chat/sessions")
+async def get_sessions(current_user: dict = Depends(get_current_user)):
+    """Get all chat sessions for current user"""
+    try:
+        response = supabase.table("chat_sessions")\
+            .select("*")\            .eq("user_id", current_user["user_id"])\
+            .order("updated_at", desc=True)\
+            .execute()
+        return {"sessions": response.data}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get sessions: {str(e)}")
+
+@app.post("/chat/sessions")
+async def create_session(current_user: dict = Depends(get_current_user)):
+    """Create a new chat session"""
+    try:
+        response = supabase.table("chat_sessions").insert({
+            "user_id": current_user["user_id"],
+            "title": "New Chat",
+            "created_at": "now()",
+            "updated_at": "now()"
+        }).execute()
+        return {"session": response.data[0]}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to create session: {str(e)}")
+
+@app.put("/chat/sessions/{session_id}")
+async def rename_session(session_id: str, title: str, current_user: dict = Depends(get_current_user)):
+    """Rename a chat session"""
+    try:
+        supabase.table("chat_sessions")\
+            .update({"title": title, "updated_at": "now()"})\
+            .eq("id", session_id)\
+            .eq("user_id", current_user["user_id"])\
+            .execute()
+        return {"message": "Session renamed"}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to rename session: {str(e)}")
+
+@app.delete("/chat/sessions/{session_id}")
+async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a chat session and its messages"""
+    try:
+        # Delete messages first (cascade should handle, but explicit for safety)
+        supabase.table("chat_messages").delete().eq("session_id", session_id).execute()
+        supabase.table("chat_sessions").delete().eq("id", session_id).eq("user_id", current_user["user_id"]).execute()
+        return {"message": "Session deleted"}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to delete session: {str(e)}")
+
+@app.get("/chat/sessions/{session_id}/messages")
+async def get_messages(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all messages for a session"""
+    try:
+        # Verify session belongs to user
+        session = supabase.table("chat_sessions")\
+            .select("*")\
+            .eq("id", session_id)\
+            .eq("user_id", current_user["user_id"])\
+            .execute()
+        if not session.data:
+            raise HTTPException(404, "Session not found")
+        
+        response = supabase.table("chat_messages")\
+            .select("*")\
+            .eq("session_id", session_id)\
+            .order("created_at", asc=True)\
+            .execute()
+        return {"messages": response.data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get messages: {str(e)}")
+
+@app.post("/chat/sessions/{session_id}/messages")
+async def send_message(
+    session_id: str,
+    request: QueryRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Send a message and get AI response with conversation context"""
+    
+    # Verify session belongs to user
+    session = supabase.table("chat_sessions")\
+        .select("*")\
+        .eq("id", session_id)\
+        .eq("user_id", current_user["user_id"])\
+        .execute()
+    if not session.data:
+        raise HTTPException(404, "Session not found")
+    
+    # Save user message
+    supabase.table("chat_messages").insert({
+        "session_id": session_id,
+        "role": "user",
+        "content": request.question
+    }).execute()
+    
+    # Get previous messages for context (last 10)
+    previous = supabase.table("chat_messages")\
+        .select("*")\
+        .eq("session_id", session_id)\
+        .order("created_at", desc=True)\
+        .limit(10)\
+        .execute()
+    
+    # Build conversation context
+    conversation = []
+    for msg in reversed(previous.data):
+        conversation.append(f"{msg['role'].upper()}: {msg['content']}")
+    conversation_context = "\n".join(conversation)
+    
+    # Hybrid search with conversation context
+    result = await hybrid_search(
+        question=request.question,
+        user_id=current_user["user_id"],
+        search_type=request.search_type,
+        conversation_context=conversation_context
+    )
+    
+    # Save assistant message
+    supabase.table("chat_messages").insert({
+        "session_id": session_id,
+        "role": "assistant",
+        "content": result["answer"],
+        "sources": result.get("sources")
+    }).execute()
+    
+    # Update session updated_at
+    supabase.table("chat_sessions")\
+        .update({"updated_at": "now()"})\
+        .eq("id", session_id)\
+        .execute()
+    
+    return QueryResponse(
+        answer=result["answer"],
+        sources=result.get("sources"),
+        search_type_used=result["search_type_used"]
+    )
+
+@app.post("/chat/sessions/{session_id}/attach")
+async def attach_document(
+    session_id: str,
+    filename: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Attach an existing document to a chat session"""
+    try:
+        # Get document ID
+        doc = supabase.table("user_documents")\
+            .select("id")\
+            .eq("user_id", current_user["user_id"])\
+            .eq("filename", filename)\
+            .execute()
+        if not doc.data:
+            raise HTTPException(404, "Document not found")
+        
+        # Link document to session
+        supabase.table("session_documents").insert({
+            "session_id": session_id,
+            "document_id": doc.data[0]["id"]
+        }).execute()
+        
+        return {"message": f"Document {filename} attached"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to attach document: {str(e)}")
+
 @app.post("/upload")
 async def upload_pdf(
     file: UploadFile = File(...),
