@@ -38,14 +38,12 @@ def get_embedding(text: str) -> list:
 
 def extract_text_with_pypdfium2(file_path: str) -> str:
     """
-    Extract text using pypdfium2 - LOW MEMORY USAGE (~256MB vs 515MB)
-    Based on benchmark data showing pypdfium2 is much more memory efficient
+    Extract text using pypdfium2 - LOW MEMORY USAGE
     """
     text = ""
     pdf = None
     
     try:
-        # Open PDF
         pdf = pdfium.PdfDocument(file_path)
         total_pages = len(pdf)
         print(f"📄 PDF has {total_pages} pages", flush=True)
@@ -54,14 +52,13 @@ def extract_text_with_pypdfium2(file_path: str) -> str:
             page = pdf[page_num]
             
             # Extract text as plain text
-            page_text = page.get_textpage()
-            text += page_text.get_text_range() + "\n\n"
+            text_page = page.get_textpage()
+            text += text_page.get_text_range() + "\n\n"
             
             # Clean up page objects immediately
             del page
-            del page_text
+            del text_page
             
-            # Force garbage collection every page
             if page_num % 5 == 0 and page_num > 0:
                 gc.collect()
             
@@ -89,7 +86,6 @@ def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]
         end = min(start + chunk_size, text_length)
         chunk = text[start:end]
         
-        # Try to break at a sentence boundary
         if end < text_length:
             last_boundary = max(
                 chunk.rfind('.'),
@@ -109,27 +105,24 @@ def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]
     return chunks
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF with pypdfium2 - memory optimized"""
+    """Process PDF using pypdfium2"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
-    # Extract text
     text = extract_text_with_pypdfium2(file_path)
     
     if not text.strip():
-        print("❌ No text extracted from PDF", flush=True)
+        print("❌ No text extracted", flush=True)
         return 0
     
     print(f"📝 Total text: {len(text)} chars", flush=True)
     
-    # Chunk text
     chunks = chunk_text(text)
     print(f"📦 Created {len(chunks)} chunks", flush=True)
     
     if not chunks:
         return 0
     
-    # Process chunks
     successful = 0
     for i, chunk in enumerate(chunks):
         print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
@@ -149,19 +142,20 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
             except Exception as e:
                 print(f"    ❌ DB error: {e}", flush=True)
         
-        # Clean up
         del embedding
         gc.collect()
         
         if (i + 1) % 5 == 0:
-            import psutil
-            process = psutil.Process()
-            mem_mb = process.memory_info().rss / 1024 / 1024
-            print(f"  📊 Memory usage: {mem_mb:.0f} MB", flush=True)
+            try:
+                import psutil
+                process = psutil.Process()
+                mem_mb = process.memory_info().rss / 1024 / 1024
+                print(f"  📊 Memory: {mem_mb:.0f} MB", flush=True)
+            except:
+                pass
     
     gc.collect()
     
-    # Record in user_documents
     if successful > 0:
         try:
             supabase.table("user_documents").insert({
@@ -172,8 +166,6 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
             print(f"✅ Stored {successful}/{len(chunks)} chunks", flush=True)
         except Exception as e:
             print(f"❌ Record error: {e}", flush=True)
-    else:
-        print("❌ No chunks stored", flush=True)
     
     return successful
 
