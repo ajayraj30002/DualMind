@@ -3,7 +3,7 @@ import sys
 import re
 import gc
 from typing import List, Dict, Any
-import fitz  # PyMuPDF
+import pypdfium2 as pdfium
 import cohere
 from supabase import create_client
 from .config import Config
@@ -36,36 +36,34 @@ def get_embedding(text: str) -> list:
         print(f"❌ Cohere error: {e}", flush=True)
         return None
 
-def extract_text_with_pymupdf(file_path: str) -> str:
+def extract_text_with_pypdfium2(file_path: str) -> str:
     """
-    Extract text using PyMuPDF with aggressive memory cleanup
-    Based on memory optimization techniques from PyMuPDF docs [citation:10]
+    Extract text using pypdfium2 - LOW MEMORY USAGE (~256MB vs 515MB)
+    Based on benchmark data showing pypdfium2 is much more memory efficient
     """
     text = ""
-    doc = None
+    pdf = None
     
     try:
         # Open PDF
-        doc = fitz.open(file_path)
-        total_pages = len(doc)
+        pdf = pdfium.PdfDocument(file_path)
+        total_pages = len(pdf)
         print(f"📄 PDF has {total_pages} pages", flush=True)
         
         for page_num in range(total_pages):
-            page = doc[page_num]
+            page = pdf[page_num]
             
-            # Extract text from page
-            page_text = page.get_text()
-            if page_text:
-                text += page_text + "\n\n"
+            # Extract text as plain text
+            page_text = page.get_textpage()
+            text += page_text.get_text_range() + "\n\n"
             
-            # CRITICAL: Clear page from memory immediately
+            # Clean up page objects immediately
             del page
+            del page_text
             
             # Force garbage collection every page
             if page_num % 5 == 0 and page_num > 0:
                 gc.collect()
-                # Shrink PyMuPDF's internal storage cache [citation:1][citation:10]
-                fitz.TOOLS.store_shrink(100)
             
             if (page_num + 1) % 10 == 0:
                 print(f"  Processed {page_num + 1}/{total_pages} pages", flush=True)
@@ -73,21 +71,16 @@ def extract_text_with_pymupdf(file_path: str) -> str:
         return text
         
     except Exception as e:
-        print(f"❌ PyMuPDF error: {e}", flush=True)
+        print(f"❌ pypdfium2 error: {e}", flush=True)
         return ""
         
     finally:
-        # CRITICAL: Always close document and clear cache [citation:10]
-        if doc:
-            doc.close()
-        # Shrink storage cache to release memory
-        fitz.TOOLS.store_shrink(100)
+        if pdf:
+            pdf.close()
         gc.collect()
 
 def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]:
-    """
-    Memory-efficient text chunking with smaller chunks
-    """
+    """Memory-efficient text chunking"""
     chunks = []
     start = 0
     text_length = len(text)
@@ -98,7 +91,6 @@ def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]
         
         # Try to break at a sentence boundary
         if end < text_length:
-            # Find last period, question mark, exclamation, or newline
             last_boundary = max(
                 chunk.rfind('.'),
                 chunk.rfind('?'),
@@ -117,12 +109,12 @@ def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]
     return chunks
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF with aggressive memory management"""
+    """Process PDF with pypdfium2 - memory optimized"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
-    # Extract text with memory optimization
-    text = extract_text_with_pymupdf(file_path)
+    # Extract text
+    text = extract_text_with_pypdfium2(file_path)
     
     if not text.strip():
         print("❌ No text extracted from PDF", flush=True)
@@ -130,14 +122,14 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
     
     print(f"📝 Total text: {len(text)} chars", flush=True)
     
-    # Chunk text with smaller chunks
+    # Chunk text
     chunks = chunk_text(text)
     print(f"📦 Created {len(chunks)} chunks", flush=True)
     
     if not chunks:
         return 0
     
-    # Process chunks one by one with memory cleanup
+    # Process chunks
     successful = 0
     for i, chunk in enumerate(chunks):
         print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
@@ -148,7 +140,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                 supabase.table("document_chunks").insert({
                     "user_id": user_id,
                     "filename": filename,
-                    "chunk_text": chunk[:800],  # Store less text
+                    "chunk_text": chunk[:800],
                     "chunk_index": i,
                     "embedding": embedding
                 }).execute()
@@ -157,22 +149,17 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
             except Exception as e:
                 print(f"    ❌ DB error: {e}", flush=True)
         
-        # Aggressive cleanup every chunk
+        # Clean up
+        del embedding
         gc.collect()
         
-        # Clear any remaining references
-        del embedding
-        
-        # Print memory usage every 5 chunks
         if (i + 1) % 5 == 0:
             import psutil
             process = psutil.Process()
             mem_mb = process.memory_info().rss / 1024 / 1024
             print(f"  📊 Memory usage: {mem_mb:.0f} MB", flush=True)
     
-    # Final cleanup
     gc.collect()
-    fitz.TOOLS.store_shrink(100)
     
     # Record in user_documents
     if successful > 0:
