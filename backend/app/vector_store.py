@@ -2,7 +2,7 @@ import os
 import sys
 import re
 from typing import List, Dict, Any
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF - NO pypdf import
 import cohere
 from supabase import create_client
 from .config import Config
@@ -37,12 +37,10 @@ def get_embedding(text: str) -> list:
 
 def extract_text_memory_efficient(file_path: str) -> str:
     """
-    Extract text using PyMuPDF - MUCH more memory efficient than pypdf
-    PyMuPDF streams pages without loading entire PDF into RAM
+    Extract text using PyMuPDF - memory efficient
     """
     text = ""
     try:
-        # Open PDF (streaming, not loading全部)
         doc = fitz.open(file_path)
         total_pages = len(doc)
         print(f"📄 PDF has {total_pages} pages", flush=True)
@@ -53,10 +51,9 @@ def extract_text_memory_efficient(file_path: str) -> str:
             if page_text:
                 text += page_text + "\n\n"
             
-            # Free page from memory immediately
+            # Free page from memory
             del page
             
-            # Log progress
             if (page_num + 1) % 10 == 0:
                 print(f"  Processed {page_num + 1}/{total_pages} pages", flush=True)
         
@@ -78,7 +75,6 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> List[str
         
         # Try to break at a sentence boundary
         if end < text_length:
-            # Find last period, question mark, or newline
             last_period = max(chunk.rfind('.'), chunk.rfind('?'), chunk.rfind('!'), chunk.rfind('\n'))
             if last_period > chunk_size // 2:
                 end = start + last_period + 1
@@ -92,15 +88,15 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> List[str
     return chunks
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF using PyMuPDF - memory optimized"""
+    """Process PDF using PyMuPDF"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
-    # Extract text (memory efficient)
+    # Extract text
     text = extract_text_memory_efficient(file_path)
     
     if not text.strip():
-        print("❌ No text extracted from PDF", flush=True)
+        print("❌ No text extracted", flush=True)
         return 0
     
     print(f"📝 Total text: {len(text)} chars", flush=True)
@@ -112,7 +108,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
     if not chunks:
         return 0
     
-    # Process chunks one by one
+    # Process chunks
     successful = 0
     for i, chunk in enumerate(chunks):
         print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
@@ -132,7 +128,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
             except Exception as e:
                 print(f"    ❌ DB error: {e}", flush=True)
         
-        # Force garbage collection every 5 chunks
+        # Garbage collection every 5 chunks
         if i > 0 and i % 5 == 0:
             import gc
             gc.collect()
@@ -148,8 +144,6 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
             print(f"✅ Stored {successful}/{len(chunks)} chunks", flush=True)
         except Exception as e:
             print(f"❌ Record error: {e}", flush=True)
-    else:
-        print("❌ No chunks stored", flush=True)
     
     return successful
 
