@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from groq import Groq
 from .closed_domain import search_closed_domain
 from .open_domain import search_open_domain
@@ -25,17 +25,25 @@ def combine_sources(closed_results: List[Dict], open_results: List[Dict], max_so
     # Limit total sources
     return all_sources[:max_sources]
 
-def generate_answer(question: str, sources: List[Dict]) -> str:
+def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
     """
     Generate a clean, natural answer using Groq LLM
-    No source citations - just direct answers
+    Supports conversation context for follow-up questions
     """
     
-    if not sources:
-        # No sources found - ask LLM to answer from its knowledge
-        prompt = f"""You are DualMind, a helpful AI assistant. Answer the following question based on your knowledge. If you don't know, say so honestly.
+    # Build conversation context if available
+    context_section = ""
+    if conversation_context:
+        context_section = f"""PREVIOUS CONVERSATION:
+{conversation_context}
 
-Question: {question}
+"""
+    
+    if not sources:
+        # No sources found - ask LLM to answer from its knowledge with context
+        prompt = f"""{context_section}You are DualMind, a helpful AI assistant. Answer the following question based on your knowledge and the conversation history. If you don't know, say so honestly.
+
+Current Question: {question}
 
 Answer:"""
     else:
@@ -44,20 +52,21 @@ Answer:"""
         for source in sources:
             context_parts.append(source['content'])
         
-        context = "\n\n---\n\n".join(context_parts)
+        doc_context = "\n\n---\n\n".join(context_parts)
         
-        prompt = f"""You are DualMind, a helpful AI assistant. Answer the question based ONLY on the information below.
+        prompt = f"""{context_section}You are DualMind, a helpful AI assistant. Answer the question based ONLY on the information below and the conversation history.
 
-INFORMATION:
-{context}
+INFORMATION FROM DOCUMENTS/WEB:
+{doc_context}
 
-QUESTION: {question}
+CURRENT QUESTION: {question}
 
 INSTRUCTIONS:
 1. Answer naturally - don't mention "source" or "document"
 2. Don't use phrases like "according to" or "based on"
 3. Just give the answer directly
 4. If the information doesn't contain the answer, say "I don't have enough information to answer that"
+5. Use the conversation history to understand follow-up questions
 
 ANSWER:"""
 
@@ -66,7 +75,7 @@ ANSWER:"""
         completion = groq_client.chat.completions.create(
             model=Config.LLM_MODEL,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that gives direct, natural answers without citing sources."},
+                {"role": "system", "content": "You are a helpful assistant that gives direct, natural answers without citing sources. Use conversation history to understand context."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
@@ -78,12 +87,23 @@ ANSWER:"""
     except Exception as e:
         return f"Error generating response: {str(e)}"
 
-async def hybrid_search(question: str, user_id: str, search_type: str = "hybrid") -> Dict[str, Any]:
+async def hybrid_search(
+    question: str, 
+    user_id: str, 
+    search_type: str = "hybrid",
+    conversation_context: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Perform hybrid search based on specified type:
     - "closed": Only user's documents
     - "open": Only web search
     - "hybrid": Both sources
+    
+    Args:
+        question: User's question
+        user_id: User ID for document search
+        search_type: Type of search to perform
+        conversation_context: Previous conversation for context
     """
     
     closed_results = []
@@ -100,16 +120,23 @@ async def hybrid_search(question: str, user_id: str, search_type: str = "hybrid"
     # Combine sources
     all_sources = combine_sources(closed_results, open_results)
     
-    # Generate clean answer
-    answer = generate_answer(question, all_sources)
+    # Generate answer with conversation context
+    answer = generate_answer(question, all_sources, conversation_context)
     
-    # Prepare sources for response (for debugging, not shown to user)
+    # Prepare sources for response (clean UI format)
     response_sources = []
     for source in all_sources[:4]:
+        source_type = source.get('source_type', 'Source')
+        # Clean up source display
+        if source_type == '📁 My Documents':
+            display_name = source.get('filename', 'Document')
+        else:
+            display_name = source.get('url', 'Web Search')
+        
         response_sources.append({
-            "type": source.get('source_type', 'Source'),
+            "type": source_type,
+            "title": display_name,
             "content": source.get('content', '')[:200],
-            "filename": source.get('filename', ''),
             "url": source.get('url', '')
         })
     
