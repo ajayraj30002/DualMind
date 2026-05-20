@@ -8,7 +8,7 @@ import cohere
 from supabase import create_client
 from .config import Config
 
-# ============================================ 
+# ============================================
 # INITIALIZE COHERE CLIENT
 # ============================================
 print("🔄 Initializing Cohere API client...", flush=True)
@@ -36,9 +36,10 @@ def get_embedding(text: str) -> list:
         print(f"❌ Cohere error: {e}", flush=True)
         return None
 
-def extract_text_with_pypdfium2(file_path: str) -> str:
+def extract_text_safe(file_path: str) -> str:
     """
-    Extract text using pypdfium2 - LOW MEMORY USAGE
+    Extract text with PROPER cleanup order to avoid "Parent closed before child"
+    Order: Close TextPage → Close Page → Close Document
     """
     text = ""
     pdf = None
@@ -50,16 +51,26 @@ def extract_text_with_pypdfium2(file_path: str) -> str:
         
         for page_num in range(total_pages):
             page = pdf[page_num]
+            text_page = None
             
-            # Extract text as plain text
-            text_page = page.get_textpage()
-            text += text_page.get_text_range() + "\n\n"
+            try:
+                # Get text page
+                text_page = page.get_textpage()
+                page_text = text_page.get_text_range()
+                if page_text:
+                    text += page_text + "\n\n"
+                
+            except Exception as e:
+                print(f"  ⚠️ Page {page_num + 1} error: {e}", flush=True)
+                
+            finally:
+                # CRITICAL: Clean up in correct order
+                if text_page:
+                    text_page.close()
+                del page
             
-            # Clean up page objects immediately
-            del page
-            del text_page
-            
-            if page_num % 5 == 0 and page_num > 0:
+            # Force GC every page
+            if page_num % 5 == 0:
                 gc.collect()
             
             if (page_num + 1) % 10 == 0:
@@ -68,7 +79,7 @@ def extract_text_with_pypdfium2(file_path: str) -> str:
         return text
         
     except Exception as e:
-        print(f"❌ pypdfium2 error: {e}", flush=True)
+        print(f"❌ PDF error: {e}", flush=True)
         return ""
         
     finally:
@@ -77,7 +88,10 @@ def extract_text_with_pypdfium2(file_path: str) -> str:
         gc.collect()
 
 def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]:
-    """Memory-efficient text chunking"""
+    """Split text into overlapping chunks"""
+    if not text:
+        return []
+    
     chunks = []
     start = 0
     text_length = len(text)
@@ -86,16 +100,14 @@ def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]
         end = min(start + chunk_size, text_length)
         chunk = text[start:end]
         
+        # Try to break at a sentence boundary
         if end < text_length:
-            last_boundary = max(
-                chunk.rfind('.'),
-                chunk.rfind('?'),
-                chunk.rfind('!'),
-                chunk.rfind('\n')
-            )
-            if last_boundary > chunk_size // 2:
-                end = start + last_boundary + 1
-                chunk = text[start:end]
+            for sep in ['. ', '? ', '! ', '\n\n', '\n']:
+                last_sep = chunk.rfind(sep)
+                if last_sep > chunk_size // 2:
+                    end = start + last_sep + len(sep)
+                    chunk = text[start:end]
+                    break
         
         if chunk.strip():
             chunks.append(chunk.strip())
@@ -105,11 +117,12 @@ def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]
     return chunks
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF using pypdfium2"""
+    """Process PDF and store chunks"""
     
     print(f"📄 Processing PDF: {filename}", flush=True)
     
-    text = extract_text_with_pypdfium2(file_path)
+    # Extract text safely
+    text = extract_text_safe(file_path)
     
     if not text.strip():
         print("❌ No text extracted", flush=True)
@@ -117,12 +130,14 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
     
     print(f"📝 Total text: {len(text)} chars", flush=True)
     
+    # Split into chunks
     chunks = chunk_text(text)
     print(f"📦 Created {len(chunks)} chunks", flush=True)
     
     if not chunks:
         return 0
     
+    # Process chunks
     successful = 0
     for i, chunk in enumerate(chunks):
         print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
@@ -133,7 +148,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                 supabase.table("document_chunks").insert({
                     "user_id": user_id,
                     "filename": filename,
-                    "chunk_text": chunk[:800],
+                    "chunk_text": chunk[:1000],
                     "chunk_index": i,
                     "embedding": embedding
                 }).execute()
@@ -142,20 +157,14 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
             except Exception as e:
                 print(f"    ❌ DB error: {e}", flush=True)
         
+        # Clean up
         del embedding
         gc.collect()
         
         if (i + 1) % 5 == 0:
-            try:
-                import psutil
-                process = psutil.Process()
-                mem_mb = process.memory_info().rss / 1024 / 1024
-                print(f"  📊 Memory: {mem_mb:.0f} MB", flush=True)
-            except:
-                pass
+            print(f"  📊 Processed {i+1}/{len(chunks)} chunks", flush=True)
     
-    gc.collect()
-    
+    # Record in user_documents
     if successful > 0:
         try:
             supabase.table("user_documents").insert({
@@ -166,11 +175,14 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
             print(f"✅ Stored {successful}/{len(chunks)} chunks", flush=True)
         except Exception as e:
             print(f"❌ Record error: {e}", flush=True)
+    else:
+        print("❌ No chunks stored", flush=True)
     
+    gc.collect()
     return successful
 
 def search_similar_chunks(question: str, user_id: str, top_k: int = 4) -> List[Dict[str, Any]]:
-    """Search for similar chunks"""
+    """Search for similar chunks using Cohere"""
     
     print(f"🔍 Searching...", flush=True)
     
@@ -212,7 +224,7 @@ def search_similar_chunks(question: str, user_id: str, top_k: int = 4) -> List[D
         return []
 
 def delete_user_documents(user_id: str, filename: str = None):
-    """Delete documents"""
+    """Delete user documents"""
     try:
         if filename:
             supabase.table("document_chunks").delete().eq("user_id", user_id).eq("filename", filename).execute()
