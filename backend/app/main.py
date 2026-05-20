@@ -31,11 +31,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
 # Ensure upload directory exists
 os.makedirs(Config.UPLOAD_DIR, exist_ok=True)
-
-# Create users table in Supabase if not exists (run once in Supabase SQL editor)
-# SQL command will be provided separately
 
 # ========== HEALTH CHECK ==========
 @app.get("/")
@@ -51,15 +49,12 @@ def health_check():
 async def signup(request: SignUpRequest):
     """User signup with email and password"""
     
-    # Check if user exists
     existing = supabase.table("users").select("*").eq("email", request.email).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Hash password
     hashed_password = bcrypt.hashpw(request.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
-    # Create user in Supabase
     try:
         response = supabase.table("users").insert({
             "email": request.email,
@@ -82,7 +77,6 @@ async def signup(request: SignUpRequest):
 async def signin(request: SignInRequest):
     """User signin with email and password"""
     
-    # Find user
     response = supabase.table("users").select("*").eq("email", request.email).execute()
     
     if not response.data:
@@ -90,11 +84,9 @@ async def signin(request: SignInRequest):
     
     user = response.data[0]
     
-    # Verify password
     if not bcrypt.checkpw(request.password.encode('utf-8'), user["hashed_password"].encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    # Create JWT token
     access_token = create_access_token(
         data={"sub": user["id"], "email": user["email"]}
     )
@@ -108,7 +100,7 @@ async def signin(request: SignInRequest):
 
 @app.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
-    """Get current user info (protected route)"""
+    """Get current user info"""
     return {
         "user_id": current_user["user_id"],
         "email": current_user["email"]
@@ -121,7 +113,8 @@ async def get_sessions(current_user: dict = Depends(get_current_user)):
     """Get all chat sessions for current user"""
     try:
         response = supabase.table("chat_sessions")\
-            .select("*")\            .eq("user_id", current_user["user_id"])\
+            .select("*")\
+            .eq("user_id", current_user["user_id"])\
             .order("updated_at", desc=True)\
             .execute()
         return {"sessions": response.data}
@@ -159,7 +152,6 @@ async def rename_session(session_id: str, title: str, current_user: dict = Depen
 async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a chat session and its messages"""
     try:
-        # Delete messages first (cascade should handle, but explicit for safety)
         supabase.table("chat_messages").delete().eq("session_id", session_id).execute()
         supabase.table("chat_sessions").delete().eq("id", session_id).eq("user_id", current_user["user_id"]).execute()
         return {"message": "Session deleted"}
@@ -170,7 +162,6 @@ async def delete_session(session_id: str, current_user: dict = Depends(get_curre
 async def get_messages(session_id: str, current_user: dict = Depends(get_current_user)):
     """Get all messages for a session"""
     try:
-        # Verify session belongs to user
         session = supabase.table("chat_sessions")\
             .select("*")\
             .eq("id", session_id)\
@@ -198,7 +189,6 @@ async def send_message(
 ):
     """Send a message and get AI response with conversation context"""
     
-    # Verify session belongs to user
     session = supabase.table("chat_sessions")\
         .select("*")\
         .eq("id", session_id)\
@@ -214,7 +204,7 @@ async def send_message(
         "content": request.question
     }).execute()
     
-    # Get previous messages for context (last 10)
+    # Get previous messages for context
     previous = supabase.table("chat_messages")\
         .select("*")\
         .eq("session_id", session_id)\
@@ -264,7 +254,6 @@ async def attach_document(
 ):
     """Attach an existing document to a chat session"""
     try:
-        # Get document ID
         doc = supabase.table("user_documents")\
             .select("id")\
             .eq("user_id", current_user["user_id"])\
@@ -273,7 +262,6 @@ async def attach_document(
         if not doc.data:
             raise HTTPException(404, "Document not found")
         
-        # Link document to session
         supabase.table("session_documents").insert({
             "session_id": session_id,
             "document_id": doc.data[0]["id"]
@@ -284,6 +272,8 @@ async def attach_document(
         raise
     except Exception as e:
         raise HTTPException(500, f"Failed to attach document: {str(e)}")
+
+# ========== DOCUMENT ENDPOINTS ==========
 
 @app.post("/upload")
 async def upload_pdf(
@@ -301,7 +291,6 @@ async def upload_pdf(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    # Process and store in Supabase pgvector
     chunk_count = process_and_store_pdf(file_path, current_user["user_id"], file.filename)
     
     return UploadResponse(
@@ -315,7 +304,7 @@ async def query(
     request: QueryRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Ask a question using hybrid RAG (protected)"""
+    """Ask a question using hybrid RAG"""
     
     result = await hybrid_search(
         question=request.question,
@@ -340,11 +329,9 @@ async def list_documents(current_user: dict = Depends(get_current_user)):
 
 @app.delete("/documents/{filename}")
 async def delete_document(filename: str, current_user: dict = Depends(get_current_user)):
-    """Delete a specific document (TODO: Also remove from ChromaDB)"""
+    """Delete a specific document"""
     try:
         supabase.table("user_documents").delete().eq("user_id", current_user["user_id"]).eq("filename", filename).execute()
         return {"message": f"Document {filename} deleted"}
     except Exception as e:
         raise HTTPException(500, f"Failed to delete: {str(e)}")
-
-# CI/CD TEST TRIGGER - DELETE THIS LINE        
