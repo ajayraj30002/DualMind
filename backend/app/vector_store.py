@@ -2,16 +2,19 @@ import os
 import sys
 import re
 from typing import List, Dict, Any
-from pypdf import PdfReader
+import fitz  # PyMuPDF
 import cohere
 from supabase import create_client
 from .config import Config
 
-# Initialize clients
+# ============================================
+# INITIALIZE COHERE CLIENT
+# ============================================
 print("🔄 Initializing Cohere API client...", flush=True)
 cohere_client = cohere.Client(api_key=Config.COHERE_API_KEY)
 print("✅ Cohere client ready", flush=True)
 
+# Initialize Supabase client
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
 def get_embedding(text: str) -> list:
@@ -32,71 +35,107 @@ def get_embedding(text: str) -> list:
         print(f"❌ Cohere error: {e}", flush=True)
         return None
 
-def process_pdf_in_chunks(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF page by page to save memory"""
-    
-    print(f"📄 Processing: {filename}", flush=True)
-    
-    successful = 0
-    chunk_index = 0
-    
+def extract_text_memory_efficient(file_path: str) -> str:
+    """
+    Extract text using PyMuPDF - MUCH more memory efficient than pypdf
+    PyMuPDF streams pages without loading entire PDF into RAM
+    """
+    text = ""
     try:
-        # Read PDF page by page (not all at once)
-        reader = PdfReader(file_path)
-        total_pages = len(reader.pages)
-        print(f"📄 Total pages: {total_pages}", flush=True)
+        # Open PDF (streaming, not loading全部)
+        doc = fitz.open(file_path)
+        total_pages = len(doc)
+        print(f"📄 PDF has {total_pages} pages", flush=True)
         
-        for page_num, page in enumerate(reader.pages):
-            print(f"  Page {page_num + 1}/{total_pages}", flush=True)
+        for page_num in range(total_pages):
+            page = doc[page_num]
+            page_text = page.get_text()
+            if page_text:
+                text += page_text + "\n\n"
             
-            # Extract text from single page
-            page_text = page.extract_text()
-            if not page_text:
-                continue
-            
-            # Split page into smaller chunks (300 chars for memory)
-            page_chunks = []
-            chunk_size = 500
-            overlap = 50
-            
-            for i in range(0, len(page_text), chunk_size - overlap):
-                chunk = page_text[i:i + chunk_size]
-                if chunk.strip():
-                    page_chunks.append(chunk.strip())
-            
-            # Process each chunk
-            for chunk in page_chunks:
-                print(f"    Chunk {chunk_index + 1}: {len(chunk)} chars", flush=True)
-                
-                embedding = get_embedding(chunk)
-                if embedding:
-                    try:
-                        supabase.table("document_chunks").insert({
-                            "user_id": user_id,
-                            "filename": filename,
-                            "chunk_text": chunk[:800],
-                            "chunk_index": chunk_index,
-                            "embedding": embedding
-                        }).execute()
-                        successful += 1
-                        chunk_index += 1
-                        print(f"      ✅ Stored", flush=True)
-                    except Exception as e:
-                        print(f"      ❌ DB error: {e}", flush=True)
-                
-                # Force garbage collection every 10 chunks
-                if chunk_index % 10 == 0:
-                    import gc
-                    gc.collect()
-            
-            # Clear page from memory
+            # Free page from memory immediately
             del page
+            
+            # Log progress
+            if (page_num + 1) % 10 == 0:
+                print(f"  Processed {page_num + 1}/{total_pages} pages", flush=True)
+        
+        doc.close()
+        return text
+    except Exception as e:
+        print(f"❌ PyMuPDF error: {e}", flush=True)
+        return ""
+
+def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> List[str]:
+    """Memory-efficient text chunking"""
+    chunks = []
+    start = 0
+    text_length = len(text)
+    
+    while start < text_length:
+        end = min(start + chunk_size, text_length)
+        chunk = text[start:end]
+        
+        # Try to break at a sentence boundary
+        if end < text_length:
+            # Find last period, question mark, or newline
+            last_period = max(chunk.rfind('.'), chunk.rfind('?'), chunk.rfind('!'), chunk.rfind('\n'))
+            if last_period > chunk_size // 2:
+                end = start + last_period + 1
+                chunk = text[start:end]
+        
+        if chunk.strip():
+            chunks.append(chunk.strip())
+        
+        start = end - overlap
+    
+    return chunks
+
+def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
+    """Process PDF using PyMuPDF - memory optimized"""
+    
+    print(f"📄 Processing PDF: {filename}", flush=True)
+    
+    # Extract text (memory efficient)
+    text = extract_text_memory_efficient(file_path)
+    
+    if not text.strip():
+        print("❌ No text extracted from PDF", flush=True)
+        return 0
+    
+    print(f"📝 Total text: {len(text)} chars", flush=True)
+    
+    # Chunk text
+    chunks = chunk_text(text)
+    print(f"📦 Created {len(chunks)} chunks", flush=True)
+    
+    if not chunks:
+        return 0
+    
+    # Process chunks one by one
+    successful = 0
+    for i, chunk in enumerate(chunks):
+        print(f"  Chunk {i+1}/{len(chunks)}: {len(chunk)} chars", flush=True)
+        
+        embedding = get_embedding(chunk)
+        if embedding:
+            try:
+                supabase.table("document_chunks").insert({
+                    "user_id": user_id,
+                    "filename": filename,
+                    "chunk_text": chunk[:1000],
+                    "chunk_index": i,
+                    "embedding": embedding
+                }).execute()
+                successful += 1
+                print(f"    ✅ Stored", flush=True)
+            except Exception as e:
+                print(f"    ❌ DB error: {e}", flush=True)
+        
+        # Force garbage collection every 5 chunks
+        if i > 0 and i % 5 == 0:
             import gc
             gc.collect()
-    
-    except Exception as e:
-        print(f"❌ PDF error: {e}", flush=True)
-        return 0
     
     # Record in user_documents
     if successful > 0:
@@ -106,14 +145,13 @@ def process_pdf_in_chunks(file_path: str, user_id: str, filename: str) -> int:
                 "filename": filename,
                 "chunk_count": successful
             }).execute()
-            print(f"✅ Stored {successful} chunks", flush=True)
+            print(f"✅ Stored {successful}/{len(chunks)} chunks", flush=True)
         except Exception as e:
             print(f"❌ Record error: {e}", flush=True)
+    else:
+        print("❌ No chunks stored", flush=True)
     
     return successful
-
-# Alias for compatibility
-process_and_store_pdf = process_pdf_in_chunks
 
 def search_similar_chunks(question: str, user_id: str, top_k: int = 4) -> List[Dict[str, Any]]:
     """Search for similar chunks"""
