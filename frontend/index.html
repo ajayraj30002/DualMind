@@ -6,152 +6,129 @@
     <title>DualMind | Hybrid RAG Assistant</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
-    <!-- ========== AUTH SECTION ========== -->
-    <div id="auth-section" class="auth-section">
-        <div class="auth-card">
-            <div class="auth-logo">
-                <span class="logo-icon">🧠</span>
-                <h2>DualMind</h2>
-            </div>
-            <p class="auth-tagline">Hybrid RAG Assistant — Your Documents + Live Web</p>
-            
-            <!-- Sign In Form -->
-            <div id="signin-form" class="auth-form">
-                <h3>Welcome Back</h3>
-                <input type="email" id="signin-email" placeholder="Email address" class="auth-input">
-                <input type="password" id="signin-password" placeholder="Password" class="auth-input">
-                <button id="signin-submit" class="auth-btn">Sign In</button>
-                <p class="auth-switch">
-                    Don't have an account? <a href="#" id="show-signup">Create account</a>
-                </p>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-brain"></i>
+                    <span>DualMind</span>
+                </div>
+                <button id="new-chat-btn" class="new-chat-btn">
+                    <i class="fas fa-plus"></i>
+                    <span>New Chat</span>
+                </button>
             </div>
             
-            <!-- Sign Up Form -->
-            <div id="signup-form" class="auth-form hidden">
-                <h3>Create Account</h3>
-                <input type="text" id="signup-fullname" placeholder="Full name" class="auth-input">
-                <input type="email" id="signup-email" placeholder="Email address" class="auth-input">
-                <input type="password" id="signup-password" placeholder="Password (min 6 characters)" class="auth-input">
-                <button id="signup-submit" class="auth-btn">Sign Up</button>
-                <p class="auth-switch">
-                    Already have an account? <a href="#" id="show-signin">Sign in</a>
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- ========== MAIN APP SECTION ========== -->
-    <div id="app-section" class="app-section hidden">
-        <div class="container">
-            <!-- Header -->
-            <div class="app-header">
-                <div class="logo-area">
-                    <span class="logo-icon-small">🧠</span>
-                    <h1>DualMind</h1>
-                </div>
-                <div class="user-area">
-                    <span class="user-email" id="user-email"></span>
-                    <button id="logout-btn" class="logout-btn">Logout</button>
+            <div class="sessions-list" id="sessions-list">
+                <div class="loading-sessions">
+                    <i class="fas fa-spinner fa-spin"></i> Loading chats...
                 </div>
             </div>
+            
+            <div class="sidebar-footer">
+                <div class="user-info" id="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="user-email">user@example.com</span>
+                </div>
+                <button id="logout-btn" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </aside>
 
-            <!-- Upload Section -->
-            <div class="upload-section">
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-icon">📄</span>
-                        <h3>Upload Document</h3>
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Auth Section (shown when logged out) -->
+            <div id="auth-section" class="auth-section">
+                <div class="auth-card">
+                    <div class="auth-logo">
+                        <i class="fas fa-brain"></i>
+                        <h2>DualMind</h2>
                     </div>
-                    <p class="card-desc">Upload PDFs to build your private knowledge base. Your documents are stored securely and used only for your queries.</p>
-                    <label for="file-upload" class="upload-btn">
-                        <span>📁 Choose PDF</span>
-                    </label>
-                    <input type="file" id="file-upload" accept=".pdf" hidden>
-                    <div id="upload-status" class="upload-status"></div>
-                    <div id="uploaded-files" class="uploaded-files">
-                        <div class="loading-placeholder">No documents uploaded yet</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Query Section -->
-            <div class="query-section">
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-icon">💬</span>
-                        <h3>Ask Anything</h3>
+                    <p class="auth-tagline">Hybrid RAG Assistant — Your Documents + Live Web</p>
+                    
+                    <div id="signin-form" class="auth-form">
+                        <h3>Welcome Back</h3>
+                        <input type="email" id="signin-email" placeholder="Email address" class="auth-input">
+                        <input type="password" id="signin-password" placeholder="Password" class="auth-input">
+                        <button id="signin-submit" class="auth-btn">Sign In</button>
+                        <p class="auth-switch">
+                            Don't have an account? <a href="#" id="show-signup">Create account</a>
+                        </p>
                     </div>
                     
-                    <!-- Search Type Selector -->
-                    <div class="search-type">
-                        <label class="radio-card">
-                            <input type="radio" name="search-type" value="closed" checked>
-                            <div class="radio-content">
-                                <span class="radio-icon">📁</span>
-                                <span class="radio-title">My Documents</span>
-                                <span class="radio-desc">Search only your uploaded PDFs</span>
-                            </div>
-                        </label>
-                        <label class="radio-card">
-                            <input type="radio" name="search-type" value="open">
-                            <div class="radio-content">
-                                <span class="radio-icon">🌐</span>
-                                <span class="radio-title">Live Web</span>
-                                <span class="radio-desc">Search the internet in real-time</span>
-                            </div>
-                        </label>
-                        <label class="radio-card">
-                            <input type="radio" name="search-type" value="hybrid">
-                            <div class="radio-content">
-                                <span class="radio-icon">🔗</span>
-                                <span class="radio-title">Hybrid</span>
-                                <span class="radio-desc">Combine both sources for best answer</span>
-                            </div>
-                        </label>
+                    <div id="signup-form" class="auth-form hidden">
+                        <h3>Create Account</h3>
+                        <input type="text" id="signup-fullname" placeholder="Full name" class="auth-input">
+                        <input type="email" id="signup-email" placeholder="Email address" class="auth-input">
+                        <input type="password" id="signup-password" placeholder="Password (min 6 characters)" class="auth-input">
+                        <button id="signup-submit" class="auth-btn">Sign Up</button>
+                        <p class="auth-switch">
+                            Already have an account? <a href="#" id="show-signin">Sign in</a>
+                        </p>
                     </div>
-                    
-                    <!-- Question Input -->
-                    <div class="input-group">
-                        <textarea id="question" placeholder="Ask your question... (e.g., 'Compare our company policy with industry standards')" rows="4"></textarea>
-                        <button id="ask-btn" class="ask-btn">
-                            <span class="btn-text">Ask DualMind</span>
-                            <span class="spinner hidden"></span>
+                </div>
+            </div>
+
+            <!-- Chat Interface (shown when logged in) -->
+            <div id="chat-section" class="chat-section hidden">
+                <!-- Chat Header -->
+                <div class="chat-header">
+                    <div class="chat-title-section">
+                        <input type="text" id="chat-title" class="chat-title-input" value="New Chat">
+                        <button id="rename-chat-btn" class="icon-btn">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                    </div>
+                    <div class="search-type-selector">
+                        <button class="search-type-btn" data-type="closed">
+                            <i class="fas fa-folder"></i> Documents
+                        </button>
+                        <button class="search-type-btn" data-type="open">
+                            <i class="fas fa-globe"></i> Web
+                        </button>
+                        <button class="search-type-btn active" data-type="hybrid">
+                            <i class="fas fa-link"></i> Hybrid
                         </button>
                     </div>
                 </div>
-            </div>
 
-            <!-- Response Section -->
-            <div id="response-section" class="response-section hidden">
-                <div class="card response-card">
-                    <div class="card-header">
-                        <span class="card-icon">✨</span>
-                        <h3>Answer</h3>
+                <!-- Messages Area -->
+                <div class="messages-area" id="messages-area">
+                    <div class="welcome-message">
+                        <i class="fas fa-brain"></i>
+                        <h2>DualMind Assistant</h2>
+                        <p>Ask me anything — I can search your documents or the web</p>
                     </div>
-                    <div id="answer" class="answer-content">
-                        <!-- Answer will appear here -->
+                </div>
+
+                <!-- Input Area -->
+                <div class="input-area">
+                    <div class="attachment-section" id="attachment-section">
+                        <button id="attach-btn" class="attach-btn">
+                            <i class="fas fa-paperclip"></i>
+                            <span>Attach PDF</span>
+                        </button>
+                        <input type="file" id="file-input" accept=".pdf" hidden>
+                        <div id="attached-files" class="attached-files"></div>
                     </div>
-                    
-                    <div id="sources" class="sources-section hidden">
-                        <div class="sources-header">
-                            <span class="sources-icon">📚</span>
-                            <h4>Sources</h4>
-                        </div>
-                        <div id="sources-list" class="sources-list">
-                            <!-- Sources will appear here -->
-                        </div>
+                    <div class="message-input-container">
+                        <textarea id="message-input" placeholder="Ask a follow-up question..." rows="1"></textarea>
+                        <button id="send-btn" class="send-btn">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div class="input-footer">
+                        <span>DualMind can search your documents and the web</span>
                     </div>
                 </div>
             </div>
-
-            <!-- Footer -->
-            <footer>
-                <p>Powered by Groq LLM • Supabase pgVector • Tavily Web Search</p>
-                <p class="footer-note">Your data is private. Documents are stored per user with secure authentication.</p>
-            </footer>
-        </div>
+        </main>
     </div>
 
     <script src="script.js"></script>
