@@ -12,104 +12,65 @@ def combine_sources(closed_results: List[Dict], open_results: List[Dict], max_so
     
     all_sources = []
     
+    # Add closed domain results
     for r in closed_results:
         r['source_type'] = '📁 My Documents'
         all_sources.append(r)
     
+    # Add open domain results
     for r in open_results:
         r['source_type'] = '🌐 Web Search'
         all_sources.append(r)
     
+    # Limit total sources
     return all_sources[:max_sources]
 
-def detect_document_type(content: str) -> str:
-    """Detect what type of document is being analyzed"""
-    content_lower = content.lower()
-    
-    if any(word in content_lower for word in ['dear hiring', 'cover letter', 'sincerely', 'i am writing']):
-        return "resume_cover"
-    elif any(word in content_lower for word in ['policy', 'procedure', 'guidelines', 'employees shall']):
-        return "policy"
-    elif any(word in content_lower for word in ['installation', 'manual', 'instructions', 'warranty']):
-        return "manual"
-    else:
-        return "general"
-
 def generate_answer(question: str, sources: List[Dict]) -> str:
-    """Generate an intelligent, structured answer using Groq LLM"""
+    """
+    Generate a clean, natural answer using Groq LLM
+    No source citations - just direct answers
+    """
     
-    # Detect document type for better response formatting
-    if sources:
-        doc_type = detect_document_type(sources[0]['content'])
-    else:
-        doc_type = "general"
-    
-    # Format context without source numbers
-    context_parts = []
-    for source in sources:
-        context_parts.append(source['content'])
-    
-    context = "\n\n---\n\n".join(context_parts)
-    
-    # Document-type specific instructions
-    type_instructions = {
-        "resume_cover": """
-Focus on extracting:
-- SKILLS: List technical skills, tools, frameworks
-- EXPERIENCE: Previous roles, companies, duration, key achievements
-- EDUCATION: Degree, institution, GPA, relevant coursework
-- PROJECTS: Names, technologies used, outcomes""",
-        
-        "policy": """
-Focus on extracting:
-- RULES: Specific requirements, restrictions, conditions
-- DATES: Deadlines, effective dates, waiting periods
-- AMOUNTS: Numbers, percentages, limits, thresholds
-- PROCEDURES: Step-by-step processes, approval chains""",
-        
-        "manual": """
-Focus on extracting:
-- STEPS: Sequential instructions, numbered procedures
-- WARNINGS: Safety information, cautions, important notes
-- SPECIFICATIONS: Technical specs, measurements, requirements""",
-        
-        "general": """
-Focus on extracting:
-- FACTS: Specific information, data points, details
-- KEY POINTS: Main ideas, important concepts"""
-    }
-    
-    instructions = type_instructions.get(doc_type, type_instructions["general"])
-    
-    prompt = f"""You are DualMind, an expert document analyst. Answer questions accurately based ONLY on the provided information.
+    if not sources:
+        # No sources found - ask LLM to answer from its knowledge
+        prompt = f"""You are DualMind, a helpful AI assistant. Answer the following question based on your knowledge. If you don't know, say so honestly.
 
-DOCUMENT CONTENT:
+Question: {question}
+
+Answer:"""
+    else:
+        # Format sources without citations
+        context_parts = []
+        for source in sources:
+            context_parts.append(source['content'])
+        
+        context = "\n\n---\n\n".join(context_parts)
+        
+        prompt = f"""You are DualMind, a helpful AI assistant. Answer the question based ONLY on the information below.
+
+INFORMATION:
 {context}
 
-USER QUESTION: {question}
+QUESTION: {question}
 
 INSTRUCTIONS:
-1. Answer ONLY using information from the document
-2. Be specific - extract names, dates, numbers, technologies
-3. Use bullet points for lists or multiple items
-4. Do NOT mention "source", "document", or cite anything
-5. Do NOT say "according to" or "the document states"
-6. Just give a clean, natural answer
+1. Answer naturally - don't mention "source" or "document"
+2. Don't use phrases like "according to" or "based on"
+3. Just give the answer directly
+4. If the information doesn't contain the answer, say "I don't have enough information to answer that"
 
-{document_type.upper()} DOCUMENT - EXTRA INSTRUCTIONS:
-{instructions}
-
-YOUR ANSWER:"""
+ANSWER:"""
 
     try:
+        # Call Groq API
         completion = groq_client.chat.completions.create(
             model=Config.LLM_MODEL,
             messages=[
-                {"role": "system", "content": "You are an expert document analyst. Provide specific, factual answers without mentioning sources or documents. Use bullet points for clarity when appropriate."},
+                {"role": "system", "content": "You are a helpful assistant that gives direct, natural answers without citing sources."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.2,  # Lower temperature for more factual answers
-            max_tokens=1500
+            temperature=0.3,
+            max_tokens=1000
         )
         
         return completion.choices[0].message.content
@@ -118,31 +79,36 @@ YOUR ANSWER:"""
         return f"Error generating response: {str(e)}"
 
 async def hybrid_search(question: str, user_id: str, search_type: str = "hybrid") -> Dict[str, Any]:
-    """Perform hybrid search based on specified type"""
+    """
+    Perform hybrid search based on specified type:
+    - "closed": Only user's documents
+    - "open": Only web search
+    - "hybrid": Both sources
+    """
     
     closed_results = []
     open_results = []
     
     # Get closed-domain results (user's documents)
     if search_type in ["closed", "hybrid"]:
-        closed_results = search_closed_domain(question, user_id, top_k=8)  # Get more for better context
+        closed_results = search_closed_domain(question, user_id, top_k=4)
     
     # Get open-domain results (web search)
     if search_type in ["open", "hybrid"]:
-        open_results = search_open_domain(question, top_k=5)
+        open_results = search_open_domain(question, top_k=4)
     
     # Combine sources
     all_sources = combine_sources(closed_results, open_results)
     
-    # Generate answer
+    # Generate clean answer
     answer = generate_answer(question, all_sources)
     
-    # Prepare sources for response
+    # Prepare sources for response (for debugging, not shown to user)
     response_sources = []
-    for source in all_sources[:5]:
+    for source in all_sources[:4]:
         response_sources.append({
             "type": source.get('source_type', 'Source'),
-            "content": source.get('content', '')[:300],
+            "content": source.get('content', '')[:200],
             "filename": source.get('filename', ''),
             "url": source.get('url', '')
         })
