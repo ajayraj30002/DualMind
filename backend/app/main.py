@@ -21,8 +21,7 @@ app = FastAPI(title="DualMind API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://dual-mind-iota.vercel.app",
-        "https://dualmind.vercel.app",
+        "ALLOWED_ORIGINS",
         "http://localhost:3000",
         "http://localhost:8000"
     ],
