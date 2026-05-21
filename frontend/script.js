@@ -1,304 +1,224 @@
-// Backend URL
-const BACKEND_URL = 'https://dualmind.onrender.com';
+const API_URL = 'https://dualmind.onrender.com';
 
-// State
-let authToken = null;
-let currentUser = null;
+let token = null;
+let user = null;
 let currentSessionId = null;
-let currentSearchType = 'hybrid';
+let currentMode = 'hybrid';
 let pendingFile = null;
 
-// DOM Elements
-let loginPage, chatPage;
-let sessionsList, messagesArea;
-let messageInput, sendBtn;
-let attachBtn, fileInput, filePreview;
-let newChatBtn, renameBtn, logoutBtn;
-let chatTitleHeader;
-let searchTypeBtns;
+// DOM
+let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
+let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
+let modeBtns;
 
-// Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    // Pages
-    loginPage = document.getElementById('login-page');
-    chatPage = document.getElementById('chat-page');
+    // Get elements
+    loginPage = document.getElementById('loginPage');
+    chatPage = document.getElementById('chatPage');
+    sessionListDiv = document.getElementById('sessionList');
+    messagesDiv = document.getElementById('messagesContainer');
+    messageInput = document.getElementById('messageInput');
+    sendBtn = document.getElementById('sendMsgBtn');
+    newChatBtn = document.getElementById('newChatBtn');
+    renameBtn = document.getElementById('renameChatBtn');
+    logoutBtn = document.getElementById('logoutSidebarBtn');
+    chatTitleSpan = document.getElementById('chatTitle');
+    attachBtn = document.getElementById('attachPdfBtn');
+    fileInput = document.getElementById('pdfFileInput');
+    fileBadge = document.getElementById('fileBadge');
+    modeBtns = document.querySelectorAll('.mode-btn');
     
-    // Sidebar
-    sessionsList = document.getElementById('sessions-list');
-    newChatBtn = document.getElementById('new-chat-sidebar');
-    logoutBtn = document.getElementById('sidebar-logout');
+    // Events
+    document.getElementById('loginBtn')?.addEventListener('click', doLogin);
+    document.getElementById('registerBtn')?.addEventListener('click', doRegister);
+    document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
+    document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
     
-    // Chat area
-    messagesArea = document.getElementById('messages-area');
-    messageInput = document.getElementById('message-input');
-    sendBtn = document.getElementById('send-message');
-    attachBtn = document.getElementById('attach-file-btn');
-    fileInput = document.getElementById('file-input');
-    filePreview = document.getElementById('file-preview');
-    renameBtn = document.getElementById('rename-chat-header');
-    chatTitleHeader = document.getElementById('chat-title-header');
-    searchTypeBtns = document.querySelectorAll('.search-type');
+    sendBtn?.addEventListener('click', sendMessage);
+    messageInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    newChatBtn?.addEventListener('click', createNewSession);
+    renameBtn?.addEventListener('click', renameSession);
+    logoutBtn?.addEventListener('click', doLogout);
+    attachBtn?.addEventListener('click', () => fileInput?.click());
+    fileInput?.addEventListener('change', onFileSelect);
     
-    setupEventListeners();
+    modeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            modeBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentMode = btn.dataset.mode;
+        });
+    });
+    
     checkAuth();
 });
 
-function setupEventListeners() {
-    // Auth
-    document.getElementById('login-button')?.addEventListener('click', () => {
-        const email = document.getElementById('login-email').value;
-        const password = document.getElementById('login-password').value;
-        signin(email, password);
-    });
-    document.getElementById('register-button')?.addEventListener('click', () => {
-        const name = document.getElementById('register-name').value;
-        const email = document.getElementById('register-email').value;
-        const password = document.getElementById('register-password').value;
-        signup(email, password, name);
-    });
-    document.getElementById('switch-to-register')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        document.getElementById('login-form').classList.remove('active');
-        document.getElementById('register-form').classList.add('active');
-    });
-    document.getElementById('switch-to-login')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        document.getElementById('register-form').classList.remove('active');
-        document.getElementById('login-form').classList.add('active');
-    });
-    
-    // Chat
-    sendBtn?.addEventListener('click', sendMessage);
-    messageInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
-    attachBtn?.addEventListener('click', () => fileInput?.click());
-    fileInput?.addEventListener('change', handleFileSelect);
-    newChatBtn?.addEventListener('click', createNewSession);
-    renameBtn?.addEventListener('click', renameCurrentSession);
-    logoutBtn?.addEventListener('click', logout);
-    
-    searchTypeBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            searchTypeBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentSearchType = btn.dataset.type;
-        });
-    });
-}
-
-// ========== AUTH ==========
-async function signup(email, password, fullName) {
-    if (!email || !password) {
-        alert('Please fill all fields');
-        return;
-    }
-    if (password.length < 6) {
-        alert('Password must be at least 6 characters');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${BACKEND_URL}/auth/signup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, full_name: fullName })
-        });
-        const data = await response.json();
-        
-        if (response.ok) {
-            alert('Signup successful! Please sign in.');
-            document.getElementById('register-form').classList.remove('active');
-            document.getElementById('login-form').classList.add('active');
-            document.getElementById('login-email').value = email;
-        } else {
-            alert('Signup failed: ' + (data.detail || 'Unknown error'));
-        }
-    } catch (error) {
-        alert('Connection error: ' + error.message);
+function toggleForms(showRegister) {
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    if (showRegister) {
+        loginForm.classList.remove('active');
+        registerForm.classList.add('active');
+    } else {
+        registerForm.classList.remove('active');
+        loginForm.classList.add('active');
     }
 }
 
-async function signin(email, password) {
-    if (!email || !password) {
-        alert('Please enter email and password');
-        return;
-    }
+async function doLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!email || !password) { alert('Enter email and password'); return; }
     
     try {
-        const response = await fetch(`${BACKEND_URL}/auth/signin`, {
+        const res = await fetch(`${API_URL}/auth/signin`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
-        const data = await response.json();
-        
-        if (response.ok) {
-            authToken = data.access_token;
-            currentUser = { id: data.user_id, email: data.email };
-            localStorage.setItem('dualmind_token', authToken);
-            localStorage.setItem('dualmind_user', JSON.stringify(currentUser));
-            showChatPage();
+        const data = await res.json();
+        if (res.ok) {
+            token = data.access_token;
+            user = { id: data.user_id, email: data.email };
+            localStorage.setItem('dm_token', token);
+            localStorage.setItem('dm_user', JSON.stringify(user));
+            showChatUI();
             await loadSessions();
+            if (!currentSessionId) await createNewSession();
         } else {
-            alert('Signin failed: ' + (data.detail || 'Invalid credentials'));
+            alert('Login failed: ' + (data.detail || 'Error'));
         }
-    } catch (error) {
-        alert('Connection error: ' + error.message);
-    }
+    } catch (err) { alert('Connection error'); }
 }
 
-function logout() {
-    authToken = null;
-    currentUser = null;
+async function doRegister() {
+    const name = document.getElementById('registerName').value;
+    const email = document.getElementById('registerEmail').value.trim();
+    const password = document.getElementById('registerPassword').value;
+    if (!email || !password) { alert('Fill all fields'); return; }
+    if (password.length < 6) { alert('Password min 6 chars'); return; }
+    
+    try {
+        const res = await fetch(`${API_URL}/auth/signup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, full_name: name })
+        });
+        if (res.ok) {
+            alert('Signup successful! Please login.');
+            toggleForms(false);
+            document.getElementById('loginEmail').value = email;
+        } else {
+            const data = await res.json();
+            alert('Signup failed: ' + (data.detail || 'Error'));
+        }
+    } catch (err) { alert('Connection error'); }
+}
+
+function doLogout() {
+    token = null;
+    user = null;
     currentSessionId = null;
-    pendingFile = null;
-    localStorage.removeItem('dualmind_token');
-    localStorage.removeItem('dualmind_user');
-    showLoginPage();
+    localStorage.removeItem('dm_token');
+    localStorage.removeItem('dm_user');
+    showLoginUI();
 }
 
 function checkAuth() {
-    const token = localStorage.getItem('dualmind_token');
-    const user = localStorage.getItem('dualmind_user');
-    
-    if (token && user) {
-        authToken = token;
-        currentUser = JSON.parse(user);
-        showChatPage();
+    const savedToken = localStorage.getItem('dm_token');
+    const savedUser = localStorage.getItem('dm_user');
+    if (savedToken && savedUser) {
+        token = savedToken;
+        user = JSON.parse(savedUser);
+        showChatUI();
         loadSessions();
     } else {
-        showLoginPage();
+        showLoginUI();
     }
 }
 
-function showLoginPage() {
-    loginPage?.classList.remove('hidden');
-    chatPage?.classList.add('hidden');
-    document.getElementById('login-email').value = '';
-    document.getElementById('login-password').value = '';
+function showLoginUI() {
+    loginPage.classList.remove('hidden');
+    chatPage.classList.add('hidden');
 }
 
-function showChatPage() {
-    loginPage?.classList.add('hidden');
-    chatPage?.classList.remove('hidden');
-    const userEmailSpan = document.getElementById('sidebar-user-email');
-    if (userEmailSpan && currentUser) {
-        userEmailSpan.textContent = currentUser.email.split('@')[0];
-    }
+function showChatUI() {
+    loginPage.classList.add('hidden');
+    chatPage.classList.remove('hidden');
+    document.getElementById('userEmailSidebar').innerText = user?.email?.split('@')[0] || 'User';
 }
 
-// ========== SESSIONS ==========
 async function loadSessions() {
-    if (!sessionsList) return;
-    sessionsList.innerHTML = '<div class="loading-sessions">Loading...</div>';
+    if (!sessionListDiv) return;
+    sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
     
     try {
-        const response = await fetch(`${BACKEND_URL}/chat/sessions`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+        const res = await fetch(`${API_URL}/chat/sessions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
         
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
-        const data = await response.json();
-        
-        if (response.ok && data.sessions && data.sessions.length > 0) {
-            renderSessions(data.sessions);
-        } else {
-            // No sessions - show empty state and auto-create one
-            sessionsList.innerHTML = '<div class="loading-sessions">No conversations</div>';
-            // Auto-create first session if none exists and we're on chat page
-            if (currentSessionId === null) {
-                await createNewSession();
+        if (res.ok && data.sessions && data.sessions.length > 0) {
+            renderSessionList(data.sessions);
+            if (!currentSessionId && data.sessions[0]) {
+                await loadSession(data.sessions[0].id);
             }
+        } else {
+            sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
+            if (!currentSessionId) await createNewSession();
         }
-    } catch (error) {
-        console.error('Load sessions error:', error);
-        sessionsList.innerHTML = '<div class="loading-sessions">Failed to load</div>';
+    } catch (err) {
+        console.error(err);
+        sessionListDiv.innerHTML = '<div class="loading-text">Failed to load</div>';
     }
 }
 
-function renderSessions(sessions) {
-    if (!sessionsList) return;
-    
-    // Clear and render only unique sessions by ID
-    const uniqueSessions = [];
-    const seenIds = new Set();
-    for (const session of sessions) {
-        if (!seenIds.has(session.id)) {
-            seenIds.add(session.id);
-            uniqueSessions.push(session);
-        }
-    }
-    
-    if (uniqueSessions.length === 0) {
-        sessionsList.innerHTML = '<div class="loading-sessions">No conversations</div>';
+function renderSessionList(sessions) {
+    if (!sessionListDiv) return;
+    if (!sessions || sessions.length === 0) {
+        sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
         return;
     }
     
-    sessionsList.innerHTML = uniqueSessions.map(session => `
-        <div class="session-item ${currentSessionId === session.id ? 'active' : ''}" data-id="${session.id}">
-            <span class="session-title">${escapeHtml(session.title)}</span>
-            <button class="session-delete" data-id="${session.id}">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `).join('');
-    
-    // Add click handlers
-    document.querySelectorAll('.session-item').forEach(el => {
-        el.addEventListener('click', (e) => {
-            if (!e.target.closest('.session-delete')) {
-                const sessionId = el.dataset.id;
-                if (sessionId && sessionId !== currentSessionId) {
-                    loadSession(sessionId);
-                }
+    sessionListDiv.innerHTML = '';
+    for (const s of sessions) {
+        const div = document.createElement('div');
+        div.className = `session-item ${currentSessionId === s.id ? 'active' : ''}`;
+        div.dataset.id = s.id;
+        div.innerHTML = `
+            <span class="session-title">${escapeHtml(s.title)}</span>
+            <button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>
+        `;
+        div.addEventListener('click', (e) => {
+            if (!e.target.closest('.delete-session')) {
+                loadSession(s.id);
             }
         });
-    });
-    document.querySelectorAll('.session-delete').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        const delBtn = div.querySelector('.delete-session');
+        delBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
-            const sessionId = btn.dataset.id;
-            if (sessionId && confirm('Delete this conversation?')) {
-                await deleteSession(sessionId);
-            }
+            deleteSession(s.id);
         });
-    });
+        sessionListDiv.appendChild(div);
+    }
 }
 
 async function createNewSession() {
     try {
-        const response = await fetch(`${BACKEND_URL}/chat/sessions`, {
+        const res = await fetch(`${API_URL}/chat/sessions`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            }
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
         });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
-        const data = await response.json();
-        
-        if (response.ok && data.session) {
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
+        if (res.ok && data.session) {
             currentSessionId = data.session.id;
-            if (chatTitleHeader) chatTitleHeader.textContent = 'New conversation';
+            chatTitleSpan.innerText = 'New conversation';
             clearMessages();
             await loadSessions();
         }
-    } catch (error) {
-        console.error('Create session error:', error);
-    }
+    } catch (err) { console.error(err); }
 }
 
 async function loadSession(sessionId) {
@@ -306,300 +226,217 @@ async function loadSession(sessionId) {
     currentSessionId = sessionId;
     
     try {
-        const response = await fetch(`${BACKEND_URL}/chat/sessions/${sessionId}/messages`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
         
-        if (response.status === 401) {
-            logout();
-            return;
-        }
+        const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const sessionsData = await sessionsRes.json();
+        const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
+        if (sessionInfo) chatTitleSpan.innerText = sessionInfo.title;
         
-        const data = await response.json();
-        
-        if (response.ok) {
-            // Update title
-            const sessionInfo = await getSessionInfo(sessionId);
-            if (chatTitleHeader && sessionInfo) {
-                chatTitleHeader.textContent = sessionInfo.title;
-            }
-            renderMessages(data.messages || []);
-            // Update active state in sidebar
-            await loadSessions();
-        }
-    } catch (error) {
-        console.error('Load session error:', error);
-    }
+        renderMessages(data.messages || []);
+        await loadSessions();
+    } catch (err) { console.error(err); }
 }
 
-async function getSessionInfo(sessionId) {
-    try {
-        const response = await fetch(`${BACKEND_URL}/chat/sessions`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        const data = await response.json();
-        return data.sessions?.find(s => s.id === sessionId);
-    } catch {
-        return null;
-    }
-}
-
-async function renameCurrentSession() {
-    const newTitle = prompt('Rename conversation:', chatTitleHeader?.textContent);
-    if (!newTitle || !currentSessionId || newTitle === chatTitleHeader?.textContent) return;
+async function renameSession() {
+    const newName = prompt('Rename conversation:', chatTitleSpan.innerText);
+    if (!newName || newName === chatTitleSpan.innerText || !currentSessionId) return;
     
     try {
-        await fetch(`${BACKEND_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newTitle)}`, {
+        await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, {
             method: 'PUT',
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (chatTitleHeader) chatTitleHeader.textContent = newTitle;
+        chatTitleSpan.innerText = newName;
         await loadSessions();
-    } catch (error) {
-        console.error('Rename error:', error);
-    }
+    } catch (err) { console.error(err); }
 }
 
 async function deleteSession(sessionId) {
+    if (!confirm('Delete this conversation?')) return;
+    
     try {
-        await fetch(`${BACKEND_URL}/chat/sessions/${sessionId}`, {
+        await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        
         if (currentSessionId === sessionId) {
             currentSessionId = null;
-            // Load remaining sessions or create new
-            const response = await fetch(`${BACKEND_URL}/chat/sessions`, {
-                headers: { 'Authorization': `Bearer ${authToken}` }
+            const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-            const data = await response.json();
-            if (data.sessions && data.sessions.length > 0) {
-                await loadSession(data.sessions[0].id);
+            const sessionsData = await sessionsRes.json();
+            if (sessionsData.sessions && sessionsData.sessions.length > 0) {
+                await loadSession(sessionsData.sessions[0].id);
             } else {
                 await createNewSession();
             }
         }
         await loadSessions();
-    } catch (error) {
-        console.error('Delete error:', error);
-    }
+    } catch (err) { console.error(err); }
 }
 
-async function updateSessionTitle(sessionId, firstMessage) {
-    const shortTitle = firstMessage.length > 30 ? firstMessage.substring(0, 30) + '...' : firstMessage;
-    // Don't rename if it's still "New conversation" and first message exists
+async function autoTitle(sessionId, firstMsg) {
+    const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
     try {
-        await fetch(`${BACKEND_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(shortTitle)}`, {
+        await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, {
             method: 'PUT',
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (chatTitleHeader && currentSessionId === sessionId) {
-            chatTitleHeader.textContent = shortTitle;
-        }
+        if (currentSessionId === sessionId) chatTitleSpan.innerText = short;
         await loadSessions();
-    } catch (error) {
-        console.error('Auto-title error:', error);
-    }
+    } catch (err) { console.error(err); }
 }
 
-// ========== MESSAGES ==========
 function clearMessages() {
-    if (!messagesArea) return;
-    messagesArea.innerHTML = `
-        <div class="welcome-area">
-            <i class="fas fa-brain"></i>
-            <h3>How can I help you today?</h3>
-            <p>Upload documents or ask anything</p>
-        </div>
-    `;
+    if (!messagesDiv) return;
+    messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
 }
 
 function renderMessages(messages) {
-    if (!messagesArea) return;
-    
+    if (!messagesDiv) return;
     if (!messages || messages.length === 0) {
         clearMessages();
         return;
     }
-    
-    messagesArea.innerHTML = messages.map(msg => `
-        <div class="message ${msg.role}">
-            <div class="message-avatar">
-                <i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i>
-            </div>
-            <div class="message-content">
-                ${escapeHtml(msg.content).replace(/\n/g, '<br>')}
-            </div>
-        </div>
-    `).join('');
-    
-    messagesArea.scrollTop = messagesArea.scrollHeight;
+    messagesDiv.innerHTML = '';
+    for (const msg of messages) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${msg.role}`;
+        msgDiv.innerHTML = `
+            <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
+            <div class="message-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
+        `;
+        messagesDiv.appendChild(msgDiv);
+    }
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-function addMessageToUI(role, content) {
-    if (!messagesArea) return;
-    
-    const welcome = messagesArea.querySelector('.welcome-area');
+function addMessage(role, content) {
+    if (!messagesDiv) return;
+    const welcome = messagesDiv.querySelector('.welcome');
     if (welcome) welcome.remove();
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}`;
-    messageDiv.innerHTML = `
-        <div class="message-avatar">
-            <i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i>
-        </div>
-        <div class="message-content">
-            ${escapeHtml(content).replace(/\n/g, '<br>')}
-        </div>
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `message ${role}`;
+    msgDiv.innerHTML = `
+        <div class="message-avatar"><i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
+        <div class="message-content">${escapeHtml(content).replace(/\n/g, '<br>')}</div>
     `;
-    messagesArea.appendChild(messageDiv);
-    messagesArea.scrollTop = messagesArea.scrollHeight;
+    messagesDiv.appendChild(msgDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-function showTypingIndicator() {
-    if (!messagesArea) return;
-    
-    const typingDiv = document.createElement('div');
-    typingDiv.className = 'message assistant';
-    typingDiv.id = 'typing-indicator';
-    typingDiv.innerHTML = `
-        <div class="message-avatar">
-            <i class="fas fa-brain"></i>
-        </div>
-        <div class="message-content">
-            <div class="typing-indicator">
-                <span></span><span></span><span></span>
-            </div>
-        </div>
-    `;
-    messagesArea.appendChild(typingDiv);
-    messagesArea.scrollTop = messagesArea.scrollHeight;
+function showTyping() {
+    if (!messagesDiv) return;
+    const typing = document.createElement('div');
+    typing.className = 'message assistant';
+    typing.id = 'typingIndicator';
+    typing.innerHTML = `<div class="message-avatar"><i class="fas fa-brain"></i></div><div class="message-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+    messagesDiv.appendChild(typing);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-function removeTypingIndicator() {
-    const indicator = document.getElementById('typing-indicator');
-    if (indicator) indicator.remove();
+function hideTyping() {
+    const el = document.getElementById('typingIndicator');
+    if (el) el.remove();
 }
 
-// ========== FILE HANDLING ==========
-function handleFileSelect(e) {
+function onFileSelect(e) {
     const file = e.target.files[0];
     if (!file || !file.name.endsWith('.pdf')) {
         alert('Please select a PDF file');
         return;
     }
-    
     pendingFile = file;
-    if (filePreview) {
-        filePreview.innerHTML = `<i class="fas fa-file-pdf"></i> ${file.name} <i class="fas fa-check-circle"></i>`;
-        filePreview.classList.remove('hidden');
-    }
+    fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${file.name} <i class="fas fa-check-circle"></i>`;
+    fileBadge.classList.remove('hidden');
 }
 
-async function uploadFileAndSend(file, message) {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await fetch(`${BACKEND_URL}/upload`, {
+async function uploadFile(file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_URL}/upload`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${authToken}` },
-        body: formData
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: fd
     });
-    
-    if (response.status === 401) {
-        logout();
-        throw new Error('Unauthorized');
-    }
-    
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Upload failed');
-    return data;
+    if (res.status === 401) { doLogout(); throw new Error('Unauth'); }
+    if (!res.ok) throw new Error('Upload failed');
+    return await res.json();
 }
 
-// ========== SEND MESSAGE ==========
 async function sendMessage() {
-    const message = messageInput?.value.trim();
-    if (!message || !currentSessionId) return;
+    const text = messageInput.value.trim();
+    if (!text || !currentSessionId) return;
     
-    // Clear input
     messageInput.value = '';
     messageInput.style.height = 'auto';
+    fileBadge.classList.add('hidden');
     
-    // Clear file preview
-    if (filePreview) filePreview.classList.add('hidden');
+    addMessage('user', text);
     
-    // Add user message to UI
-    addMessageToUI('user', message);
+    const isFirst = messagesDiv?.querySelectorAll('.message').length === 1;
+    if (isFirst) await autoTitle(currentSessionId, text);
     
-    // Check if this is the first message (for auto-title)
-    const isFirstMessage = messagesArea?.querySelectorAll('.message').length === 1;
-    if (isFirstMessage) {
-        await updateSessionTitle(currentSessionId, message);
-    }
-    
-    // Upload file if exists
-    let uploadedFile = null;
+    let uploaded = null;
     if (pendingFile) {
-        showTypingIndicator();
+        showTyping();
         try {
-            uploadedFile = await uploadFileAndSend(pendingFile, message);
+            uploaded = await uploadFile(pendingFile);
             pendingFile = null;
-            removeTypingIndicator();
-        } catch (error) {
-            removeTypingIndicator();
-            addMessageToUI('assistant', `Upload failed: ${error.message}`);
-            sendBtn.disabled = false;
+            hideTyping();
+        } catch (err) {
+            hideTyping();
+            addMessage('assistant', `Upload failed: ${err.message}`);
             return;
         }
     }
     
-    // Send message
-    showTypingIndicator();
+    showTyping();
     sendBtn.disabled = true;
     
     try {
-        const requestBody = {
-            question: message,
-            search_type: uploadedFile ? 'closed' : currentSearchType,
-            include_sources: false
-        };
-        
-        const response = await fetch(`${BACKEND_URL}/chat/sessions/${currentSessionId}/messages`, {
+        const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                question: text,
+                search_type: uploaded ? 'closed' : currentMode,
+                include_sources: false
+            })
         });
-        
-        if (response.status === 401) {
-            removeTypingIndicator();
-            logout();
-            return;
-        }
-        
-        const data = await response.json();
-        removeTypingIndicator();
-        
-        if (response.ok) {
-            addMessageToUI('assistant', data.answer);
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
+        hideTyping();
+        if (res.ok) {
+            addMessage('assistant', data.answer);
         } else {
-            addMessageToUI('assistant', 'Sorry, something went wrong. Please try again.');
+            addMessage('assistant', 'Sorry, something went wrong.');
         }
-    } catch (error) {
-        console.error('Send error:', error);
-        removeTypingIndicator();
-        addMessageToUI('assistant', 'Connection error. Please try again.');
+    } catch (err) {
+        hideTyping();
+        addMessage('assistant', 'Connection error.');
     } finally {
         sendBtn.disabled = false;
         messageInput.focus();
     }
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
 }
