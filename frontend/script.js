@@ -124,53 +124,94 @@ function toggleForms(showRegister) {
     }
 }
 
-async function loadSessions() {
-    const sessionList = document.getElementById('sessionList');
-    if (!sessionList) return;
-    sessionList.innerHTML = '<div class="loading-text">Loading...</div>';
+async function loadSession(sessionId) {
+    if (sessionId === currentSessionId) return;
+    
+    console.log("🔄 Loading session:", sessionId);
     
     try {
-        const res = await fetch(`${API_URL}/chat/sessions`, {
+        // Fetch messages for this session
+        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (res.status === 401) { doLogout(); return; }
-        const data = await res.json();
         
-        if (res.ok && data.sessions && data.sessions.length > 0) {
-            sessionList.innerHTML = '';
-            for (const s of data.sessions) {
-                const div = document.createElement('div');
-                div.className = `session-item ${currentSessionId === s.id ? 'active' : ''}`;
-                div.dataset.id = s.id;
-                div.innerHTML = `
-                    <span class="session-title">${escapeHtml(s.title)}</span>
-                    <button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>
-                `;
-                div.addEventListener('click', (e) => {
-                    if (!e.target.closest('.delete-session')) {
-                        loadSession(s.id);
-                    }
-                });
-                div.querySelector('.delete-session')?.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteSession(s.id);
-                });
-                sessionList.appendChild(div);
-            }
-            if (!currentSessionId && data.sessions[0]) {
-                await loadSession(data.sessions[0].id);
-            }
-        } else {
-            sessionList.innerHTML = '<div class="loading-text">No conversations</div>';
-            if (!currentSessionId) {
-                await createNewSession();
+        console.log("📨 Messages response status:", res.status);
+        
+        if (res.status === 401) { 
+            doLogout(); 
+            return; 
+        }
+        
+        if (!res.ok) {
+            console.error("Failed to fetch messages:", res.status);
+            return;
+        }
+        
+        const data = await res.json();
+        console.log("📨 Messages received:", data.messages?.length || 0, "messages");
+        
+        // Update current session ID AFTER successful fetch
+        currentSessionId = sessionId;
+        
+        // Get session title separately
+        const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (sessionsRes.ok) {
+            const sessionsData = await sessionsRes.json();
+            const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
+            if (sessionInfo) {
+                document.getElementById('chatTitle').innerText = sessionInfo.title;
             }
         }
-    } catch (err) {
-        console.error(err);
-        sessionList.innerHTML = '<div class="loading-text">Failed to load</div>';
+        
+        // Render messages
+        const messagesDiv = document.getElementById('messagesContainer');
+        if (messagesDiv) {
+            if (!data.messages || data.messages.length === 0) {
+                messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
+            } else {
+                messagesDiv.innerHTML = '';
+                for (const msg of data.messages) {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = `message ${msg.role}`;
+                    msgDiv.innerHTML = `
+                        <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
+                        <div class="message-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
+                    `;
+                    messagesDiv.appendChild(msgDiv);
+                }
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        }
+        
+        // Update sidebar active state
+        await loadSessions();
+        
+    } catch (err) { 
+        console.error('Load session error:', err); 
     }
 }
+
+// Debug function - call this from console
+window.debugMessages = async function() {
+    const res = await fetch(`${API_URL}/chat/sessions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    console.log("All sessions:", data.sessions);
+    
+    if (data.sessions && data.sessions.length > 0) {
+        for (const s of data.sessions) {
+            const msgRes = await fetch(`${API_URL}/chat/sessions/${s.id}/messages`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const msgData = await msgRes.json();
+            console.log(`Session ${s.id} (${s.title}): ${msgData.messages?.length || 0} messages`);
+        }
+    }
+};
 
 async function createNewSession() {
     try {
