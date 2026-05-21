@@ -1,6 +1,5 @@
 // Backend URL
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL 
-
+const BACKEND_URL = 'https://dualmind.onrender.com';
 // State
 let authToken = null;
 let currentUser = null;
