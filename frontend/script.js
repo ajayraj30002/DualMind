@@ -1,5 +1,6 @@
 // Backend URL
 const BACKEND_URL = 'https://dualmind.onrender.com';
+
 // State
 let authToken = null;
 let currentUser = null;
@@ -7,9 +8,8 @@ let currentSessionId = null;
 let currentSearchType = 'hybrid';
 
 // DOM Elements
-let sidebar, mainContent, authSection, chatSection;
-let sessionsList, messagesArea, messageInput, sendBtn, attachBtn, fileInput;
-let chatTitle, renameBtn, newChatBtn, logoutBtn;
+let authSection, chatSection, sessionsList, messagesArea, messageInput, sendBtn;
+let attachBtn, fileInput, chatTitle, renameBtn, newChatBtn, logoutBtn;
 let searchTypeBtns;
 
 // Initialize
@@ -29,48 +29,55 @@ document.addEventListener('DOMContentLoaded', () => {
     logoutBtn = document.getElementById('logout-btn');
     searchTypeBtns = document.querySelectorAll('.search-type-btn');
     
-    // Setup event listeners
     setupEventListeners();
-    
-    // Check auth status
     checkAuth();
 });
 
 function setupEventListeners() {
     // Auth
-    document.getElementById('show-signup')?.addEventListener('click', (e) => {
+    const showSignupBtn = document.getElementById('show-signup');
+    const showSigninBtn = document.getElementById('show-signin');
+    const signupSubmit = document.getElementById('signup-submit');
+    const signinSubmit = document.getElementById('signin-submit');
+    
+    if (showSignupBtn) showSignupBtn.addEventListener('click', (e) => {
         e.preventDefault();
         showSignup();
     });
-    document.getElementById('show-signin')?.addEventListener('click', (e) => {
+    
+    if (showSigninBtn) showSigninBtn.addEventListener('click', (e) => {
         e.preventDefault();
         showSignin();
     });
-    document.getElementById('signup-submit')?.addEventListener('click', () => {
+    
+    if (signupSubmit) signupSubmit.addEventListener('click', () => {
         const email = document.getElementById('signup-email').value;
         const password = document.getElementById('signup-password').value;
         const fullName = document.getElementById('signup-fullname').value;
         signup(email, password, fullName);
     });
-    document.getElementById('signin-submit')?.addEventListener('click', () => {
+    
+    if (signinSubmit) signinSubmit.addEventListener('click', () => {
         const email = document.getElementById('signin-email').value;
         const password = document.getElementById('signin-password').value;
         signin(email, password);
     });
     
     // Chat
-    sendBtn?.addEventListener('click', sendMessage);
-    messageInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
-    attachBtn?.addEventListener('click', () => fileInput?.click());
-    fileInput?.addEventListener('change', handleFileUpload);
-    newChatBtn?.addEventListener('click', createNewSession);
-    renameBtn?.addEventListener('click', renameCurrentSession);
-    logoutBtn?.addEventListener('click', logout);
+    if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+    if (messageInput) {
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    }
+    if (attachBtn) attachBtn.addEventListener('click', () => fileInput?.click());
+    if (fileInput) fileInput.addEventListener('change', handleFileUpload);
+    if (newChatBtn) newChatBtn.addEventListener('click', createNewSession);
+    if (renameBtn) renameBtn.addEventListener('click', renameCurrentSession);
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
     
     // Search type selector
     searchTypeBtns.forEach(btn => {
@@ -83,6 +90,7 @@ function setupEventListeners() {
 }
 
 // ========== AUTH FUNCTIONS ==========
+
 async function signup(email, password, fullName) {
     if (!email || !password) {
         alert('Please fill in all fields');
@@ -104,6 +112,12 @@ async function signup(email, password, fullName) {
         if (response.ok) {
             alert('✅ Signup successful! Please sign in.');
             showSignin();
+            // Clear form
+            document.getElementById('signup-email').value = '';
+            document.getElementById('signup-password').value = '';
+            if (document.getElementById('signup-fullname')) {
+                document.getElementById('signup-fullname').value = '';
+            }
         } else {
             alert('❌ Signup failed: ' + (data.detail || 'Unknown error'));
         }
@@ -192,6 +206,7 @@ function showSignin() {
 }
 
 // ========== CHAT SESSION FUNCTIONS ==========
+
 async function loadSessions() {
     if (!sessionsList) return;
     sessionsList.innerHTML = '<div class="loading-sessions"><i class="fas fa-spinner fa-spin"></i> Loading chats...</div>';
@@ -200,6 +215,12 @@ async function loadSessions() {
         const response = await fetch(`${BACKEND_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const data = await response.json();
         
         if (response.ok && data.sessions) {
@@ -230,7 +251,6 @@ function renderSessions(sessions) {
         </div>
     `).join('');
     
-    // Add event listeners
     document.querySelectorAll('.session-item').forEach(el => {
         el.addEventListener('click', (e) => {
             if (!e.target.closest('.session-delete')) {
@@ -255,6 +275,12 @@ async function createNewSession() {
                 'Authorization': `Bearer ${authToken}`
             }
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const data = await response.json();
         
         if (response.ok) {
@@ -275,11 +301,17 @@ async function loadSession(sessionId) {
         const response = await fetch(`${BACKEND_URL}/chat/sessions/${sessionId}/messages`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const data = await response.json();
         
         if (response.ok) {
-            const session = await getSessionInfo(sessionId);
-            if (chatTitle && session) chatTitle.value = session.title;
+            const sessionInfo = await getSessionInfo(sessionId);
+            if (chatTitle && sessionInfo) chatTitle.value = sessionInfo.title;
             renderMessages(data.messages || []);
             loadSessions();
         }
@@ -334,6 +366,7 @@ async function deleteSession(sessionId) {
 }
 
 // ========== MESSAGE FUNCTIONS ==========
+
 function clearMessages() {
     if (!messagesArea) return;
     messagesArea.innerHTML = `
@@ -360,7 +393,6 @@ function renderMessages(messages) {
             </div>
             <div class="message-content">
                 ${formatMessage(msg.content)}
-                ${msg.sources ? renderSources(msg.sources) : ''}
             </div>
         </div>
     `).join('');
@@ -368,24 +400,25 @@ function renderMessages(messages) {
     messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
-
-
 function formatMessage(content) {
     return content.replace(/\n/g, '<br>');
+}
+
+function renderSources(sources) {
+    // Return empty string - sources hidden for cleaner UI
+    return '';
 }
 
 async function sendMessage() {
     const message = messageInput?.value.trim();
     if (!message || !currentSessionId) return;
     
-    // Add user message to UI
     addMessageToUI('user', message);
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
-    // Show typing indicator
     showTypingIndicator();
-    sendBtn.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
     
     try {
         const response = await fetch(`${BACKEND_URL}/chat/sessions/${currentSessionId}/messages`, {
@@ -401,11 +434,17 @@ async function sendMessage() {
             })
         });
         
+        if (response.status === 401) {
+            removeTypingIndicator();
+            logout();
+            return;
+        }
+        
         const data = await response.json();
         removeTypingIndicator();
         
         if (response.ok) {
-            addMessageToUI('assistant', data.answer, data.sources);
+            addMessageToUI('assistant', data.answer);
         } else {
             addMessageToUI('assistant', 'Sorry, something went wrong. Please try again.');
         }
@@ -414,15 +453,14 @@ async function sendMessage() {
         removeTypingIndicator();
         addMessageToUI('assistant', 'Connection error. Please check your connection.');
     } finally {
-        sendBtn.disabled = false;
-        messageInput.focus();
+        if (sendBtn) sendBtn.disabled = false;
+        if (messageInput) messageInput.focus();
     }
 }
 
-function addMessageToUI(role, content, sources = null) {
+function addMessageToUI(role, content) {
     if (!messagesArea) return;
     
-    // Remove welcome message if present
     const welcomeMsg = messagesArea.querySelector('.welcome-message');
     if (welcomeMsg) welcomeMsg.remove();
     
@@ -434,7 +472,6 @@ function addMessageToUI(role, content, sources = null) {
         </div>
         <div class="message-content">
             ${formatMessage(content)}
-            ${sources ? renderSources(sources) : ''}
         </div>
     `;
     messagesArea.appendChild(messageDiv);
@@ -467,6 +504,7 @@ function removeTypingIndicator() {
 }
 
 // ========== FILE UPLOAD ==========
+
 async function handleFileUpload(e) {
     const file = e.target.files[0];
     if (!file || !file.name.endsWith('.pdf')) {
@@ -489,6 +527,11 @@ async function handleFileUpload(e) {
             body: formData
         });
         
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const data = await response.json();
         
         if (response.ok) {
@@ -508,7 +551,7 @@ async function handleFileUpload(e) {
         alert('❌ Connection error');
     }
     
-    fileInput.value = '';
+    if (fileInput) fileInput.value = '';
 }
 
 function escapeHtml(text) {
