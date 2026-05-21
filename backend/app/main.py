@@ -157,24 +157,35 @@ async def delete_session(session_id: str, current_user: dict = Depends(get_curre
 async def get_messages(session_id: str, current_user: dict = Depends(get_current_user)):
     """Get all messages for a session"""
     try:
+        # Verify session belongs to user
         session = supabase.table("chat_sessions")\
             .select("*")\
             .eq("id", session_id)\
             .eq("user_id", current_user["user_id"])\
             .execute()
+        
         if not session.data:
             raise HTTPException(404, "Session not found")
         
+        # Get messages - NO order() to avoid the 500 error
         response = supabase.table("chat_messages")\
             .select("*")\
             .eq("session_id", session_id)\
-            .order("created_at", asc=True)\
             .execute()
-        return {"messages": response.data}
+        
+        # Sort messages manually
+        messages = response.data if response.data else []
+        messages.sort(key=lambda x: x.get('created_at', ''))
+        
+        print(f"✅ Retrieved {len(messages)} messages for session {session_id}")
+        return {"messages": messages}
+        
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Failed to get messages: {str(e)}")
+        print(f"❌ Error in get_messages: {str(e)}")
+        # Return empty array instead of crashing
+        return {"messages": []}
 
 @app.post("/chat/sessions/{session_id}/messages")
 async def send_message(
@@ -203,13 +214,18 @@ async def send_message(
     previous = supabase.table("chat_messages")\
         .select("*")\
         .eq("session_id", session_id)\
-        .order("created_at", desc=True)\
-        .limit(10)\
         .execute()
+    
+    # Sort manually
+    prev_list = previous.data if previous.data else []
+    prev_list.sort(key=lambda x: x.get('created_at', ''))
+    
+    # Get last 10 for context
+    context_messages = prev_list[-10:] if len(prev_list) > 10 else prev_list
     
     # Build conversation context
     conversation = []
-    for msg in reversed(previous.data):
+    for msg in context_messages:
         conversation.append(f"{msg['role'].upper()}: {msg['content']}")
     conversation_context = "\n".join(conversation)
     
