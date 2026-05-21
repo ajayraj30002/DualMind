@@ -5,6 +5,7 @@ let user = null;
 let currentSessionId = null;
 let currentMode = 'hybrid';
 let pendingFile = null;
+let isLoadingSessions = false;  // Prevent multiple simultaneous loads
 
 // DOM
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
@@ -84,7 +85,10 @@ async function doLogin() {
             localStorage.setItem('dm_user', JSON.stringify(user));
             showChatUI();
             await loadSessions();
-            if (!currentSessionId) await createNewSession();
+            // Only create ONE new session if no sessions exist
+            if (!currentSessionId) {
+                await createNewSession();
+            }
         } else {
             alert('Login failed: ' + (data.detail || 'Error'));
         }
@@ -149,6 +153,10 @@ function showChatUI() {
 }
 
 async function loadSessions() {
+    // Prevent multiple simultaneous calls
+    if (isLoadingSessions) return;
+    isLoadingSessions = true;
+    
     if (!sessionListDiv) return;
     sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
     
@@ -156,21 +164,24 @@ async function loadSessions() {
         const res = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (res.status === 401) { doLogout(); return; }
+        if (res.status === 401) { doLogout(); isLoadingSessions = false; return; }
         const data = await res.json();
         
         if (res.ok && data.sessions && data.sessions.length > 0) {
             renderSessionList(data.sessions);
+            // Only load first session if no current session
             if (!currentSessionId && data.sessions[0]) {
                 await loadSession(data.sessions[0].id);
             }
         } else {
             sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
-            if (!currentSessionId) await createNewSession();
+            // Don't auto-create here - let the caller handle it
         }
     } catch (err) {
         console.error(err);
         sessionListDiv.innerHTML = '<div class="loading-text">Failed to load</div>';
+    } finally {
+        isLoadingSessions = false;
     }
 }
 
@@ -232,6 +243,7 @@ async function loadSession(sessionId) {
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
         
+        // Get session info for title
         const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -266,8 +278,10 @@ async function deleteSession(sessionId) {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
         if (currentSessionId === sessionId) {
             currentSessionId = null;
+            // Refresh session list
             const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
