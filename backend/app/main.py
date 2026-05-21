@@ -8,27 +8,42 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 import jwt
 from supabase import create_client, Client
+import uuid
 
 # Initialize FastAPI
 app = FastAPI(title="DualMind API", version="1.0.0")
 
-# Configuration
+# Configuration - Load from environment variables
 class Config:
-    SUPABASE_URL = "YOUR_SUPABASE_URL"  # Replace with your actual Supabase URL
-    SUPABASE_KEY = "YOUR_SUPABASE_KEY"  # Replace with your actual Supabase key
-    SECRET_KEY = "your-secret-key-change-this"  # Change this!
+    # Supabase Configuration - Set these as environment variables
+    SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
     ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 30
-    UPLOAD_DIR = "uploads"
-    ALLOWED_ORIGINS = ["*"]  # Configure properly for production
+    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
+# Validate configuration
+if not Config.SUPABASE_URL or not Config.SUPABASE_KEY:
+    print("WARNING: SUPABASE_URL or SUPABASE_KEY not set in environment variables!")
+    print("Please set these before running the app.")
+    # For development only - remove in production
+    Config.SUPABASE_URL = "https://your-project.supabase.co"  # Replace with your URL
+    Config.SUPABASE_KEY = "your-anon-key"  # Replace with your key
 
 # Initialize Supabase
-supabase: Client = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
+try:
+    supabase: Client = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
+    print(f"Successfully connected to Supabase at {Config.SUPABASE_URL}")
+except Exception as e:
+    print(f"Failed to connect to Supabase: {str(e)}")
+    supabase = None
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=Config.ALLOWED_ORIGINS,
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -84,23 +99,24 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, Config.SECRET_KEY, algorithm=Config.ALGORITHM)
     return encoded_jwt
 
-def get_current_user(token: str = Depends(lambda: None)):
-    """This is a simplified version - you'll need to implement the actual token extraction"""
-    # For now, we'll create a placeholder
-    # You should implement proper token extraction from Authorization header
+async def get_current_user(authorization: Optional[str] = None):
+    """Extract current user from JWT token"""
+    # This is a simplified version - you'll need to extract from headers properly
+    # For now, return a test user
     return {"user_id": "test-user", "email": "test@example.com"}
 
-# ========== MOCK HYBRID SEARCH (Replace with your actual implementation) ==========
+# ========== MOCK HYBRID SEARCH ==========
 async def hybrid_search(question: str, user_id: str, search_type: str = "hybrid", conversation_context: str = ""):
     """Mock implementation - replace with your actual hybrid search"""
     return {
-        "answer": f"This is a response to: {question}",
-        "sources": ["source1.pdf", "source2.pdf"],
+        "answer": f"This is a response to: {question}\n\nBased on the conversation context and your documents.",
+        "sources": ["document1.pdf", "document2.pdf"],
         "search_type_used": search_type
     }
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str):
     """Mock implementation - replace with your actual PDF processing"""
+    print(f"Processing PDF: {file_path} for user {user_id}")
     return 10  # Return chunk count
 
 # ========== HEALTH CHECK ==========
@@ -110,12 +126,17 @@ def root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    if supabase is None:
+        return {"status": "degraded", "error": "Supabase not connected"}
+    return {"status": "ok", "supabase": "connected"}
 
 # ========== AUTH ENDPOINTS ==========
 @app.post("/auth/signup", response_model=SignUpResponse)
 async def signup(request: SignUpRequest):
     """User signup with email and password"""
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Database not connected")
+    
     try:
         # Check if user exists
         existing = supabase.table("users").select("*").eq("email", request.email).execute()
@@ -140,6 +161,8 @@ async def signup(request: SignUpRequest):
             user_id=user["id"],
             email=user["email"]
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Signup error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}")
@@ -147,6 +170,9 @@ async def signup(request: SignUpRequest):
 @app.post("/auth/signin", response_model=SignInResponse)
 async def signin(request: SignInRequest):
     """User signin with email and password"""
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Database not connected")
+    
     try:
         response = supabase.table("users").select("*").eq("email", request.email).execute()
         
@@ -186,6 +212,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 @app.get("/chat/sessions")
 async def get_sessions(current_user: dict = Depends(get_current_user)):
     """Get all chat sessions for current user"""
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Database not connected")
+    
     try:
         print(f"Fetching sessions for user: {current_user['user_id']}")
         
@@ -204,6 +233,9 @@ async def get_sessions(current_user: dict = Depends(get_current_user)):
 @app.post("/chat/sessions")
 async def create_session(current_user: dict = Depends(get_current_user)):
     """Create a new chat session"""
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Database not connected")
+    
     try:
         print(f"Creating new session for user: {current_user['user_id']}")
         
@@ -226,6 +258,9 @@ async def rename_session(
     current_user: dict = Depends(get_current_user)
 ):
     """Rename a chat session"""
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Database not connected")
+    
     try:
         print(f"Renaming session {session_id} to: {request.title}")
         
@@ -243,6 +278,9 @@ async def rename_session(
 @app.delete("/chat/sessions/{session_id}")
 async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a chat session and its messages"""
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Database not connected")
+    
     try:
         print(f"Deleting session {session_id}")
         
@@ -259,6 +297,9 @@ async def delete_session(session_id: str, current_user: dict = Depends(get_curre
 @app.get("/chat/sessions/{session_id}/messages")
 async def get_messages(session_id: str, current_user: dict = Depends(get_current_user)):
     """Get all messages for a session"""
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Database not connected")
+    
     try:
         print(f"=== GET MESSAGES DEBUG ===")
         print(f"Session ID: {session_id}")
@@ -286,7 +327,7 @@ async def get_messages(session_id: str, current_user: dict = Depends(get_current
         
         print(f"Found {len(response.data)} messages")
         for msg in response.data:
-            print(f"Message: {msg.get('role')} - {msg.get('content')[:50]}...")
+            print(f"Message: {msg.get('role')} - {str(msg.get('content'))[:50]}...")
         
         # Format messages for response
         messages = []
@@ -317,6 +358,9 @@ async def send_message(
     current_user: dict = Depends(get_current_user)
 ):
     """Send a message and get AI response"""
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Database not connected")
+    
     try:
         print(f"Sending message to session: {session_id}")
         
@@ -338,7 +382,7 @@ async def send_message(
             "created_at": datetime.utcnow().isoformat()
         }).execute()
         
-        print(f"Saved user message: {user_msg.data[0]['id'] if user_msg.data else 'unknown'}")
+        print(f"Saved user message")
         
         # Get previous messages for context
         previous = supabase.table("chat_messages")\
@@ -371,7 +415,7 @@ async def send_message(
             "created_at": datetime.utcnow().isoformat()
         }).execute()
         
-        print(f"Saved assistant message: {assistant_msg.data[0]['id'] if assistant_msg.data else 'unknown'}")
+        print(f"Saved assistant message")
         
         # Update session updated_at
         supabase.table("chat_sessions")\
@@ -428,6 +472,9 @@ async def upload_pdf(
 @app.get("/documents")
 async def list_documents(current_user: dict = Depends(get_current_user)):
     """List all uploaded documents for the current user"""
+    if supabase is None:
+        return {"documents": [], "error": "Database not connected"}
+    
     try:
         response = supabase.table("user_documents").select("*").eq("user_id", current_user["user_id"]).execute()
         return {"documents": response.data}
@@ -438,6 +485,9 @@ async def list_documents(current_user: dict = Depends(get_current_user)):
 @app.delete("/documents/{filename}")
 async def delete_document(filename: str, current_user: dict = Depends(get_current_user)):
     """Delete a specific document"""
+    if supabase is None:
+        raise HTTPException(500, detail="Database not connected")
+    
     try:
         supabase.table("user_documents").delete().eq("user_id", current_user["user_id"]).eq("filename", filename).execute()
         return {"message": f"Document {filename} deleted"}
@@ -445,12 +495,14 @@ async def delete_document(filename: str, current_user: dict = Depends(get_curren
         print(f"Error deleting document: {str(e)}")
         raise HTTPException(500, detail=f"Failed to delete: {str(e)}")
 
-# ========== TEST ENDPOINT TO CHECK DATABASE ==========
+# ========== DEBUG ENDPOINT ==========
 @app.get("/debug/check-messages/{session_id}")
 async def check_messages(session_id: str, current_user: dict = Depends(get_current_user)):
     """Debug endpoint to check messages directly"""
+    if supabase is None:
+        return {"error": "Database not connected"}
+    
     try:
-        # Direct query to see what's in the database
         response = supabase.table("chat_messages")\
             .select("*")\
             .eq("session_id", session_id)\
@@ -464,3 +516,7 @@ async def check_messages(session_id: str, current_user: dict = Depends(get_curre
         }
     except Exception as e:
         return {"error": str(e)}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
