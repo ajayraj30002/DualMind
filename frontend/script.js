@@ -6,30 +6,31 @@ let authToken = null;
 let currentUser = null;
 let currentSessionId = null;
 let currentSearchType = 'hybrid';
-let pendingFile = null;  // Store file before sending
+let pendingFile = null;
 
 // DOM Elements
-let authSection, chatSection, sessionsList, messagesArea, messageInput, sendBtn;
-let attachBtn, fileInput, chatTitle, renameBtn, newChatBtn, logoutBtn;
-let searchTypeBtns, attachedFilesDiv;
+let loginPage, chatPage, sessionsList, messagesContainer;
+let messageInput, sendBtn, attachBtn, fileInput, newChatBtn;
+let chatTitle, renameBtn, logoutBtn, modelBtns;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    // Get DOM elements
-    authSection = document.getElementById('auth-section');
-    chatSection = document.getElementById('chat-section');
+    // Pages
+    loginPage = document.getElementById('login-page');
+    chatPage = document.getElementById('chat-page');
+    
+    // Auth elements
     sessionsList = document.getElementById('sessions-list');
-    messagesArea = document.getElementById('messages-area');
+    messagesContainer = document.getElementById('messages-container');
     messageInput = document.getElementById('message-input');
-    sendBtn = document.getElementById('send-btn');
-    attachBtn = document.getElementById('attach-btn');
-    fileInput = document.getElementById('file-input');
+    sendBtn = document.getElementById('send-message-btn');
+    attachBtn = document.getElementById('attach-pdf-btn');
+    fileInput = document.getElementById('pdf-input');
+    newChatBtn = document.getElementById('new-chat-btn');
     chatTitle = document.getElementById('chat-title');
     renameBtn = document.getElementById('rename-chat-btn');
-    newChatBtn = document.getElementById('new-chat-btn');
     logoutBtn = document.getElementById('logout-btn');
-    searchTypeBtns = document.querySelectorAll('.search-type-btn');
-    attachedFilesDiv = document.getElementById('attached-files');
+    modelBtns = document.querySelectorAll('.model-btn');
     
     setupEventListeners();
     checkAuth();
@@ -37,24 +38,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
     // Auth
-    document.getElementById('show-signup')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        showSignup();
-    });
-    document.getElementById('show-signin')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        showSignin();
-    });
-    document.getElementById('signup-submit')?.addEventListener('click', () => {
-        const email = document.getElementById('signup-email').value;
-        const password = document.getElementById('signup-password').value;
-        const fullName = document.getElementById('signup-fullname').value;
-        signup(email, password, fullName);
-    });
-    document.getElementById('signin-submit')?.addEventListener('click', () => {
-        const email = document.getElementById('signin-email').value;
-        const password = document.getElementById('signin-password').value;
+    document.getElementById('login-btn')?.addEventListener('click', () => {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
         signin(email, password);
+    });
+    document.getElementById('register-btn')?.addEventListener('click', () => {
+        const name = document.getElementById('register-name').value;
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+        signup(email, password, name);
+    });
+    document.getElementById('show-register')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('login-form').classList.remove('active');
+        document.getElementById('register-form').classList.add('active');
+    });
+    document.getElementById('show-login')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('register-form').classList.remove('active');
+        document.getElementById('login-form').classList.add('active');
     });
     
     // Chat
@@ -71,18 +74,16 @@ function setupEventListeners() {
     renameBtn?.addEventListener('click', renameCurrentSession);
     logoutBtn?.addEventListener('click', logout);
     
-    // Search type selector
-    searchTypeBtns.forEach(btn => {
+    modelBtns.forEach(btn => {
         btn.addEventListener('click', () => {
-            searchTypeBtns.forEach(b => b.classList.remove('active'));
+            modelBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentSearchType = btn.dataset.type;
         });
     });
 }
 
-// ========== AUTH FUNCTIONS ==========
-
+// ========== AUTH ==========
 async function signup(email, password, fullName) {
     if (!email || !password) {
         alert('Please fill in all fields');
@@ -102,18 +103,15 @@ async function signup(email, password, fullName) {
         const data = await response.json();
         
         if (response.ok) {
-            alert('✅ Signup successful! Please sign in.');
-            showSignin();
-            document.getElementById('signup-email').value = '';
-            document.getElementById('signup-password').value = '';
-            if (document.getElementById('signup-fullname')) {
-                document.getElementById('signup-fullname').value = '';
-            }
+            alert('Signup successful! Please sign in.');
+            document.getElementById('register-form').classList.remove('active');
+            document.getElementById('login-form').classList.add('active');
+            document.getElementById('login-email').value = email;
         } else {
-            alert('❌ Signup failed: ' + (data.detail || 'Unknown error'));
+            alert('Signup failed: ' + (data.detail || 'Unknown error'));
         }
     } catch (error) {
-        alert('❌ Connection error: ' + error.message);
+        alert('Connection error: ' + error.message);
     }
 }
 
@@ -136,14 +134,14 @@ async function signin(email, password) {
             currentUser = { id: data.user_id, email: data.email };
             localStorage.setItem('dualmind_token', authToken);
             localStorage.setItem('dualmind_user', JSON.stringify(currentUser));
-            showApp();
+            showChatPage();
             await loadSessions();
             await createNewSession();
         } else {
-            alert('❌ Signin failed: ' + (data.detail || 'Invalid credentials'));
+            alert('Signin failed: ' + (data.detail || 'Invalid credentials'));
         }
     } catch (error) {
-        alert('❌ Connection error: ' + error.message);
+        alert('Connection error: ' + error.message);
     }
 }
 
@@ -154,7 +152,7 @@ function logout() {
     pendingFile = null;
     localStorage.removeItem('dualmind_token');
     localStorage.removeItem('dualmind_user');
-    showAuth();
+    showLoginPage();
 }
 
 function checkAuth() {
@@ -164,44 +162,38 @@ function checkAuth() {
     if (token && user) {
         authToken = token;
         currentUser = JSON.parse(user);
-        showApp();
+        showChatPage();
         loadSessions();
     } else {
-        showAuth();
+        showLoginPage();
     }
 }
 
-function showAuth() {
-    if (authSection) authSection.classList.remove('hidden');
-    if (chatSection) chatSection.classList.add('hidden');
+function showLoginPage() {
+    if (loginPage) loginPage.classList.remove('hidden');
+    if (chatPage) chatPage.classList.add('hidden');
+    clearAuthForms();
 }
 
-function showApp() {
-    if (authSection) authSection.classList.add('hidden');
-    if (chatSection) chatSection.classList.remove('hidden');
-    const userEmailSpan = document.getElementById('user-email');
-    if (userEmailSpan && currentUser) userEmailSpan.textContent = currentUser.email;
+function showChatPage() {
+    if (loginPage) loginPage.classList.add('hidden');
+    if (chatPage) chatPage.classList.remove('hidden');
+    const userEmailSpan = document.getElementById('user-email-sidebar');
+    if (userEmailSpan && currentUser) userEmailSpan.textContent = currentUser.email.split('@')[0];
 }
 
-function showSignup() {
-    const signupForm = document.getElementById('signup-form');
-    const signinForm = document.getElementById('signin-form');
-    if (signupForm) signupForm.classList.remove('hidden');
-    if (signinForm) signinForm.classList.add('hidden');
+function clearAuthForms() {
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('register-name').value = '';
+    document.getElementById('register-email').value = '';
+    document.getElementById('register-password').value = '';
 }
 
-function showSignin() {
-    const signupForm = document.getElementById('signup-form');
-    const signinForm = document.getElementById('signin-form');
-    if (signupForm) signupForm.classList.add('hidden');
-    if (signinForm) signinForm.classList.remove('hidden');
-}
-
-// ========== CHAT SESSION FUNCTIONS ==========
-
+// ========== SESSIONS ==========
 async function loadSessions() {
     if (!sessionsList) return;
-    sessionsList.innerHTML = '<div class="loading-sessions"><i class="fas fa-spinner fa-spin"></i> Loading chats...</div>';
+    sessionsList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #52525b;">Loading...</div>';
     
     try {
         const response = await fetch(`${BACKEND_URL}/chat/sessions`, {
@@ -217,12 +209,10 @@ async function loadSessions() {
         
         if (response.ok && data.sessions) {
             renderSessions(data.sessions);
-        } else {
-            sessionsList.innerHTML = '<div class="loading-sessions">No chats yet. Start a new one!</div>';
         }
     } catch (error) {
         console.error('Load sessions error:', error);
-        sessionsList.innerHTML = '<div class="loading-sessions">Failed to load chats</div>';
+        sessionsList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #52525b;">Failed to load</div>';
     }
 }
 
@@ -230,7 +220,7 @@ function renderSessions(sessions) {
     if (!sessionsList) return;
     
     if (sessions.length === 0) {
-        sessionsList.innerHTML = '<div class="loading-sessions">No chats yet. Start a new one!</div>';
+        sessionsList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #52525b;">No conversations</div>';
         return;
     }
     
@@ -238,7 +228,7 @@ function renderSessions(sessions) {
         <div class="session-item ${currentSessionId === session.id ? 'active' : ''}" data-id="${session.id}">
             <span class="session-title">${escapeHtml(session.title)}</span>
             <button class="session-delete" data-id="${session.id}">
-                <i class="fas fa-trash"></i>
+                <i class="fas fa-times"></i>
             </button>
         </div>
     `).join('');
@@ -277,7 +267,7 @@ async function createNewSession() {
         
         if (response.ok) {
             currentSessionId = data.session.id;
-            if (chatTitle) chatTitle.value = 'New Chat';
+            if (chatTitle) chatTitle.textContent = 'New conversation';
             clearMessages();
             await loadSessions();
         }
@@ -303,7 +293,7 @@ async function loadSession(sessionId) {
         
         if (response.ok) {
             const sessionInfo = await getSessionInfo(sessionId);
-            if (chatTitle && sessionInfo) chatTitle.value = sessionInfo.title;
+            if (chatTitle && sessionInfo) chatTitle.textContent = sessionInfo.title;
             renderMessages(data.messages || []);
             await loadSessions();
         }
@@ -325,7 +315,7 @@ async function getSessionInfo(sessionId) {
 }
 
 async function renameCurrentSession() {
-    const newTitle = prompt('Enter new chat name:', chatTitle?.value);
+    const newTitle = prompt('Rename conversation:', chatTitle?.textContent);
     if (!newTitle || !currentSessionId) return;
     
     try {
@@ -333,7 +323,7 @@ async function renameCurrentSession() {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        if (chatTitle) chatTitle.value = newTitle;
+        if (chatTitle) chatTitle.textContent = newTitle;
         await loadSessions();
     } catch (error) {
         console.error('Rename error:', error);
@@ -341,7 +331,7 @@ async function renameCurrentSession() {
 }
 
 async function deleteSession(sessionId) {
-    if (!confirm('Delete this chat?')) return;
+    if (!confirm('Delete this conversation?')) return;
     
     try {
         await fetch(`${BACKEND_URL}/chat/sessions/${sessionId}`, {
@@ -357,7 +347,6 @@ async function deleteSession(sessionId) {
     }
 }
 
-// Generate title from first message
 async function updateSessionTitle(sessionId, firstMessage) {
     const shortTitle = firstMessage.length > 30 ? firstMessage.substring(0, 30) + '...' : firstMessage;
     try {
@@ -365,57 +354,95 @@ async function updateSessionTitle(sessionId, firstMessage) {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        if (chatTitle && currentSessionId === sessionId) chatTitle.value = shortTitle;
+        if (chatTitle && currentSessionId === sessionId) chatTitle.textContent = shortTitle;
         await loadSessions();
     } catch (error) {
         console.error('Auto-title error:', error);
     }
 }
 
-// ========== MESSAGE FUNCTIONS ==========
-
+// ========== MESSAGES ==========
 function clearMessages() {
-    if (!messagesArea) return;
-    messagesArea.innerHTML = `
-        <div class="welcome-message">
-            <i class="fas fa-brain"></i>
-            <h2>DualMind Assistant</h2>
-            <p>Ask me anything — I can search your documents or the web</p>
+    if (!messagesContainer) return;
+    messagesContainer.innerHTML = `
+        <div class="welcome-screen">
+            <div class="welcome-icon">
+                <i class="fas fa-brain"></i>
+            </div>
+            <h2>How can I help you today?</h2>
+            <p>Upload PDFs, search the web, or ask anything</p>
         </div>
     `;
 }
 
 function renderMessages(messages) {
-    if (!messagesArea) return;
+    if (!messagesContainer) return;
     
     if (messages.length === 0) {
         clearMessages();
         return;
     }
     
-    messagesArea.innerHTML = messages.map(msg => `
+    messagesContainer.innerHTML = messages.map(msg => `
         <div class="message ${msg.role}">
             <div class="message-avatar">
                 <i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i>
             </div>
             <div class="message-content">
-                ${formatMessage(msg.content)}
+                ${escapeHtml(msg.content).replace(/\n/g, '<br>')}
             </div>
         </div>
     `).join('');
     
-    messagesArea.scrollTop = messagesArea.scrollHeight;
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function formatMessage(content) {
-    return content.replace(/\n/g, '<br>');
+function addMessageToUI(role, content) {
+    if (!messagesContainer) return;
+    
+    const welcome = messagesContainer.querySelector('.welcome-screen');
+    if (welcome) welcome.remove();
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}`;
+    messageDiv.innerHTML = `
+        <div class="message-avatar">
+            <i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i>
+        </div>
+        <div class="message-content">
+            ${escapeHtml(content).replace(/\n/g, '<br>')}
+        </div>
+    `;
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function renderSources(sources) {
-    return '';
+function showTypingIndicator() {
+    if (!messagesContainer) return;
+    
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'message assistant';
+    typingDiv.id = 'typing-indicator';
+    typingDiv.innerHTML = `
+        <div class="message-avatar">
+            <i class="fas fa-brain"></i>
+        </div>
+        <div class="message-content">
+            <div class="typing-indicator">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+    `;
+    messagesContainer.appendChild(typingDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// File selection - store file for later
+function removeTypingIndicator() {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) indicator.remove();
+}
+
+// ========== FILE HANDLING ==========
 function handleFileSelect(e) {
     const file = e.target.files[0];
     if (!file || !file.name.endsWith('.pdf')) {
@@ -424,84 +451,77 @@ function handleFileSelect(e) {
     }
     
     pendingFile = file;
-    if (attachedFilesDiv) {
-        attachedFilesDiv.innerHTML = `<div class="file-badge">📄 ${file.name} <i class="fas fa-paperclip"></i></div>`;
+    const badge = document.getElementById('file-badge');
+    if (badge) {
+        badge.innerHTML = `<i class="fas fa-file-pdf"></i> ${file.name} <i class="fas fa-check-circle"></i>`;
+        badge.classList.remove('hidden');
     }
 }
 
-// Upload file and send message
 async function uploadFileAndSend(file, message) {
     const formData = new FormData();
     formData.append('file', file);
     
-    const uploadResponse = await fetch(`${BACKEND_URL}/upload`, {
+    const response = await fetch(`${BACKEND_URL}/upload`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${authToken}` },
         body: formData
     });
     
-    if (uploadResponse.status === 401) {
+    if (response.status === 401) {
         logout();
         throw new Error('Unauthorized');
     }
     
-    const uploadData = await uploadResponse.json();
-    if (!uploadResponse.ok) {
-        throw new Error(uploadData.detail || 'Upload failed');
-    }
-    
-    return uploadData;
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Upload failed');
+    return data;
 }
 
+// ========== SEND MESSAGE ==========
 async function sendMessage() {
     const message = messageInput?.value.trim();
     if (!message || !currentSessionId) return;
     
-    // Clear pending file display
-    if (attachedFilesDiv) attachedFilesDiv.innerHTML = '';
-    
-    // Add user message to UI
-    addMessageToUI('user', message);
+    // Clear UI
     messageInput.value = '';
     messageInput.style.height = 'auto';
+    const badge = document.getElementById('file-badge');
+    if (badge) badge.classList.add('hidden');
     
-    // Upload file if exists (BEFORE sending message)
-    let uploadedFileInfo = null;
+    addMessageToUI('user', message);
+    
+    // Check if first message (auto-title)
+    const isFirstMessage = messagesContainer?.querySelectorAll('.message').length === 0;
+    if (isFirstMessage) {
+        await updateSessionTitle(currentSessionId, message);
+    }
+    
+    // Upload file if exists
+    let uploadedFile = null;
     if (pendingFile) {
         showTypingIndicator();
         try {
-            uploadedFileInfo = await uploadFileAndSend(pendingFile, message);
+            uploadedFile = await uploadFileAndSend(pendingFile, message);
             pendingFile = null;
             removeTypingIndicator();
         } catch (error) {
             removeTypingIndicator();
-            addMessageToUI('assistant', `Failed to upload file: ${error.message}`);
+            addMessageToUI('assistant', `Upload failed: ${error.message}`);
             sendBtn.disabled = false;
             return;
         }
     }
     
-    // Auto-generate session title from first message
-    const isFirstMessage = messagesArea?.querySelectorAll('.message').length === 0;
-    if (isFirstMessage) {
-        await updateSessionTitle(currentSessionId, message);
-    }
-    
-    // Show typing indicator
     showTypingIndicator();
     sendBtn.disabled = true;
     
     try {
         const requestBody = {
             question: message,
-            search_type: currentSearchType,
-            include_sources: true
+            search_type: uploadedFile ? 'closed' : currentSearchType,
+            include_sources: false
         };
-        
-        // If a document was just uploaded, force closed-domain for this query
-        if (uploadedFileInfo) {
-            requestBody.search_type = 'closed';
-        }
         
         const response = await fetch(`${BACKEND_URL}/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
@@ -529,56 +549,11 @@ async function sendMessage() {
     } catch (error) {
         console.error('Send error:', error);
         removeTypingIndicator();
-        addMessageToUI('assistant', 'Connection error. Please check your connection.');
+        addMessageToUI('assistant', 'Connection error. Please try again.');
     } finally {
         sendBtn.disabled = false;
         messageInput.focus();
     }
-}
-
-function addMessageToUI(role, content) {
-    if (!messagesArea) return;
-    
-    const welcomeMsg = messagesArea.querySelector('.welcome-message');
-    if (welcomeMsg) welcomeMsg.remove();
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}`;
-    messageDiv.innerHTML = `
-        <div class="message-avatar">
-            <i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i>
-        </div>
-        <div class="message-content">
-            ${formatMessage(content)}
-        </div>
-    `;
-    messagesArea.appendChild(messageDiv);
-    messagesArea.scrollTop = messagesArea.scrollHeight;
-}
-
-function showTypingIndicator() {
-    if (!messagesArea) return;
-    
-    const typingDiv = document.createElement('div');
-    typingDiv.className = 'message assistant';
-    typingDiv.id = 'typing-indicator';
-    typingDiv.innerHTML = `
-        <div class="message-avatar">
-            <i class="fas fa-brain"></i>
-        </div>
-        <div class="message-content">
-            <div class="typing-indicator">
-                <span></span><span></span><span></span>
-            </div>
-        </div>
-    `;
-    messagesArea.appendChild(typingDiv);
-    messagesArea.scrollTop = messagesArea.scrollHeight;
-}
-
-function removeTypingIndicator() {
-    const indicator = document.getElementById('typing-indicator');
-    if (indicator) indicator.remove();
 }
 
 function escapeHtml(text) {
