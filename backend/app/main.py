@@ -14,6 +14,8 @@ from .models.schemas import (
     UploadResponse
 )
 from .auth import create_access_token, get_current_user, supabase
+from typing import Optional
+from pydantic import BaseModel
 
 app = FastAPI(title="DualMind API", version="1.0.0")
 
@@ -103,6 +105,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 
 # ========== CHAT SESSION ENDPOINTS ==========
 
+class RenameSessionRequest(BaseModel):
+    title: str
+
 @app.get("/chat/sessions")
 async def get_sessions(current_user: dict = Depends(get_current_user)):
     """Get all chat sessions for current user"""
@@ -131,11 +136,15 @@ async def create_session(current_user: dict = Depends(get_current_user)):
         raise HTTPException(500, f"Failed to create session: {str(e)}")
 
 @app.put("/chat/sessions/{session_id}")
-async def rename_session(session_id: str, title: str, current_user: dict = Depends(get_current_user)):
+async def rename_session(
+    session_id: str, 
+    request: RenameSessionRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """Rename a chat session"""
     try:
         supabase.table("chat_sessions")\
-            .update({"title": title, "updated_at": "now()"})\
+            .update({"title": request.title, "updated_at": "now()"})\
             .eq("id", session_id)\
             .eq("user_id", current_user["user_id"])\
             .execute()
@@ -147,7 +156,9 @@ async def rename_session(session_id: str, title: str, current_user: dict = Depen
 async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a chat session and its messages"""
     try:
+        # First delete messages
         supabase.table("chat_messages").delete().eq("session_id", session_id).execute()
+        # Then delete session
         supabase.table("chat_sessions").delete().eq("id", session_id).eq("user_id", current_user["user_id"]).execute()
         return {"message": "Session deleted"}
     except Exception as e:
@@ -157,6 +168,7 @@ async def delete_session(session_id: str, current_user: dict = Depends(get_curre
 async def get_messages(session_id: str, current_user: dict = Depends(get_current_user)):
     """Get all messages for a session"""
     try:
+        # Verify session belongs to user
         session = supabase.table("chat_sessions")\
             .select("*")\
             .eq("id", session_id)\
@@ -165,12 +177,25 @@ async def get_messages(session_id: str, current_user: dict = Depends(get_current
         if not session.data:
             raise HTTPException(404, "Session not found")
         
+        # Get all messages for this session
         response = supabase.table("chat_messages")\
             .select("*")\
             .eq("session_id", session_id)\
             .order("created_at", asc=True)\
             .execute()
-        return {"messages": response.data}
+        
+        # Process messages to ensure proper format
+        messages = []
+        for msg in response.data:
+            messages.append({
+                "id": msg.get("id"),
+                "role": msg.get("role"),
+                "content": msg.get("content"),
+                "sources": msg.get("sources"),
+                "created_at": msg.get("created_at")
+            })
+        
+        return {"messages": messages}
     except HTTPException:
         raise
     except Exception as e:
@@ -184,6 +209,7 @@ async def send_message(
 ):
     """Send a message and get AI response with conversation context"""
     
+    # Verify session belongs to user
     session = supabase.table("chat_sessions")\
         .select("*")\
         .eq("id", session_id)\
@@ -193,18 +219,18 @@ async def send_message(
         raise HTTPException(404, "Session not found")
     
     # Save user message
-    supabase.table("chat_messages").insert({
+    user_msg = supabase.table("chat_messages").insert({
         "session_id": session_id,
         "role": "user",
         "content": request.question
     }).execute()
     
-    # Get previous messages for context
+    # Get previous messages for context (limit to last 20 for better context)
     previous = supabase.table("chat_messages")\
         .select("*")\
         .eq("session_id", session_id)\
         .order("created_at", desc=True)\
-        .limit(10)\
+        .limit(20)\
         .execute()
     
     # Build conversation context
@@ -221,8 +247,8 @@ async def send_message(
         conversation_context=conversation_context
     )
     
-    # Save assistant message
-    supabase.table("chat_messages").insert({
+    # Save assistant message with sources
+    assistant_msg = supabase.table("chat_messages").insert({
         "session_id": session_id,
         "role": "assistant",
         "content": result["answer"],
