@@ -9,9 +9,13 @@ let currentSearchType = 'hybrid';
 let pendingFile = null;
 
 // DOM Elements
-let loginPage, chatPage, sessionsList, messagesContainer;
-let messageInput, sendBtn, attachBtn, fileInput, newChatBtn;
-let chatTitle, renameBtn, logoutBtn, modelBtns;
+let loginPage, chatPage;
+let sessionsList, messagesArea;
+let messageInput, sendBtn;
+let attachBtn, fileInput, filePreview;
+let newChatBtn, renameBtn, logoutBtn;
+let chatTitleHeader;
+let searchTypeBtns;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,18 +23,21 @@ document.addEventListener('DOMContentLoaded', () => {
     loginPage = document.getElementById('login-page');
     chatPage = document.getElementById('chat-page');
     
-    // Auth elements
+    // Sidebar
     sessionsList = document.getElementById('sessions-list');
-    messagesContainer = document.getElementById('messages-container');
+    newChatBtn = document.getElementById('new-chat-sidebar');
+    logoutBtn = document.getElementById('sidebar-logout');
+    
+    // Chat area
+    messagesArea = document.getElementById('messages-area');
     messageInput = document.getElementById('message-input');
-    sendBtn = document.getElementById('send-message-btn');
-    attachBtn = document.getElementById('attach-pdf-btn');
-    fileInput = document.getElementById('pdf-input');
-    newChatBtn = document.getElementById('new-chat-btn');
-    chatTitle = document.getElementById('chat-title');
-    renameBtn = document.getElementById('rename-chat-btn');
-    logoutBtn = document.getElementById('logout-btn');
-    modelBtns = document.querySelectorAll('.model-btn');
+    sendBtn = document.getElementById('send-message');
+    attachBtn = document.getElementById('attach-file-btn');
+    fileInput = document.getElementById('file-input');
+    filePreview = document.getElementById('file-preview');
+    renameBtn = document.getElementById('rename-chat-header');
+    chatTitleHeader = document.getElementById('chat-title-header');
+    searchTypeBtns = document.querySelectorAll('.search-type');
     
     setupEventListeners();
     checkAuth();
@@ -38,23 +45,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
     // Auth
-    document.getElementById('login-btn')?.addEventListener('click', () => {
+    document.getElementById('login-button')?.addEventListener('click', () => {
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
         signin(email, password);
     });
-    document.getElementById('register-btn')?.addEventListener('click', () => {
+    document.getElementById('register-button')?.addEventListener('click', () => {
         const name = document.getElementById('register-name').value;
         const email = document.getElementById('register-email').value;
         const password = document.getElementById('register-password').value;
         signup(email, password, name);
     });
-    document.getElementById('show-register')?.addEventListener('click', (e) => {
+    document.getElementById('switch-to-register')?.addEventListener('click', (e) => {
         e.preventDefault();
         document.getElementById('login-form').classList.remove('active');
         document.getElementById('register-form').classList.add('active');
     });
-    document.getElementById('show-login')?.addEventListener('click', (e) => {
+    document.getElementById('switch-to-login')?.addEventListener('click', (e) => {
         e.preventDefault();
         document.getElementById('register-form').classList.remove('active');
         document.getElementById('login-form').classList.add('active');
@@ -74,9 +81,9 @@ function setupEventListeners() {
     renameBtn?.addEventListener('click', renameCurrentSession);
     logoutBtn?.addEventListener('click', logout);
     
-    modelBtns.forEach(btn => {
+    searchTypeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
-            modelBtns.forEach(b => b.classList.remove('active'));
+            searchTypeBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentSearchType = btn.dataset.type;
         });
@@ -86,7 +93,7 @@ function setupEventListeners() {
 // ========== AUTH ==========
 async function signup(email, password, fullName) {
     if (!email || !password) {
-        alert('Please fill in all fields');
+        alert('Please fill all fields');
         return;
     }
     if (password.length < 6) {
@@ -170,30 +177,25 @@ function checkAuth() {
 }
 
 function showLoginPage() {
-    if (loginPage) loginPage.classList.remove('hidden');
-    if (chatPage) chatPage.classList.add('hidden');
-    clearAuthForms();
+    loginPage?.classList.remove('hidden');
+    chatPage?.classList.add('hidden');
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-password').value = '';
 }
 
 function showChatPage() {
-    if (loginPage) loginPage.classList.add('hidden');
-    if (chatPage) chatPage.classList.remove('hidden');
-    const userEmailSpan = document.getElementById('user-email-sidebar');
-    if (userEmailSpan && currentUser) userEmailSpan.textContent = currentUser.email.split('@')[0];
-}
-
-function clearAuthForms() {
-    document.getElementById('login-email').value = '';
-    document.getElementById('login-password').value = '';
-    document.getElementById('register-name').value = '';
-    document.getElementById('register-email').value = '';
-    document.getElementById('register-password').value = '';
+    loginPage?.classList.add('hidden');
+    chatPage?.classList.remove('hidden');
+    const userEmailSpan = document.getElementById('sidebar-user-email');
+    if (userEmailSpan && currentUser) {
+        userEmailSpan.textContent = currentUser.email.split('@')[0];
+    }
 }
 
 // ========== SESSIONS ==========
 async function loadSessions() {
     if (!sessionsList) return;
-    sessionsList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #52525b;">Loading...</div>';
+    sessionsList.innerHTML = '<div class="loading-sessions">Loading...</div>';
     
     try {
         const response = await fetch(`${BACKEND_URL}/chat/sessions`, {
@@ -209,10 +211,12 @@ async function loadSessions() {
         
         if (response.ok && data.sessions) {
             renderSessions(data.sessions);
+        } else {
+            sessionsList.innerHTML = '<div class="loading-sessions">No conversations</div>';
         }
     } catch (error) {
         console.error('Load sessions error:', error);
-        sessionsList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #52525b;">Failed to load</div>';
+        sessionsList.innerHTML = '<div class="loading-sessions">Failed to load</div>';
     }
 }
 
@@ -220,7 +224,7 @@ function renderSessions(sessions) {
     if (!sessionsList) return;
     
     if (sessions.length === 0) {
-        sessionsList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #52525b;">No conversations</div>';
+        sessionsList.innerHTML = '<div class="loading-sessions">No conversations</div>';
         return;
     }
     
@@ -267,7 +271,7 @@ async function createNewSession() {
         
         if (response.ok) {
             currentSessionId = data.session.id;
-            if (chatTitle) chatTitle.textContent = 'New conversation';
+            if (chatTitleHeader) chatTitleHeader.textContent = 'New conversation';
             clearMessages();
             await loadSessions();
         }
@@ -277,6 +281,7 @@ async function createNewSession() {
 }
 
 async function loadSession(sessionId) {
+    if (sessionId === currentSessionId) return;
     currentSessionId = sessionId;
     
     try {
@@ -293,7 +298,9 @@ async function loadSession(sessionId) {
         
         if (response.ok) {
             const sessionInfo = await getSessionInfo(sessionId);
-            if (chatTitle && sessionInfo) chatTitle.textContent = sessionInfo.title;
+            if (chatTitleHeader && sessionInfo) {
+                chatTitleHeader.textContent = sessionInfo.title;
+            }
             renderMessages(data.messages || []);
             await loadSessions();
         }
@@ -315,7 +322,7 @@ async function getSessionInfo(sessionId) {
 }
 
 async function renameCurrentSession() {
-    const newTitle = prompt('Rename conversation:', chatTitle?.textContent);
+    const newTitle = prompt('Rename conversation:', chatTitleHeader?.textContent);
     if (!newTitle || !currentSessionId) return;
     
     try {
@@ -323,7 +330,7 @@ async function renameCurrentSession() {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        if (chatTitle) chatTitle.textContent = newTitle;
+        if (chatTitleHeader) chatTitleHeader.textContent = newTitle;
         await loadSessions();
     } catch (error) {
         console.error('Rename error:', error);
@@ -340,8 +347,9 @@ async function deleteSession(sessionId) {
         });
         if (currentSessionId === sessionId) {
             await createNewSession();
+        } else {
+            await loadSessions();
         }
-        await loadSessions();
     } catch (error) {
         console.error('Delete error:', error);
     }
@@ -354,7 +362,9 @@ async function updateSessionTitle(sessionId, firstMessage) {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        if (chatTitle && currentSessionId === sessionId) chatTitle.textContent = shortTitle;
+        if (chatTitleHeader && currentSessionId === sessionId) {
+            chatTitleHeader.textContent = shortTitle;
+        }
         await loadSessions();
     } catch (error) {
         console.error('Auto-title error:', error);
@@ -363,27 +373,25 @@ async function updateSessionTitle(sessionId, firstMessage) {
 
 // ========== MESSAGES ==========
 function clearMessages() {
-    if (!messagesContainer) return;
-    messagesContainer.innerHTML = `
-        <div class="welcome-screen">
-            <div class="welcome-icon">
-                <i class="fas fa-brain"></i>
-            </div>
-            <h2>How can I help you today?</h2>
-            <p>Upload PDFs, search the web, or ask anything</p>
+    if (!messagesArea) return;
+    messagesArea.innerHTML = `
+        <div class="welcome-area">
+            <i class="fas fa-brain"></i>
+            <h3>How can I help you today?</h3>
+            <p>Upload documents or ask anything</p>
         </div>
     `;
 }
 
 function renderMessages(messages) {
-    if (!messagesContainer) return;
+    if (!messagesArea) return;
     
     if (messages.length === 0) {
         clearMessages();
         return;
     }
     
-    messagesContainer.innerHTML = messages.map(msg => `
+    messagesArea.innerHTML = messages.map(msg => `
         <div class="message ${msg.role}">
             <div class="message-avatar">
                 <i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i>
@@ -394,13 +402,13 @@ function renderMessages(messages) {
         </div>
     `).join('');
     
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
 function addMessageToUI(role, content) {
-    if (!messagesContainer) return;
+    if (!messagesArea) return;
     
-    const welcome = messagesContainer.querySelector('.welcome-screen');
+    const welcome = messagesArea.querySelector('.welcome-area');
     if (welcome) welcome.remove();
     
     const messageDiv = document.createElement('div');
@@ -413,12 +421,12 @@ function addMessageToUI(role, content) {
             ${escapeHtml(content).replace(/\n/g, '<br>')}
         </div>
     `;
-    messagesContainer.appendChild(messageDiv);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    messagesArea.appendChild(messageDiv);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
 function showTypingIndicator() {
-    if (!messagesContainer) return;
+    if (!messagesArea) return;
     
     const typingDiv = document.createElement('div');
     typingDiv.className = 'message assistant';
@@ -433,8 +441,8 @@ function showTypingIndicator() {
             </div>
         </div>
     `;
-    messagesContainer.appendChild(typingDiv);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    messagesArea.appendChild(typingDiv);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
 function removeTypingIndicator() {
@@ -451,10 +459,9 @@ function handleFileSelect(e) {
     }
     
     pendingFile = file;
-    const badge = document.getElementById('file-badge');
-    if (badge) {
-        badge.innerHTML = `<i class="fas fa-file-pdf"></i> ${file.name} <i class="fas fa-check-circle"></i>`;
-        badge.classList.remove('hidden');
+    if (filePreview) {
+        filePreview.innerHTML = `<i class="fas fa-file-pdf"></i> ${file.name} <i class="fas fa-check-circle"></i>`;
+        filePreview.classList.remove('hidden');
     }
 }
 
@@ -483,21 +490,18 @@ async function sendMessage() {
     const message = messageInput?.value.trim();
     if (!message || !currentSessionId) return;
     
-    // Clear UI
     messageInput.value = '';
     messageInput.style.height = 'auto';
-    const badge = document.getElementById('file-badge');
-    if (badge) badge.classList.add('hidden');
+    
+    if (filePreview) filePreview.classList.add('hidden');
     
     addMessageToUI('user', message);
     
-    // Check if first message (auto-title)
-    const isFirstMessage = messagesContainer?.querySelectorAll('.message').length === 0;
+    const isFirstMessage = messagesArea?.querySelectorAll('.message').length === 1;
     if (isFirstMessage) {
         await updateSessionTitle(currentSessionId, message);
     }
     
-    // Upload file if exists
     let uploadedFile = null;
     if (pendingFile) {
         showTypingIndicator();
