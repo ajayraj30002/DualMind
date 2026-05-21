@@ -148,57 +148,41 @@ function showChatUI() {
     document.getElementById('userEmailSidebar').innerText = user?.email?.split('@')[0] || 'User';
 }
 
-async function loadSession(sessionId) {
-    if (sessionId === currentSessionId) return;
-    currentSessionId = sessionId;
+async function loadSessions() {
+    if (isLoadingSessions) return;
+    isLoadingSessions = true;
     
-    console.log("Loading session:", sessionId);
-    console.log("Using token:", token ? token.substring(0, 50) + "..." : "NO TOKEN");
+    if (!sessionListDiv) return;
+    sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
     
     try {
-        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
-            method: 'GET',
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        console.log("Response status:", res.status);
-        
-        if (res.status === 401) { 
-            console.error("Unauthorized! Logging out...");
-            doLogout(); 
-            return; 
-        }
-        
-        const data = await res.json();
-        console.log("Messages data:", data);
-        
-        // Get session info for title
-        const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
+        const res = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        const sessionsData = await sessionsRes.json();
-        const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
-        if (sessionInfo && chatTitleSpan) {
-            chatTitleSpan.innerText = sessionInfo.title;
-        }
+        if (res.status === 401) { doLogout(); isLoadingSessions = false; return; }
+        const data = await res.json();
         
-        // Render messages
-        if (messagesDiv) {
-            if (!data.messages || data.messages.length === 0) {
-                clearMessages();
-            } else {
-                renderMessages(data.messages);
+        if (res.ok && data.sessions && data.sessions.length > 0) {
+            renderSessionList(data.sessions);
+            // If no current session, load the most recent one
+            if (!currentSessionId && data.sessions[0]) {
+                await loadSession(data.sessions[0].id);
+            } else if (currentSessionId) {
+                // Just refresh the active state
+                renderSessionList(data.sessions);
+            }
+        } else {
+            sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
+            // Only create a new session if we're logged in and no session exists
+            if (!currentSessionId) {
+                await createNewSession();
             }
         }
-        
-        // Update sidebar active state
-        await loadSessions();
-        
-    } catch (err) { 
-        console.error('Load session error:', err); 
+    } catch (err) {
+        console.error(err);
+        sessionListDiv.innerHTML = '<div class="loading-text">Failed to load</div>';
+    } finally {
+        isLoadingSessions = false;
     }
 }
 
