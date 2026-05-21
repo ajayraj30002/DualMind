@@ -368,20 +368,7 @@ function renderMessages(messages) {
     messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
-function renderSources(sources) {
-    if (!sources || sources.length === 0) return '';
-    return `
-        <div class="sources-panel">
-            <div class="sources-title">📚 Sources</div>
-            ${sources.map(s => `
-                <div class="source-item">
-                    <i class="fas ${s.type === '📁 My Documents' ? 'fa-file-alt' : 'fa-globe'}"></i>
-                    <span>${escapeHtml(s.title || s.type)}</span>
-                </div>
-            `).join('')}
-        </div>
-    `;
-}
+
 
 function formatMessage(content) {
     return content.replace(/\n/g, '<br>');
