@@ -5,7 +5,6 @@ let user = null;
 let currentSessionId = null;
 let currentMode = 'hybrid';
 let pendingFile = null;
-let isLoadingSession = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
@@ -23,7 +22,6 @@ function setupEventListeners() {
     document.getElementById('attachPdfBtn')?.addEventListener('click', () => document.getElementById('pdfFileInput')?.click());
     document.getElementById('pdfFileInput')?.addEventListener('change', onFileSelect);
     
-    // Enter key to send message
     document.getElementById('messageInput')?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -62,7 +60,10 @@ async function doLogin() {
         } else {
             alert('Login failed: ' + (data.detail || 'Error'));
         }
-    } catch (err) { alert('Connection error'); }
+    } catch (err) { 
+        console.error('Login error:', err);
+        alert('Connection error'); 
+    }
 }
 
 async function doRegister() {
@@ -86,7 +87,10 @@ async function doRegister() {
             const data = await res.json();
             alert('Signup failed: ' + (data.detail || 'Error'));
         }
-    } catch (err) { alert('Connection error'); }
+    } catch (err) { 
+        console.error('Register error:', err);
+        alert('Connection error'); 
+    }
 }
 
 function doLogout() {
@@ -142,17 +146,24 @@ async function loadSessions() {
         const res = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (res.status === 401) { doLogout(); return; }
-        const data = await res.json();
         
-        if (res.ok && data.sessions && data.sessions.length > 0) {
+        if (res.status === 401) { doLogout(); return; }
+        
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+        
+        const data = await res.json();
+        console.log('Sessions loaded:', data);
+        
+        if (data.sessions && data.sessions.length > 0) {
             sessionList.innerHTML = '';
             for (const s of data.sessions) {
                 const div = document.createElement('div');
                 div.className = `session-item ${currentSessionId === s.id ? 'active' : ''}`;
                 div.dataset.id = s.id;
                 div.innerHTML = `
-                    <span class="session-title">${escapeHtml(s.title)}</span>
+                    <span class="session-title">${escapeHtml(s.title || 'Untitled')}</span>
                     <button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>
                 `;
                 div.addEventListener('click', (e) => {
@@ -166,8 +177,16 @@ async function loadSessions() {
                 });
                 sessionList.appendChild(div);
             }
+            
+            // Load the first session if no session is selected
             if (!currentSessionId && data.sessions[0]) {
                 await loadSession(data.sessions[0].id);
+            } else if (currentSessionId) {
+                // Refresh the current session to ensure it's highlighted
+                const sessionItem = document.querySelector(`.session-item[data-id="${currentSessionId}"]`);
+                if (sessionItem) {
+                    sessionItem.classList.add('active');
+                }
             }
         } else {
             sessionList.innerHTML = '<div class="loading-text">No conversations</div>';
@@ -176,7 +195,7 @@ async function loadSessions() {
             }
         }
     } catch (err) {
-        console.error(err);
+        console.error('Error loading sessions:', err);
         sessionList.innerHTML = '<div class="loading-text">Failed to load</div>';
     }
 }
@@ -185,63 +204,75 @@ async function createNewSession() {
     try {
         const res = await fetch(`${API_URL}/chat/sessions`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            headers: { 
+                'Authorization': `Bearer ${token}`, 
+                'Content-Type': 'application/json' 
+            }
         });
+        
         if (res.status === 401) { doLogout(); return; }
+        
         const data = await res.json();
+        console.log('New session created:', data);
+        
         if (res.ok && data.session) {
             currentSessionId = data.session.id;
             document.getElementById('chatTitle').innerText = 'New conversation';
             clearMessages();
             await loadSessions();
+        } else {
+            console.error('Failed to create session:', data);
         }
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error('Error creating session:', err);
+    }
 }
 
 async function loadSession(sessionId) {
-    if (isLoadingSession) return;
     if (sessionId === currentSessionId) return;
     
-    isLoadingSession = true;
+    console.log(`Loading session: ${sessionId}`);
     currentSessionId = sessionId;
     
+    // Update active state in sidebar
+    document.querySelectorAll('.session-item').forEach(item => {
+        if (item.dataset.id === sessionId) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+    
     try {
-        // First, highlight the active session in sidebar
-        document.querySelectorAll('.session-item').forEach(item => {
-            if (item.dataset.id === sessionId) {
-                item.classList.add('active');
-            } else {
-                item.classList.remove('active');
-            }
-        });
-        
-        // Fetch messages for this session
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
+        console.log(`Messages response status: ${res.status}`);
+        
         if (res.status === 401) { doLogout(); return; }
-        if (res.status === 404) {
-            console.error('Session not found');
-            await createNewSession();
-            return;
+        
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error(`Failed to load messages: ${res.status} - ${errorText}`);
+            throw new Error(`HTTP ${res.status}`);
         }
         
         const data = await res.json();
+        console.log(`Loaded ${data.messages?.length || 0} messages for session ${sessionId}`);
         
-        // Get session title from the sessions list
+        // Get session title
         const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const sessionsData = await sessionsRes.json();
         const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
+        
         if (sessionInfo) {
-            document.getElementById('chatTitle').innerText = sessionInfo.title;
-        } else {
-            document.getElementById('chatTitle').innerText = 'Conversation';
+            document.getElementById('chatTitle').innerText = sessionInfo.title || 'Conversation';
         }
         
-        // Render messages - CRITICAL FIX: Properly render messages
+        // Render messages
         const messagesDiv = document.getElementById('messagesContainer');
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
@@ -251,19 +282,9 @@ async function loadSession(sessionId) {
                 for (const msg of data.messages) {
                     const msgDiv = document.createElement('div');
                     msgDiv.className = `message ${msg.role}`;
-                    
-                    let contentHtml = escapeHtml(msg.content).replace(/\n/g, '<br>');
-                    
-                    // Add sources if present
-                    if (msg.sources && msg.sources.length > 0) {
-                        contentHtml += '<div class="sources"><small>Sources: ';
-                        contentHtml += msg.sources.map(s => `<span class="source">${escapeHtml(s)}</span>`).join(', ');
-                        contentHtml += '</small></div>';
-                    }
-                    
                     msgDiv.innerHTML = `
                         <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
-                        <div class="message-content">${contentHtml}</div>
+                        <div class="message-content">${escapeHtml(msg.content || '').replace(/\n/g, '<br>')}</div>
                     `;
                     messagesDiv.appendChild(msgDiv);
                 }
@@ -271,13 +292,11 @@ async function loadSession(sessionId) {
             }
         }
     } catch (err) { 
-        console.error('Error loading session:', err);
+        console.error('Error loading session messages:', err);
         const messagesDiv = document.getElementById('messagesContainer');
         if (messagesDiv) {
-            messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-exclamation-triangle"></i><h3>Error loading messages</h3><p>Please try refreshing</p></div>`;
+            messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-exclamation-triangle"></i><h3>Error loading messages</h3><p>Please try refreshing the page</p><p style="font-size:12px;color:#666;">Error: ${err.message}</p></div>`;
         }
-    } finally {
-        isLoadingSession = false;
     }
 }
 
@@ -285,10 +304,12 @@ async function deleteSession(sessionId) {
     if (!confirm('Delete this conversation?')) return;
     
     try {
-        await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
+        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
+        if (res.status === 401) { doLogout(); return; }
         
         if (currentSessionId === sessionId) {
             currentSessionId = null;
@@ -296,6 +317,7 @@ async function deleteSession(sessionId) {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const sessionsData = await sessionsRes.json();
+            
             if (sessionsData.sessions && sessionsData.sessions.length > 0) {
                 await loadSession(sessionsData.sessions[0].id);
             } else {
@@ -303,7 +325,9 @@ async function deleteSession(sessionId) {
             }
         }
         await loadSessions();
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error('Error deleting session:', err);
+    }
 }
 
 function clearMessages() {
@@ -367,14 +391,17 @@ async function uploadFile(file) {
         headers: { 'Authorization': `Bearer ${token}` },
         body: fd
     });
-    if (res.status === 401) { doLogout(); throw new Error('Unauth'); }
+    if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
     if (!res.ok) throw new Error('Upload failed');
     return await res.json();
 }
 
 async function sendMessage() {
     const text = document.getElementById('messageInput')?.value.trim();
-    if (!text || !currentSessionId) return;
+    if (!text || !currentSessionId) {
+        console.log('Cannot send: no text or no session');
+        return;
+    }
     
     document.getElementById('messageInput').value = '';
     document.getElementById('fileBadge')?.classList.add('hidden');
@@ -417,22 +444,29 @@ async function sendMessage() {
                 include_sources: false
             })
         });
+        
+        console.log(`Send message response status: ${res.status}`);
+        
         if (res.status === 401) { doLogout(); return; }
+        
         const data = await res.json();
         hideTyping();
+        
         if (res.ok) {
             addMessage('assistant', data.answer);
         } else {
+            console.error('Error response:', data);
             addMessage('assistant', 'Sorry, something went wrong. ' + (data.detail || ''));
         }
     } catch (err) {
+        console.error('Send message error:', err);
         hideTyping();
         addMessage('assistant', 'Connection error. Please try again.');
     } finally {
         if (sendBtn) sendBtn.disabled = false;
         document.getElementById('messageInput')?.focus();
         // Refresh session list to update timestamps
-        loadSessions();
+        await loadSessions();
     }
 }
 
@@ -447,11 +481,14 @@ async function autoTitle(sessionId, firstMsg) {
             },
             body: JSON.stringify({ title: short })
         });
+        
         if (res.ok) {
             document.getElementById('chatTitle').innerText = short;
             await loadSessions();
         }
-    } catch (err) { console.error('Auto-title error:', err); }
+    } catch (err) { 
+        console.error('Auto-title error:', err);
+    }
 }
 
 function escapeHtml(str) {
@@ -464,13 +501,20 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
-// Add this to debug - you can remove in production
+// Debug function to check messages directly
 async function debugCheckSession(sessionId) {
-    console.log('Checking session:', sessionId);
-    const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const data = await res.json();
-    console.log('Messages found:', data.messages?.length || 0);
-    return data;
+    console.log(`Debugging session: ${sessionId}`);
+    try {
+        const res = await fetch(`${API_URL}/debug/check-messages/${sessionId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        console.log('Debug data:', data);
+        return data;
+    } catch (err) {
+        console.error('Debug error:', err);
+    }
 }
+
+// Expose debug function to console
+window.debugCheckSession = debugCheckSession;
