@@ -143,7 +143,6 @@ async function signin(email, password) {
             localStorage.setItem('dualmind_user', JSON.stringify(currentUser));
             showChatPage();
             await loadSessions();
-            await createNewSession();
         } else {
             alert('Signin failed: ' + (data.detail || 'Invalid credentials'));
         }
@@ -209,10 +208,15 @@ async function loadSessions() {
         
         const data = await response.json();
         
-        if (response.ok && data.sessions) {
+        if (response.ok && data.sessions && data.sessions.length > 0) {
             renderSessions(data.sessions);
         } else {
+            // No sessions - show empty state and auto-create one
             sessionsList.innerHTML = '<div class="loading-sessions">No conversations</div>';
+            // Auto-create first session if none exists and we're on chat page
+            if (currentSessionId === null) {
+                await createNewSession();
+            }
         }
     } catch (error) {
         console.error('Load sessions error:', error);
@@ -223,12 +227,22 @@ async function loadSessions() {
 function renderSessions(sessions) {
     if (!sessionsList) return;
     
-    if (sessions.length === 0) {
+    // Clear and render only unique sessions by ID
+    const uniqueSessions = [];
+    const seenIds = new Set();
+    for (const session of sessions) {
+        if (!seenIds.has(session.id)) {
+            seenIds.add(session.id);
+            uniqueSessions.push(session);
+        }
+    }
+    
+    if (uniqueSessions.length === 0) {
         sessionsList.innerHTML = '<div class="loading-sessions">No conversations</div>';
         return;
     }
     
-    sessionsList.innerHTML = sessions.map(session => `
+    sessionsList.innerHTML = uniqueSessions.map(session => `
         <div class="session-item ${currentSessionId === session.id ? 'active' : ''}" data-id="${session.id}">
             <span class="session-title">${escapeHtml(session.title)}</span>
             <button class="session-delete" data-id="${session.id}">
@@ -237,17 +251,24 @@ function renderSessions(sessions) {
         </div>
     `).join('');
     
+    // Add click handlers
     document.querySelectorAll('.session-item').forEach(el => {
         el.addEventListener('click', (e) => {
             if (!e.target.closest('.session-delete')) {
-                loadSession(el.dataset.id);
+                const sessionId = el.dataset.id;
+                if (sessionId && sessionId !== currentSessionId) {
+                    loadSession(sessionId);
+                }
             }
         });
     });
     document.querySelectorAll('.session-delete').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            deleteSession(btn.dataset.id);
+            const sessionId = btn.dataset.id;
+            if (sessionId && confirm('Delete this conversation?')) {
+                await deleteSession(sessionId);
+            }
         });
     });
 }
@@ -269,7 +290,7 @@ async function createNewSession() {
         
         const data = await response.json();
         
-        if (response.ok) {
+        if (response.ok && data.session) {
             currentSessionId = data.session.id;
             if (chatTitleHeader) chatTitleHeader.textContent = 'New conversation';
             clearMessages();
@@ -297,11 +318,13 @@ async function loadSession(sessionId) {
         const data = await response.json();
         
         if (response.ok) {
+            // Update title
             const sessionInfo = await getSessionInfo(sessionId);
             if (chatTitleHeader && sessionInfo) {
                 chatTitleHeader.textContent = sessionInfo.title;
             }
             renderMessages(data.messages || []);
+            // Update active state in sidebar
             await loadSessions();
         }
     } catch (error) {
@@ -323,7 +346,7 @@ async function getSessionInfo(sessionId) {
 
 async function renameCurrentSession() {
     const newTitle = prompt('Rename conversation:', chatTitleHeader?.textContent);
-    if (!newTitle || !currentSessionId) return;
+    if (!newTitle || !currentSessionId || newTitle === chatTitleHeader?.textContent) return;
     
     try {
         await fetch(`${BACKEND_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newTitle)}`, {
@@ -338,18 +361,26 @@ async function renameCurrentSession() {
 }
 
 async function deleteSession(sessionId) {
-    if (!confirm('Delete this conversation?')) return;
-    
     try {
         await fetch(`${BACKEND_URL}/chat/sessions/${sessionId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
+        
         if (currentSessionId === sessionId) {
-            await createNewSession();
-        } else {
-            await loadSessions();
+            currentSessionId = null;
+            // Load remaining sessions or create new
+            const response = await fetch(`${BACKEND_URL}/chat/sessions`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const data = await response.json();
+            if (data.sessions && data.sessions.length > 0) {
+                await loadSession(data.sessions[0].id);
+            } else {
+                await createNewSession();
+            }
         }
+        await loadSessions();
     } catch (error) {
         console.error('Delete error:', error);
     }
@@ -357,6 +388,7 @@ async function deleteSession(sessionId) {
 
 async function updateSessionTitle(sessionId, firstMessage) {
     const shortTitle = firstMessage.length > 30 ? firstMessage.substring(0, 30) + '...' : firstMessage;
+    // Don't rename if it's still "New conversation" and first message exists
     try {
         await fetch(`${BACKEND_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(shortTitle)}`, {
             method: 'PUT',
@@ -386,7 +418,7 @@ function clearMessages() {
 function renderMessages(messages) {
     if (!messagesArea) return;
     
-    if (messages.length === 0) {
+    if (!messages || messages.length === 0) {
         clearMessages();
         return;
     }
@@ -490,18 +522,23 @@ async function sendMessage() {
     const message = messageInput?.value.trim();
     if (!message || !currentSessionId) return;
     
+    // Clear input
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
+    // Clear file preview
     if (filePreview) filePreview.classList.add('hidden');
     
+    // Add user message to UI
     addMessageToUI('user', message);
     
+    // Check if this is the first message (for auto-title)
     const isFirstMessage = messagesArea?.querySelectorAll('.message').length === 1;
     if (isFirstMessage) {
         await updateSessionTitle(currentSessionId, message);
     }
     
+    // Upload file if exists
     let uploadedFile = null;
     if (pendingFile) {
         showTypingIndicator();
@@ -517,6 +554,7 @@ async function sendMessage() {
         }
     }
     
+    // Send message
     showTypingIndicator();
     sendBtn.disabled = true;
     
