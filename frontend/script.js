@@ -5,6 +5,7 @@ let user = null;
 let currentSessionId = null;
 let currentMode = 'hybrid';
 let pendingFile = null;
+let isLoadingSession = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
@@ -21,6 +22,14 @@ function setupEventListeners() {
     document.getElementById('logoutSidebarBtn')?.addEventListener('click', doLogout);
     document.getElementById('attachPdfBtn')?.addEventListener('click', () => document.getElementById('pdfFileInput')?.click());
     document.getElementById('pdfFileInput')?.addEventListener('change', onFileSelect);
+    
+    // Enter key to send message
+    document.getElementById('messageInput')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
     
     document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -124,94 +133,53 @@ function toggleForms(showRegister) {
     }
 }
 
-async function loadSession(sessionId) {
-    if (sessionId === currentSessionId) return;
-    
-    console.log("🔄 Loading session:", sessionId);
+async function loadSessions() {
+    const sessionList = document.getElementById('sessionList');
+    if (!sessionList) return;
+    sessionList.innerHTML = '<div class="loading-text">Loading...</div>';
     
     try {
-        // Fetch messages for this session
-        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
+        const res = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
-        console.log("📨 Messages response status:", res.status);
-        
-        if (res.status === 401) { 
-            doLogout(); 
-            return; 
-        }
-        
-        if (!res.ok) {
-            console.error("Failed to fetch messages:", res.status);
-            return;
-        }
-        
+        if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
-        console.log("📨 Messages received:", data.messages?.length || 0, "messages");
         
-        // Update current session ID AFTER successful fetch
-        currentSessionId = sessionId;
-        
-        // Get session title separately
-        const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (sessionsRes.ok) {
-            const sessionsData = await sessionsRes.json();
-            const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
-            if (sessionInfo) {
-                document.getElementById('chatTitle').innerText = sessionInfo.title;
+        if (res.ok && data.sessions && data.sessions.length > 0) {
+            sessionList.innerHTML = '';
+            for (const s of data.sessions) {
+                const div = document.createElement('div');
+                div.className = `session-item ${currentSessionId === s.id ? 'active' : ''}`;
+                div.dataset.id = s.id;
+                div.innerHTML = `
+                    <span class="session-title">${escapeHtml(s.title)}</span>
+                    <button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>
+                `;
+                div.addEventListener('click', (e) => {
+                    if (!e.target.closest('.delete-session')) {
+                        loadSession(s.id);
+                    }
+                });
+                div.querySelector('.delete-session')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteSession(s.id);
+                });
+                sessionList.appendChild(div);
+            }
+            if (!currentSessionId && data.sessions[0]) {
+                await loadSession(data.sessions[0].id);
+            }
+        } else {
+            sessionList.innerHTML = '<div class="loading-text">No conversations</div>';
+            if (!currentSessionId) {
+                await createNewSession();
             }
         }
-        
-        // Render messages
-        const messagesDiv = document.getElementById('messagesContainer');
-        if (messagesDiv) {
-            if (!data.messages || data.messages.length === 0) {
-                messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
-            } else {
-                messagesDiv.innerHTML = '';
-                for (const msg of data.messages) {
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = `message ${msg.role}`;
-                    msgDiv.innerHTML = `
-                        <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
-                        <div class="message-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
-                    `;
-                    messagesDiv.appendChild(msgDiv);
-                }
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            }
-        }
-        
-        // Update sidebar active state
-        await loadSessions();
-        
-    } catch (err) { 
-        console.error('Load session error:', err); 
+    } catch (err) {
+        console.error(err);
+        sessionList.innerHTML = '<div class="loading-text">Failed to load</div>';
     }
 }
-
-// Debug function - call this from console
-window.debugMessages = async function() {
-    const res = await fetch(`${API_URL}/chat/sessions`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const data = await res.json();
-    console.log("All sessions:", data.sessions);
-    
-    if (data.sessions && data.sessions.length > 0) {
-        for (const s of data.sessions) {
-            const msgRes = await fetch(`${API_URL}/chat/sessions/${s.id}/messages`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const msgData = await msgRes.json();
-            console.log(`Session ${s.id} (${s.title}): ${msgData.messages?.length || 0} messages`);
-        }
-    }
-};
 
 async function createNewSession() {
     try {
@@ -231,18 +199,37 @@ async function createNewSession() {
 }
 
 async function loadSession(sessionId) {
+    if (isLoadingSession) return;
     if (sessionId === currentSessionId) return;
+    
+    isLoadingSession = true;
     currentSessionId = sessionId;
     
     try {
-        // Fetch messages
+        // First, highlight the active session in sidebar
+        document.querySelectorAll('.session-item').forEach(item => {
+            if (item.dataset.id === sessionId) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+        
+        // Fetch messages for this session
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
         if (res.status === 401) { doLogout(); return; }
+        if (res.status === 404) {
+            console.error('Session not found');
+            await createNewSession();
+            return;
+        }
+        
         const data = await res.json();
         
-        // Get session title
+        // Get session title from the sessions list
         const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -250,9 +237,11 @@ async function loadSession(sessionId) {
         const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
         if (sessionInfo) {
             document.getElementById('chatTitle').innerText = sessionInfo.title;
+        } else {
+            document.getElementById('chatTitle').innerText = 'Conversation';
         }
         
-        // Render messages
+        // Render messages - CRITICAL FIX: Properly render messages
         const messagesDiv = document.getElementById('messagesContainer');
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
@@ -262,18 +251,34 @@ async function loadSession(sessionId) {
                 for (const msg of data.messages) {
                     const msgDiv = document.createElement('div');
                     msgDiv.className = `message ${msg.role}`;
+                    
+                    let contentHtml = escapeHtml(msg.content).replace(/\n/g, '<br>');
+                    
+                    // Add sources if present
+                    if (msg.sources && msg.sources.length > 0) {
+                        contentHtml += '<div class="sources"><small>Sources: ';
+                        contentHtml += msg.sources.map(s => `<span class="source">${escapeHtml(s)}</span>`).join(', ');
+                        contentHtml += '</small></div>';
+                    }
+                    
                     msgDiv.innerHTML = `
                         <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
-                        <div class="message-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
+                        <div class="message-content">${contentHtml}</div>
                     `;
                     messagesDiv.appendChild(msgDiv);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
         }
-        
-        await loadSessions();
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error('Error loading session:', err);
+        const messagesDiv = document.getElementById('messagesContainer');
+        if (messagesDiv) {
+            messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-exclamation-triangle"></i><h3>Error loading messages</h3><p>Please try refreshing</p></div>`;
+        }
+    } finally {
+        isLoadingSession = false;
+    }
 }
 
 async function deleteSession(sessionId) {
@@ -376,7 +381,9 @@ async function sendMessage() {
     
     addMessage('user', text);
     
-    const isFirst = document.getElementById('messagesContainer')?.querySelectorAll('.message').length === 1;
+    // Auto-title for first message
+    const messagesDiv = document.getElementById('messagesContainer');
+    const isFirst = messagesDiv?.querySelectorAll('.message').length === 1;
     if (isFirst) await autoTitle(currentSessionId, text);
     
     let uploaded = null;
@@ -416,35 +423,54 @@ async function sendMessage() {
         if (res.ok) {
             addMessage('assistant', data.answer);
         } else {
-            addMessage('assistant', 'Sorry, something went wrong.');
+            addMessage('assistant', 'Sorry, something went wrong. ' + (data.detail || ''));
         }
     } catch (err) {
         hideTyping();
-        addMessage('assistant', 'Connection error.');
+        addMessage('assistant', 'Connection error. Please try again.');
     } finally {
         if (sendBtn) sendBtn.disabled = false;
         document.getElementById('messageInput')?.focus();
+        // Refresh session list to update timestamps
+        loadSessions();
     }
 }
 
 async function autoTitle(sessionId, firstMsg) {
     const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
     try {
-        await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, {
+        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
             method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title: short })
         });
-        document.getElementById('chatTitle').innerText = short;
-        await loadSessions();
-    } catch (err) { console.error(err); }
+        if (res.ok) {
+            document.getElementById('chatTitle').innerText = short;
+            await loadSessions();
+        }
+    } catch (err) { console.error('Auto-title error:', err); }
 }
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Add this to debug - you can remove in production
+async function debugCheckSession(sessionId) {
+    console.log('Checking session:', sessionId);
+    const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
+        headers: { 'Authorization': `Bearer ${token}` }
     });
+    const data = await res.json();
+    console.log('Messages found:', data.messages?.length || 0);
+    return data;
 }
