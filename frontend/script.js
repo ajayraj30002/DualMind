@@ -6,11 +6,12 @@ let authToken = null;
 let currentUser = null;
 let currentSessionId = null;
 let currentSearchType = 'hybrid';
+let pendingFile = null;  // Store file before sending
 
 // DOM Elements
 let authSection, chatSection, sessionsList, messagesArea, messageInput, sendBtn;
 let attachBtn, fileInput, chatTitle, renameBtn, newChatBtn, logoutBtn;
-let searchTypeBtns;
+let searchTypeBtns, attachedFilesDiv;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -28,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     newChatBtn = document.getElementById('new-chat-btn');
     logoutBtn = document.getElementById('logout-btn');
     searchTypeBtns = document.querySelectorAll('.search-type-btn');
+    attachedFilesDiv = document.getElementById('attached-files');
     
     setupEventListeners();
     checkAuth();
@@ -35,49 +37,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
     // Auth
-    const showSignupBtn = document.getElementById('show-signup');
-    const showSigninBtn = document.getElementById('show-signin');
-    const signupSubmit = document.getElementById('signup-submit');
-    const signinSubmit = document.getElementById('signin-submit');
-    
-    if (showSignupBtn) showSignupBtn.addEventListener('click', (e) => {
+    document.getElementById('show-signup')?.addEventListener('click', (e) => {
         e.preventDefault();
         showSignup();
     });
-    
-    if (showSigninBtn) showSigninBtn.addEventListener('click', (e) => {
+    document.getElementById('show-signin')?.addEventListener('click', (e) => {
         e.preventDefault();
         showSignin();
     });
-    
-    if (signupSubmit) signupSubmit.addEventListener('click', () => {
+    document.getElementById('signup-submit')?.addEventListener('click', () => {
         const email = document.getElementById('signup-email').value;
         const password = document.getElementById('signup-password').value;
         const fullName = document.getElementById('signup-fullname').value;
         signup(email, password, fullName);
     });
-    
-    if (signinSubmit) signinSubmit.addEventListener('click', () => {
+    document.getElementById('signin-submit')?.addEventListener('click', () => {
         const email = document.getElementById('signin-email').value;
         const password = document.getElementById('signin-password').value;
         signin(email, password);
     });
     
     // Chat
-    if (sendBtn) sendBtn.addEventListener('click', sendMessage);
-    if (messageInput) {
-        messageInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-    }
-    if (attachBtn) attachBtn.addEventListener('click', () => fileInput?.click());
-    if (fileInput) fileInput.addEventListener('change', handleFileUpload);
-    if (newChatBtn) newChatBtn.addEventListener('click', createNewSession);
-    if (renameBtn) renameBtn.addEventListener('click', renameCurrentSession);
-    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+    sendBtn?.addEventListener('click', sendMessage);
+    messageInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    attachBtn?.addEventListener('click', () => fileInput?.click());
+    fileInput?.addEventListener('change', handleFileSelect);
+    newChatBtn?.addEventListener('click', createNewSession);
+    renameBtn?.addEventListener('click', renameCurrentSession);
+    logoutBtn?.addEventListener('click', logout);
     
     // Search type selector
     searchTypeBtns.forEach(btn => {
@@ -112,7 +104,6 @@ async function signup(email, password, fullName) {
         if (response.ok) {
             alert('✅ Signup successful! Please sign in.');
             showSignin();
-            // Clear form
             document.getElementById('signup-email').value = '';
             document.getElementById('signup-password').value = '';
             if (document.getElementById('signup-fullname')) {
@@ -146,8 +137,8 @@ async function signin(email, password) {
             localStorage.setItem('dualmind_token', authToken);
             localStorage.setItem('dualmind_user', JSON.stringify(currentUser));
             showApp();
-            loadSessions();
-            createNewSession();
+            await loadSessions();
+            await createNewSession();
         } else {
             alert('❌ Signin failed: ' + (data.detail || 'Invalid credentials'));
         }
@@ -160,6 +151,7 @@ function logout() {
     authToken = null;
     currentUser = null;
     currentSessionId = null;
+    pendingFile = null;
     localStorage.removeItem('dualmind_token');
     localStorage.removeItem('dualmind_user');
     showAuth();
@@ -287,7 +279,7 @@ async function createNewSession() {
             currentSessionId = data.session.id;
             if (chatTitle) chatTitle.value = 'New Chat';
             clearMessages();
-            loadSessions();
+            await loadSessions();
         }
     } catch (error) {
         console.error('Create session error:', error);
@@ -313,7 +305,7 @@ async function loadSession(sessionId) {
             const sessionInfo = await getSessionInfo(sessionId);
             if (chatTitle && sessionInfo) chatTitle.value = sessionInfo.title;
             renderMessages(data.messages || []);
-            loadSessions();
+            await loadSessions();
         }
     } catch (error) {
         console.error('Load session error:', error);
@@ -342,7 +334,7 @@ async function renameCurrentSession() {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
         if (chatTitle) chatTitle.value = newTitle;
-        loadSessions();
+        await loadSessions();
     } catch (error) {
         console.error('Rename error:', error);
     }
@@ -357,11 +349,26 @@ async function deleteSession(sessionId) {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
         if (currentSessionId === sessionId) {
-            createNewSession();
+            await createNewSession();
         }
-        loadSessions();
+        await loadSessions();
     } catch (error) {
         console.error('Delete error:', error);
+    }
+}
+
+// Generate title from first message
+async function updateSessionTitle(sessionId, firstMessage) {
+    const shortTitle = firstMessage.length > 30 ? firstMessage.substring(0, 30) + '...' : firstMessage;
+    try {
+        await fetch(`${BACKEND_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(shortTitle)}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (chatTitle && currentSessionId === sessionId) chatTitle.value = shortTitle;
+        await loadSessions();
+    } catch (error) {
+        console.error('Auto-title error:', error);
     }
 }
 
@@ -405,33 +412,104 @@ function formatMessage(content) {
 }
 
 function renderSources(sources) {
-    // Return empty string - sources hidden for cleaner UI
     return '';
+}
+
+// File selection - store file for later
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file || !file.name.endsWith('.pdf')) {
+        alert('Please select a PDF file');
+        return;
+    }
+    
+    pendingFile = file;
+    if (attachedFilesDiv) {
+        attachedFilesDiv.innerHTML = `<div class="file-badge">📄 ${file.name} <i class="fas fa-paperclip"></i></div>`;
+    }
+}
+
+// Upload file and send message
+async function uploadFileAndSend(file, message) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const uploadResponse = await fetch(`${BACKEND_URL}/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authToken}` },
+        body: formData
+    });
+    
+    if (uploadResponse.status === 401) {
+        logout();
+        throw new Error('Unauthorized');
+    }
+    
+    const uploadData = await uploadResponse.json();
+    if (!uploadResponse.ok) {
+        throw new Error(uploadData.detail || 'Upload failed');
+    }
+    
+    return uploadData;
 }
 
 async function sendMessage() {
     const message = messageInput?.value.trim();
     if (!message || !currentSessionId) return;
     
+    // Clear pending file display
+    if (attachedFilesDiv) attachedFilesDiv.innerHTML = '';
+    
+    // Add user message to UI
     addMessageToUI('user', message);
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
+    // Upload file if exists (BEFORE sending message)
+    let uploadedFileInfo = null;
+    if (pendingFile) {
+        showTypingIndicator();
+        try {
+            uploadedFileInfo = await uploadFileAndSend(pendingFile, message);
+            pendingFile = null;
+            removeTypingIndicator();
+        } catch (error) {
+            removeTypingIndicator();
+            addMessageToUI('assistant', `Failed to upload file: ${error.message}`);
+            sendBtn.disabled = false;
+            return;
+        }
+    }
+    
+    // Auto-generate session title from first message
+    const isFirstMessage = messagesArea?.querySelectorAll('.message').length === 0;
+    if (isFirstMessage) {
+        await updateSessionTitle(currentSessionId, message);
+    }
+    
+    // Show typing indicator
     showTypingIndicator();
-    if (sendBtn) sendBtn.disabled = true;
+    sendBtn.disabled = true;
     
     try {
+        const requestBody = {
+            question: message,
+            search_type: currentSearchType,
+            include_sources: true
+        };
+        
+        // If a document was just uploaded, force closed-domain for this query
+        if (uploadedFileInfo) {
+            requestBody.search_type = 'closed';
+        }
+        
         const response = await fetch(`${BACKEND_URL}/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${authToken}`
             },
-            body: JSON.stringify({
-                question: message,
-                search_type: currentSearchType,
-                include_sources: true
-            })
+            body: JSON.stringify(requestBody)
         });
         
         if (response.status === 401) {
@@ -453,8 +531,8 @@ async function sendMessage() {
         removeTypingIndicator();
         addMessageToUI('assistant', 'Connection error. Please check your connection.');
     } finally {
-        if (sendBtn) sendBtn.disabled = false;
-        if (messageInput) messageInput.focus();
+        sendBtn.disabled = false;
+        messageInput.focus();
     }
 }
 
@@ -501,57 +579,6 @@ function showTypingIndicator() {
 function removeTypingIndicator() {
     const indicator = document.getElementById('typing-indicator');
     if (indicator) indicator.remove();
-}
-
-// ========== FILE UPLOAD ==========
-
-async function handleFileUpload(e) {
-    const file = e.target.files[0];
-    if (!file || !file.name.endsWith('.pdf')) {
-        alert('Please select a PDF file');
-        return;
-    }
-    
-    const attachedFilesDiv = document.getElementById('attached-files');
-    if (attachedFilesDiv) {
-        attachedFilesDiv.innerHTML = `<div class="file-badge">📄 ${file.name} <i class="fas fa-spinner fa-spin"></i></div>`;
-    }
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    try {
-        const response = await fetch(`${BACKEND_URL}/upload`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${authToken}` },
-            body: formData
-        });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            if (attachedFilesDiv) {
-                attachedFilesDiv.innerHTML = `<div class="file-badge">📄 ${file.name} <i class="fas fa-check-circle" style="color: #10b981;"></i></div>`;
-                setTimeout(() => {
-                    attachedFilesDiv.innerHTML = '';
-                }, 3000);
-            }
-            alert(`✅ Uploaded! ${data.chunk_count} chunks processed.`);
-        } else {
-            attachedFilesDiv.innerHTML = '';
-            alert('❌ Upload failed: ' + (data.detail || 'Unknown error'));
-        }
-    } catch (error) {
-        attachedFilesDiv.innerHTML = '';
-        alert('❌ Connection error');
-    }
-    
-    if (fileInput) fileInput.value = '';
 }
 
 function escapeHtml(text) {
