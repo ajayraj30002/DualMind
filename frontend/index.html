@@ -2,119 +2,111 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>DualMind | Hybrid AI Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DualMind | AI Assistant</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
     <!-- LOGIN PAGE -->
     <div id="login-page" class="login-page">
-        <div class="login-card">
+        <div class="login-container">
             <div class="login-icon">
                 <i class="fas fa-brain"></i>
             </div>
             <h1>DualMind</h1>
-            <p class="login-subtitle">Hybrid RAG Assistant</p>
+            <p class="login-sub">Hybrid RAG Assistant</p>
             
             <div id="login-form" class="login-form active">
                 <input type="email" id="login-email" placeholder="Email" class="login-input">
                 <input type="password" id="login-password" placeholder="Password" class="login-input">
-                <button id="login-btn" class="login-btn">Sign In</button>
-                <p class="login-switch">
-                    New here? <a href="#" id="show-register">Create account</a>
-                </p>
+                <button id="login-button" class="login-button">Sign In</button>
+                <p class="login-switch">New? <a href="#" id="switch-to-register">Create account</a></p>
             </div>
             
             <div id="register-form" class="login-form">
                 <input type="text" id="register-name" placeholder="Full name" class="login-input">
                 <input type="email" id="register-email" placeholder="Email" class="login-input">
                 <input type="password" id="register-password" placeholder="Password" class="login-input">
-                <button id="register-btn" class="login-btn">Create Account</button>
-                <p class="login-switch">
-                    Already have an account? <a href="#" id="show-login">Sign In</a>
-                </p>
+                <button id="register-button" class="login-button">Create Account</button>
+                <p class="login-switch">Already have an account? <a href="#" id="switch-to-login">Sign In</a></p>
             </div>
         </div>
     </div>
 
     <!-- MAIN CHAT PAGE -->
     <div id="chat-page" class="chat-page hidden">
-        <!-- Sidebar -->
-        <aside class="chat-sidebar">
+        <!-- SIDEBAR -->
+        <div class="sidebar">
             <div class="sidebar-header">
-                <button id="new-chat-btn" class="new-chat-btn">
+                <button id="new-chat-sidebar" class="new-chat-sidebar">
                     <i class="fas fa-plus"></i>
                     <span>New chat</span>
                 </button>
             </div>
-            <div class="sessions-container" id="sessions-container">
-                <div class="sessions-list" id="sessions-list"></div>
+            <div class="sessions-list" id="sessions-list">
+                <div class="loading-sessions">Loading...</div>
             </div>
-            <div class="sidebar-footer">
-                <div class="user-menu">
+            <div class="sidebar-bottom">
+                <div class="user-info-sidebar">
                     <i class="fas fa-user-circle"></i>
-                    <span id="user-email-sidebar"></span>
+                    <span id="sidebar-user-email"></span>
                 </div>
-                <button id="logout-btn" class="logout-sidebar-btn">
+                <button id="sidebar-logout" class="sidebar-logout">
                     <i class="fas fa-sign-out-alt"></i>
                 </button>
             </div>
-        </aside>
+        </div>
 
-        <!-- Main Content -->
-        <main class="chat-main">
+        <!-- MAIN CHAT AREA -->
+        <div class="chat-area">
             <div class="chat-header">
-                <div class="chat-title-area">
-                    <h2 id="chat-title">New conversation</h2>
-                    <button id="rename-chat-btn" class="rename-btn">
+                <div class="chat-title-header">
+                    <h2 id="chat-title-header">New conversation</h2>
+                    <button id="rename-chat-header" class="rename-header">
                         <i class="fas fa-pen"></i>
                     </button>
                 </div>
-                <div class="model-selector">
-                    <button class="model-btn" data-type="closed">
+                <div class="search-type-group">
+                    <button class="search-type" data-type="closed">
                         <i class="fas fa-folder"></i> Documents
                     </button>
-                    <button class="model-btn" data-type="open">
+                    <button class="search-type" data-type="open">
                         <i class="fas fa-globe"></i> Web
                     </button>
-                    <button class="model-btn active" data-type="hybrid">
+                    <button class="search-type active" data-type="hybrid">
                         <i class="fas fa-link"></i> Hybrid
                     </button>
                 </div>
             </div>
 
-            <div class="messages-container" id="messages-container">
-                <div class="welcome-screen">
-                    <div class="welcome-icon">
-                        <i class="fas fa-brain"></i>
-                    </div>
-                    <h2>How can I help you today?</h2>
-                    <p>Upload PDFs, search the web, or ask anything</p>
+            <div class="messages-area" id="messages-area">
+                <div class="welcome-area">
+                    <i class="fas fa-brain"></i>
+                    <h3>How can I help you today?</h3>
+                    <p>Upload documents or ask anything</p>
                 </div>
             </div>
 
-            <div class="input-container">
-                <div class="attachment-area" id="attachment-area">
-                    <button id="attach-pdf-btn" class="attach-pdf-btn">
+            <div class="input-area">
+                <div class="file-attach-area">
+                    <button id="attach-file-btn" class="attach-file">
                         <i class="fas fa-paperclip"></i>
                         <span>Attach PDF</span>
                     </button>
-                    <input type="file" id="pdf-input" accept=".pdf" hidden>
-                    <div id="file-badge" class="file-badge hidden"></div>
+                    <input type="file" id="file-input" accept=".pdf" hidden>
+                    <div id="file-preview" class="file-preview hidden"></div>
                 </div>
-                <div class="message-input-wrapper">
-                    <textarea id="message-input" placeholder="Ask anything..." rows="1"></textarea>
-                    <button id="send-message-btn" class="send-message-btn">
+                <div class="message-input-wrap">
+                    <textarea id="message-input" placeholder="Ask a question..." rows="1"></textarea>
+                    <button id="send-message" class="send-message">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
-                <div class="input-footer">
-                    <span>DualMind can search your documents and the web</span>
-                </div>
+                <div class="input-hint">DualMind can search documents and the web</div>
             </div>
-        </main>
+        </div>
     </div>
 
     <script src="script.js"></script>
