@@ -5,7 +5,6 @@ let user = null;
 let currentSessionId = null;
 let currentMode = 'hybrid';
 let pendingFile = null;
-let isLoadingSessions = false;
 
 // DOM elements
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
@@ -29,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fileBadge = document.getElementById('fileBadge');
     modeBtns = document.querySelectorAll('.mode-btn');
     
-    // Events
+    // Setup event listeners
     document.getElementById('loginBtn')?.addEventListener('click', doLogin);
     document.getElementById('registerBtn')?.addEventListener('click', doRegister);
     document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
@@ -149,9 +148,6 @@ function showChatUI() {
 }
 
 async function loadSessions() {
-    if (isLoadingSessions) return;
-    isLoadingSessions = true;
-    
     if (!sessionListDiv) return;
     sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
     
@@ -159,7 +155,7 @@ async function loadSessions() {
         const res = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (res.status === 401) { doLogout(); isLoadingSessions = false; return; }
+        if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
         
         if (res.ok && data.sessions && data.sessions.length > 0) {
@@ -167,13 +163,10 @@ async function loadSessions() {
             // If no current session, load the most recent one
             if (!currentSessionId && data.sessions[0]) {
                 await loadSession(data.sessions[0].id);
-            } else if (currentSessionId) {
-                // Just refresh the active state
-                renderSessionList(data.sessions);
             }
         } else {
             sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
-            // Only create a new session if we're logged in and no session exists
+            // Only create a new session if we're logged in and no session exists AND no current session
             if (!currentSessionId) {
                 await createNewSession();
             }
@@ -181,8 +174,6 @@ async function loadSessions() {
     } catch (err) {
         console.error(err);
         sessionListDiv.innerHTML = '<div class="loading-text">Failed to load</div>';
-    } finally {
-        isLoadingSessions = false;
     }
 }
 
@@ -240,9 +231,15 @@ async function loadSession(sessionId) {
     try {
         // Fetch messages for this session
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            method: 'GET',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
         });
+        
         if (res.status === 401) { doLogout(); return; }
+        
         const data = await res.json();
         
         // Get session info for title
@@ -255,12 +252,22 @@ async function loadSession(sessionId) {
             chatTitleSpan.innerText = sessionInfo.title;
         }
         
-        // Render messages
+        // Render messages - IMPORTANT: data.messages contains the messages
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
                 clearMessages();
             } else {
-                renderMessages(data.messages);
+                messagesDiv.innerHTML = '';
+                for (const msg of data.messages) {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = `message ${msg.role}`;
+                    msgDiv.innerHTML = `
+                        <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
+                        <div class="message-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
+                    `;
+                    messagesDiv.appendChild(msgDiv);
+                }
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
         }
         
@@ -329,26 +336,6 @@ async function autoTitle(sessionId, firstMsg) {
 function clearMessages() {
     if (!messagesDiv) return;
     messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
-}
-
-function renderMessages(messages) {
-    if (!messagesDiv) return;
-    if (!messages || messages.length === 0) {
-        clearMessages();
-        return;
-    }
-    
-    messagesDiv.innerHTML = '';
-    for (const msg of messages) {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${msg.role}`;
-        msgDiv.innerHTML = `
-            <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
-            <div class="message-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
-        `;
-        messagesDiv.appendChild(msgDiv);
-    }
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
 function addMessage(role, content) {
