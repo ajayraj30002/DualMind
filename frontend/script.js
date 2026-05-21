@@ -6,63 +6,29 @@ let currentSessionId = null;
 let currentMode = 'hybrid';
 let pendingFile = null;
 
-// DOM elements
-let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
-let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
-let modeBtns;
-
 document.addEventListener('DOMContentLoaded', () => {
-    // Get elements
-    loginPage = document.getElementById('loginPage');
-    chatPage = document.getElementById('chatPage');
-    sessionListDiv = document.getElementById('sessionList');
-    messagesDiv = document.getElementById('messagesContainer');
-    messageInput = document.getElementById('messageInput');
-    sendBtn = document.getElementById('sendMsgBtn');
-    newChatBtn = document.getElementById('newChatBtn');
-    renameBtn = document.getElementById('renameChatBtn');
-    logoutBtn = document.getElementById('logoutSidebarBtn');
-    chatTitleSpan = document.getElementById('chatTitle');
-    attachBtn = document.getElementById('attachPdfBtn');
-    fileInput = document.getElementById('pdfFileInput');
-    fileBadge = document.getElementById('fileBadge');
-    modeBtns = document.querySelectorAll('.mode-btn');
-    
-    // Setup event listeners
+    checkAuth();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
     document.getElementById('loginBtn')?.addEventListener('click', doLogin);
     document.getElementById('registerBtn')?.addEventListener('click', doRegister);
     document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
     document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
+    document.getElementById('sendMsgBtn')?.addEventListener('click', sendMessage);
+    document.getElementById('newChatBtn')?.addEventListener('click', createNewSession);
+    document.getElementById('logoutSidebarBtn')?.addEventListener('click', doLogout);
+    document.getElementById('attachPdfBtn')?.addEventListener('click', () => document.getElementById('pdfFileInput')?.click());
+    document.getElementById('pdfFileInput')?.addEventListener('change', onFileSelect);
     
-    sendBtn?.addEventListener('click', sendMessage);
-    messageInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-    newChatBtn?.addEventListener('click', createNewSession);
-    renameBtn?.addEventListener('click', renameSession);
-    logoutBtn?.addEventListener('click', doLogout);
-    attachBtn?.addEventListener('click', () => fileInput?.click());
-    fileInput?.addEventListener('change', onFileSelect);
-    
-    modeBtns.forEach(btn => {
+    document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            modeBtns.forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentMode = btn.dataset.mode;
         });
     });
-    
-    checkAuth();
-});
-
-function toggleForms(showRegister) {
-    const loginForm = document.getElementById('loginForm');
-    const registerForm = document.getElementById('registerForm');
-    if (showRegister) {
-        loginForm.classList.remove('active');
-        registerForm.classList.add('active');
-    } else {
-        registerForm.classList.remove('active');
-        loginForm.classList.add('active');
-    }
 }
 
 async function doLogin() {
@@ -118,8 +84,7 @@ function doLogout() {
     token = null;
     user = null;
     currentSessionId = null;
-    localStorage.removeItem('dm_token');
-    localStorage.removeItem('dm_user');
+    localStorage.clear();
     showLoginUI();
 }
 
@@ -137,19 +102,32 @@ function checkAuth() {
 }
 
 function showLoginUI() {
-    loginPage.classList.remove('hidden');
-    chatPage.classList.add('hidden');
+    document.getElementById('loginPage').classList.remove('hidden');
+    document.getElementById('chatPage').classList.add('hidden');
 }
 
 function showChatUI() {
-    loginPage.classList.add('hidden');
-    chatPage.classList.remove('hidden');
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('chatPage').classList.remove('hidden');
     document.getElementById('userEmailSidebar').innerText = user?.email?.split('@')[0] || 'User';
 }
 
+function toggleForms(showRegister) {
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    if (showRegister) {
+        loginForm.classList.remove('active');
+        registerForm.classList.add('active');
+    } else {
+        registerForm.classList.remove('active');
+        loginForm.classList.add('active');
+    }
+}
+
 async function loadSessions() {
-    if (!sessionListDiv) return;
-    sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
+    const sessionList = document.getElementById('sessionList');
+    if (!sessionList) return;
+    sessionList.innerHTML = '<div class="loading-text">Loading...</div>';
     
     try {
         const res = await fetch(`${API_URL}/chat/sessions`, {
@@ -159,51 +137,38 @@ async function loadSessions() {
         const data = await res.json();
         
         if (res.ok && data.sessions && data.sessions.length > 0) {
-            renderSessionList(data.sessions);
-            // If no current session, load the most recent one
+            sessionList.innerHTML = '';
+            for (const s of data.sessions) {
+                const div = document.createElement('div');
+                div.className = `session-item ${currentSessionId === s.id ? 'active' : ''}`;
+                div.dataset.id = s.id;
+                div.innerHTML = `
+                    <span class="session-title">${escapeHtml(s.title)}</span>
+                    <button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>
+                `;
+                div.addEventListener('click', (e) => {
+                    if (!e.target.closest('.delete-session')) {
+                        loadSession(s.id);
+                    }
+                });
+                div.querySelector('.delete-session')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteSession(s.id);
+                });
+                sessionList.appendChild(div);
+            }
             if (!currentSessionId && data.sessions[0]) {
                 await loadSession(data.sessions[0].id);
             }
         } else {
-            sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
-            // Only create a new session if we're logged in and no session exists AND no current session
+            sessionList.innerHTML = '<div class="loading-text">No conversations</div>';
             if (!currentSessionId) {
                 await createNewSession();
             }
         }
     } catch (err) {
         console.error(err);
-        sessionListDiv.innerHTML = '<div class="loading-text">Failed to load</div>';
-    }
-}
-
-function renderSessionList(sessions) {
-    if (!sessionListDiv) return;
-    if (!sessions || sessions.length === 0) {
-        sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
-        return;
-    }
-    
-    sessionListDiv.innerHTML = '';
-    for (const s of sessions) {
-        const div = document.createElement('div');
-        div.className = `session-item ${currentSessionId === s.id ? 'active' : ''}`;
-        div.dataset.id = s.id;
-        div.innerHTML = `
-            <span class="session-title">${escapeHtml(s.title)}</span>
-            <button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>
-        `;
-        div.addEventListener('click', (e) => {
-            if (!e.target.closest('.delete-session')) {
-                loadSession(s.id);
-            }
-        });
-        const delBtn = div.querySelector('.delete-session');
-        delBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deleteSession(s.id);
-        });
-        sessionListDiv.appendChild(div);
+        sessionList.innerHTML = '<div class="loading-text">Failed to load</div>';
     }
 }
 
@@ -217,7 +182,7 @@ async function createNewSession() {
         const data = await res.json();
         if (res.ok && data.session) {
             currentSessionId = data.session.id;
-            chatTitleSpan.innerText = 'New conversation';
+            document.getElementById('chatTitle').innerText = 'New conversation';
             clearMessages();
             await loadSessions();
         }
@@ -229,33 +194,28 @@ async function loadSession(sessionId) {
     currentSessionId = sessionId;
     
     try {
-        // Fetch messages for this session
+        // Fetch messages
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
-            method: 'GET',
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        
         if (res.status === 401) { doLogout(); return; }
-        
         const data = await res.json();
         
-        // Get session info for title
+        // Get session title
         const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const sessionsData = await sessionsRes.json();
         const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
-        if (sessionInfo && chatTitleSpan) {
-            chatTitleSpan.innerText = sessionInfo.title;
+        if (sessionInfo) {
+            document.getElementById('chatTitle').innerText = sessionInfo.title;
         }
         
-        // Render messages - IMPORTANT: data.messages contains the messages
+        // Render messages
+        const messagesDiv = document.getElementById('messagesContainer');
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
-                clearMessages();
+                messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
             } else {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
@@ -271,24 +231,6 @@ async function loadSession(sessionId) {
             }
         }
         
-        // Update sidebar active state
-        await loadSessions();
-        
-    } catch (err) { 
-        console.error('Load session error:', err); 
-    }
-}
-
-async function renameSession() {
-    const newName = prompt('Rename conversation:', chatTitleSpan?.innerText);
-    if (!newName || newName === chatTitleSpan?.innerText || !currentSessionId) return;
-    
-    try {
-        await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (chatTitleSpan) chatTitleSpan.innerText = newName;
         await loadSessions();
     } catch (err) { console.error(err); }
 }
@@ -304,7 +246,6 @@ async function deleteSession(sessionId) {
         
         if (currentSessionId === sessionId) {
             currentSessionId = null;
-            // Refresh session list and load first session
             const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -319,26 +260,15 @@ async function deleteSession(sessionId) {
     } catch (err) { console.error(err); }
 }
 
-async function autoTitle(sessionId, firstMsg) {
-    const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
-    try {
-        await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (currentSessionId === sessionId && chatTitleSpan) {
-            chatTitleSpan.innerText = short;
-        }
-        await loadSessions();
-    } catch (err) { console.error(err); }
-}
-
 function clearMessages() {
-    if (!messagesDiv) return;
-    messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
+    const messagesDiv = document.getElementById('messagesContainer');
+    if (messagesDiv) {
+        messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
+    }
 }
 
 function addMessage(role, content) {
+    const messagesDiv = document.getElementById('messagesContainer');
     if (!messagesDiv) return;
     const welcome = messagesDiv.querySelector('.welcome');
     if (welcome) welcome.remove();
@@ -353,6 +283,7 @@ function addMessage(role, content) {
 }
 
 function showTyping() {
+    const messagesDiv = document.getElementById('messagesContainer');
     if (!messagesDiv) return;
     hideTyping();
     const typing = document.createElement('div');
@@ -375,9 +306,10 @@ function onFileSelect(e) {
         return;
     }
     pendingFile = file;
-    if (fileBadge) {
-        fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${file.name} <i class="fas fa-check-circle"></i>`;
-        fileBadge.classList.remove('hidden');
+    const badge = document.getElementById('fileBadge');
+    if (badge) {
+        badge.innerHTML = `<i class="fas fa-file-pdf"></i> ${file.name} <i class="fas fa-check-circle"></i>`;
+        badge.classList.remove('hidden');
     }
 }
 
@@ -395,18 +327,15 @@ async function uploadFile(file) {
 }
 
 async function sendMessage() {
-    const text = messageInput?.value.trim();
+    const text = document.getElementById('messageInput')?.value.trim();
     if (!text || !currentSessionId) return;
     
-    if (messageInput) {
-        messageInput.value = '';
-        messageInput.style.height = 'auto';
-    }
-    if (fileBadge) fileBadge.classList.add('hidden');
+    document.getElementById('messageInput').value = '';
+    document.getElementById('fileBadge')?.classList.add('hidden');
     
     addMessage('user', text);
     
-    const isFirst = messagesDiv?.querySelectorAll('.message').length === 1;
+    const isFirst = document.getElementById('messagesContainer')?.querySelectorAll('.message').length === 1;
     if (isFirst) await autoTitle(currentSessionId, text);
     
     let uploaded = null;
@@ -419,12 +348,12 @@ async function sendMessage() {
         } catch (err) {
             hideTyping();
             addMessage('assistant', `Upload failed: ${err.message}`);
-            if (sendBtn) sendBtn.disabled = false;
             return;
         }
     }
     
     showTyping();
+    const sendBtn = document.getElementById('sendMsgBtn');
     if (sendBtn) sendBtn.disabled = true;
     
     try {
@@ -453,8 +382,20 @@ async function sendMessage() {
         addMessage('assistant', 'Connection error.');
     } finally {
         if (sendBtn) sendBtn.disabled = false;
-        if (messageInput) messageInput.focus();
+        document.getElementById('messageInput')?.focus();
     }
+}
+
+async function autoTitle(sessionId, firstMsg) {
+    const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
+    try {
+        await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        document.getElementById('chatTitle').innerText = short;
+        await loadSessions();
+    } catch (err) { console.error(err); }
 }
 
 function escapeHtml(str) {
