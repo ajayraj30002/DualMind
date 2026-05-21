@@ -10,74 +10,73 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo">
+        <!-- Auth Section (shown when logged out) -->
+        <div id="auth-section" class="auth-section">
+            <div class="auth-card">
+                <div class="auth-logo">
                     <i class="fas fa-brain"></i>
-                    <span>DualMind</span>
+                    <h2>DualMind</h2>
                 </div>
-                <button id="new-chat-btn" class="new-chat-btn">
-                    <i class="fas fa-plus"></i>
-                    <span>New Chat</span>
-                </button>
-            </div>
-            
-            <div class="sessions-list" id="sessions-list">
-                <div class="loading-sessions">
-                    <i class="fas fa-spinner fa-spin"></i> Loading chats...
+                <p class="auth-tagline">Hybrid RAG Assistant — Your Documents + Live Web</p>
+                
+                <div id="signin-form" class="auth-form">
+                    <h3>Welcome Back</h3>
+                    <input type="email" id="signin-email" placeholder="Email address" class="auth-input">
+                    <input type="password" id="signin-password" placeholder="Password" class="auth-input">
+                    <button id="signin-submit" class="auth-btn">Sign In</button>
+                    <p class="auth-switch">
+                        Don't have an account? <a href="#" id="show-signup">Create account</a>
+                    </p>
+                </div>
+                
+                <div id="signup-form" class="auth-form hidden">
+                    <h3>Create Account</h3>
+                    <input type="text" id="signup-fullname" placeholder="Full name" class="auth-input">
+                    <input type="email" id="signup-email" placeholder="Email address" class="auth-input">
+                    <input type="password" id="signup-password" placeholder="Password (min 6 characters)" class="auth-input">
+                    <button id="signup-submit" class="auth-btn">Sign Up</button>
+                    <p class="auth-switch">
+                        Already have an account? <a href="#" id="show-signin">Sign in</a>
+                    </p>
                 </div>
             </div>
-            
-            <div class="sidebar-footer">
-                <div class="user-info" id="user-info">
-                    <i class="fas fa-user-circle"></i>
-                    <span id="user-email">user@example.com</span>
-                </div>
-                <button id="logout-btn" class="logout-btn">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Logout</span>
-                </button>
-            </div>
-        </aside>
+        </div>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Auth Section (shown when logged out) -->
-            <div id="auth-section" class="auth-section">
-                <div class="auth-card">
-                    <div class="auth-logo">
+        <!-- Chat Section (shown when logged in) -->
+        <div id="chat-section" class="chat-section hidden">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <div class="logo">
                         <i class="fas fa-brain"></i>
-                        <h2>DualMind</h2>
+                        <span>DualMind</span>
                     </div>
-                    <p class="auth-tagline">Hybrid RAG Assistant — Your Documents + Live Web</p>
-                    
-                    <div id="signin-form" class="auth-form">
-                        <h3>Welcome Back</h3>
-                        <input type="email" id="signin-email" placeholder="Email address" class="auth-input">
-                        <input type="password" id="signin-password" placeholder="Password" class="auth-input">
-                        <button id="signin-submit" class="auth-btn">Sign In</button>
-                        <p class="auth-switch">
-                            Don't have an account? <a href="#" id="show-signup">Create account</a>
-                        </p>
-                    </div>
-                    
-                    <div id="signup-form" class="auth-form hidden">
-                        <h3>Create Account</h3>
-                        <input type="text" id="signup-fullname" placeholder="Full name" class="auth-input">
-                        <input type="email" id="signup-email" placeholder="Email address" class="auth-input">
-                        <input type="password" id="signup-password" placeholder="Password (min 6 characters)" class="auth-input">
-                        <button id="signup-submit" class="auth-btn">Sign Up</button>
-                        <p class="auth-switch">
-                            Already have an account? <a href="#" id="show-signin">Sign in</a>
-                        </p>
+                    <button id="new-chat-btn" class="new-chat-btn">
+                        <i class="fas fa-plus"></i>
+                        <span>New Chat</span>
+                    </button>
+                </div>
+                
+                <div class="sessions-list" id="sessions-list">
+                    <div class="loading-sessions">
+                        <i class="fas fa-spinner fa-spin"></i> Loading chats...
                     </div>
                 </div>
-            </div>
+                
+                <div class="sidebar-footer">
+                    <div class="user-info" id="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="user-email">user@example.com</span>
+                    </div>
+                    <button id="logout-btn" class="logout-btn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </aside>
 
-            <!-- Chat Interface (shown when logged in) -->
-            <div id="chat-section" class="chat-section hidden">
-                <!-- Chat Header -->
+            <!-- Main Chat Area -->
+            <div class="chat-main">
                 <div class="chat-header">
                     <div class="chat-title-section">
                         <input type="text" id="chat-title" class="chat-title-input" value="New Chat">
@@ -98,7 +97,6 @@
                     </div>
                 </div>
 
-                <!-- Messages Area -->
                 <div class="messages-area" id="messages-area">
                     <div class="welcome-message">
                         <i class="fas fa-brain"></i>
@@ -107,7 +105,6 @@
                     </div>
                 </div>
 
-                <!-- Input Area -->
                 <div class="input-area">
                     <div class="attachment-section" id="attachment-section">
                         <button id="attach-btn" class="attach-btn">
@@ -128,7 +125,7 @@
                     </div>
                 </div>
             </div>
-        </main>
+        </div>
     </div>
 
     <script src="script.js"></script>
