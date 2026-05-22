@@ -5,14 +5,13 @@ let user = null;
 let currentSessionId = null;
 let currentMode = 'hybrid';
 let pendingFile = null;
+let currentSessionDocuments = [];
 
-// DOM elements
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
 let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
-let modeBtns;
+let modeBtns, loadingOverlay;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Get elements
     loginPage = document.getElementById('loginPage');
     chatPage = document.getElementById('chatPage');
     sessionListDiv = document.getElementById('sessionList');
@@ -27,18 +26,48 @@ document.addEventListener('DOMContentLoaded', () => {
     fileInput = document.getElementById('pdfFileInput');
     fileBadge = document.getElementById('fileBadge');
     modeBtns = document.querySelectorAll('.mode-btn');
+    loadingOverlay = document.getElementById('loadingOverlay');
     
-    // Setup event listeners
-    document.getElementById('loginBtn')?.addEventListener('click', doLogin);
-    document.getElementById('registerBtn')?.addEventListener('click', doRegister);
+    setupEventListeners();
+    checkAuth();
+});
+
+function showLoading() {
+    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+}
+
+function hideLoading() {
+    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+}
+
+function setupEventListeners() {
+    document.getElementById('loginBtn')?.addEventListener('click', async () => {
+        showLoading();
+        await doLogin();
+        hideLoading();
+    });
+    document.getElementById('registerBtn')?.addEventListener('click', async () => {
+        showLoading();
+        await doRegister();
+        hideLoading();
+    });
     document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
     document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
     
     sendBtn?.addEventListener('click', sendMessage);
-    messageInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    messageInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
     newChatBtn?.addEventListener('click', createNewSession);
     renameBtn?.addEventListener('click', renameSession);
-    logoutBtn?.addEventListener('click', doLogout);
+    logoutBtn?.addEventListener('click', async () => {
+        showLoading();
+        doLogout();
+        hideLoading();
+    });
     attachBtn?.addEventListener('click', () => fileInput?.click());
     fileInput?.addEventListener('change', onFileSelect);
     
@@ -49,20 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
             currentMode = btn.dataset.mode;
         });
     });
-    
-    checkAuth();
-});
-
-function toggleForms(showRegister) {
-    const loginForm = document.getElementById('loginForm');
-    const registerForm = document.getElementById('registerForm');
-    if (showRegister) {
-        loginForm.classList.remove('active');
-        registerForm.classList.add('active');
-    } else {
-        registerForm.classList.remove('active');
-        loginForm.classList.add('active');
-    }
 }
 
 async function doLogin() {
@@ -118,8 +133,8 @@ function doLogout() {
     token = null;
     user = null;
     currentSessionId = null;
-    localStorage.removeItem('dm_token');
-    localStorage.removeItem('dm_user');
+    currentSessionDocuments = [];
+    localStorage.clear();
     showLoginUI();
 }
 
@@ -147,6 +162,18 @@ function showChatUI() {
     document.getElementById('userEmailSidebar').innerText = user?.email?.split('@')[0] || 'User';
 }
 
+function toggleForms(showRegister) {
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    if (showRegister) {
+        loginForm.classList.remove('active');
+        registerForm.classList.add('active');
+    } else {
+        registerForm.classList.remove('active');
+        loginForm.classList.add('active');
+    }
+}
+
 async function loadSessions() {
     if (!sessionListDiv) return;
     sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
@@ -160,13 +187,11 @@ async function loadSessions() {
         
         if (res.ok && data.sessions && data.sessions.length > 0) {
             renderSessionList(data.sessions);
-            // If no current session, load the most recent one
             if (!currentSessionId && data.sessions[0]) {
                 await loadSession(data.sessions[0].id);
             }
         } else {
             sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
-            // Only create a new session if we're logged in and no session exists AND no current session
             if (!currentSessionId) {
                 await createNewSession();
             }
@@ -198,8 +223,7 @@ function renderSessionList(sessions) {
                 loadSession(s.id);
             }
         });
-        const delBtn = div.querySelector('.delete-session');
-        delBtn?.addEventListener('click', (e) => {
+        div.querySelector('.delete-session')?.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteSession(s.id);
         });
@@ -217,6 +241,7 @@ async function createNewSession() {
         const data = await res.json();
         if (res.ok && data.session) {
             currentSessionId = data.session.id;
+            currentSessionDocuments = [];
             chatTitleSpan.innerText = 'New conversation';
             clearMessages();
             await loadSessions();
@@ -229,41 +254,38 @@ async function loadSession(sessionId) {
     currentSessionId = sessionId;
     
     try {
-        // Fetch messages for this session
+        await loadSessionDocuments(sessionId);
+        
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
-            method: 'GET',
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        
         if (res.status === 401) { doLogout(); return; }
-        
         const data = await res.json();
         
-        // Get session info for title
         const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const sessionsData = await sessionsRes.json();
         const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
-        if (sessionInfo && chatTitleSpan) {
+        if (sessionInfo) {
             chatTitleSpan.innerText = sessionInfo.title;
         }
         
-        // Render messages - IMPORTANT: data.messages contains the messages
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
-                clearMessages();
+                messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
             } else {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
                     const msgDiv = document.createElement('div');
                     msgDiv.className = `message ${msg.role}`;
+                    const hasDoc = msg.metadata?.filename;
                     msgDiv.innerHTML = `
                         <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
-                        <div class="message-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
+                        <div class="message-content">
+                            ${hasDoc ? `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(hasDoc)}</div>` : ''}
+                            ${escapeHtml(msg.content).replace(/\n/g, '<br>')}
+                        </div>
                     `;
                     messagesDiv.appendChild(msgDiv);
                 }
@@ -271,26 +293,22 @@ async function loadSession(sessionId) {
             }
         }
         
-        // Update sidebar active state
-        await loadSessions();
-        
-    } catch (err) { 
-        console.error('Load session error:', err); 
-    }
-}
-
-async function renameSession() {
-    const newName = prompt('Rename conversation:', chatTitleSpan?.innerText);
-    if (!newName || newName === chatTitleSpan?.innerText || !currentSessionId) return;
-    
-    try {
-        await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (chatTitleSpan) chatTitleSpan.innerText = newName;
         await loadSessions();
     } catch (err) { console.error(err); }
+}
+
+async function loadSessionDocuments(sessionId) {
+    try {
+        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/documents`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            currentSessionDocuments = data.documents || [];
+        }
+    } catch (err) {
+        currentSessionDocuments = [];
+    }
 }
 
 async function deleteSession(sessionId) {
@@ -304,7 +322,7 @@ async function deleteSession(sessionId) {
         
         if (currentSessionId === sessionId) {
             currentSessionId = null;
-            // Refresh session list and load first session
+            currentSessionDocuments = [];
             const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -319,26 +337,12 @@ async function deleteSession(sessionId) {
     } catch (err) { console.error(err); }
 }
 
-async function autoTitle(sessionId, firstMsg) {
-    const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
-    try {
-        await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (currentSessionId === sessionId && chatTitleSpan) {
-            chatTitleSpan.innerText = short;
-        }
-        await loadSessions();
-    } catch (err) { console.error(err); }
-}
-
 function clearMessages() {
     if (!messagesDiv) return;
     messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
 }
 
-function addMessage(role, content) {
+function addMessage(role, content, filename = null) {
     if (!messagesDiv) return;
     const welcome = messagesDiv.querySelector('.welcome');
     if (welcome) welcome.remove();
@@ -346,7 +350,10 @@ function addMessage(role, content) {
     msgDiv.className = `message ${role}`;
     msgDiv.innerHTML = `
         <div class="message-avatar"><i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
-        <div class="message-content">${escapeHtml(content).replace(/\n/g, '<br>')}</div>
+        <div class="message-content">
+            ${filename ? `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>` : ''}
+            ${escapeHtml(content).replace(/\n/g, '<br>')}
+        </div>
     `;
     messagesDiv.appendChild(msgDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -381,9 +388,10 @@ function onFileSelect(e) {
     }
 }
 
-async function uploadFile(file) {
+async function uploadFile(file, sessionId) {
     const fd = new FormData();
     fd.append('file', file);
+    fd.append('session_id', sessionId);
     const res = await fetch(`${API_URL}/upload`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
@@ -398,36 +406,38 @@ async function sendMessage() {
     const text = messageInput?.value.trim();
     if (!text || !currentSessionId) return;
     
-    if (messageInput) {
-        messageInput.value = '';
-        messageInput.style.height = 'auto';
-    }
-    if (fileBadge) fileBadge.classList.add('hidden');
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
     
-    addMessage('user', text);
+    let uploadedFilename = null;
+    let uploadedFileData = null;
     
-    const isFirst = messagesDiv?.querySelectorAll('.message').length === 1;
-    if (isFirst) await autoTitle(currentSessionId, text);
-    
-    let uploaded = null;
     if (pendingFile) {
         showTyping();
         try {
-            uploaded = await uploadFile(pendingFile);
+            uploadedFileData = await uploadFile(pendingFile, currentSessionId);
+            uploadedFilename = pendingFile.name;
             pendingFile = null;
+            if (fileBadge) fileBadge.classList.add('hidden');
             hideTyping();
         } catch (err) {
             hideTyping();
             addMessage('assistant', `Upload failed: ${err.message}`);
-            if (sendBtn) sendBtn.disabled = false;
             return;
         }
     }
+    
+    addMessage('user', text, uploadedFilename);
+    
+    const isFirst = messagesDiv?.querySelectorAll('.message').length === 1;
+    if (isFirst) await autoTitle(currentSessionId, text);
     
     showTyping();
     if (sendBtn) sendBtn.disabled = true;
     
     try {
+        const searchMode = uploadedFileData ? 'closed' : currentMode;
+        
         const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
             headers: {
@@ -436,15 +446,22 @@ async function sendMessage() {
             },
             body: JSON.stringify({
                 question: text,
-                search_type: uploaded ? 'closed' : currentMode,
-                include_sources: false
+                search_type: searchMode,
+                include_sources: false,
+                uploaded_document: uploadedFilename
             })
         });
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
         hideTyping();
         if (res.ok) {
-            addMessage('assistant', data.answer);
+            let cleanAnswer = data.answer;
+            cleanAnswer = cleanAnswer.replace(/[\u{1F600}-\u{1F64F}]/gu, '');
+            cleanAnswer = cleanAnswer.replace(/[\u{1F300}-\u{1F5FF}]/gu, '');
+            cleanAnswer = cleanAnswer.replace(/[\u{1F680}-\u{1F6FF}]/gu, '');
+            cleanAnswer = cleanAnswer.replace(/[\u{2600}-\u{26FF}]/gu, '');
+            cleanAnswer = cleanAnswer.replace(/[\u{2700}-\u{27BF}]/gu, '');
+            addMessage('assistant', cleanAnswer);
         } else {
             addMessage('assistant', 'Sorry, something went wrong.');
         }
@@ -453,8 +470,34 @@ async function sendMessage() {
         addMessage('assistant', 'Connection error.');
     } finally {
         if (sendBtn) sendBtn.disabled = false;
-        if (messageInput) messageInput.focus();
+        messageInput?.focus();
     }
+}
+
+async function autoTitle(sessionId, firstMsg) {
+    const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
+    try {
+        await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        chatTitleSpan.innerText = short;
+        await loadSessions();
+    } catch (err) { console.error(err); }
+}
+
+async function renameSession() {
+    const newName = prompt('Rename conversation:', chatTitleSpan?.innerText);
+    if (!newName || newName === chatTitleSpan?.innerText || !currentSessionId) return;
+    
+    try {
+        await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        chatTitleSpan.innerText = newName;
+        await loadSessions();
+    } catch (err) { console.error(err); }
 }
 
 function escapeHtml(str) {
