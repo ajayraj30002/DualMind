@@ -357,29 +357,22 @@ async function sendMessage() {
     const text = document.getElementById('messageInput')?.value.trim();
     if (!text || !currentSessionId) return;
     
-    // Clear input
-    document.getElementById('messageInput').value = '';
-    
-    // Get file info BEFORE sending
+    // Get file before clearing
     const fileToUpload = pendingFile;
-    let uploadedFilename = null;
+    let uploadedFilename = fileToUpload?.name || null;
     
-    // Clear file badge immediately
+    // Clear input and file badge IMMEDIATELY
+    document.getElementById('messageInput').value = '';
     const badge = document.getElementById('fileBadge');
     if (badge) badge.classList.add('hidden');
     
-    // Show user message with file badge IMMEDIATELY (before API call)
-    if (fileToUpload) {
-        uploadedFilename = fileToUpload.name;
-        addMessage('user', text, uploadedFilename);
-    } else {
-        addMessage('user', text);
-    }
+    // ***** SHOW USER MESSAGE + FILE BADGE IMMEDIATELY *****
+    addMessage('user', text, uploadedFilename);
     
     // Clear pending file
     pendingFile = null;
     
-    // Upload file if exists
+    // Upload file if exists (in background)
     let uploadedFileData = null;
     if (fileToUpload) {
         try {
@@ -394,12 +387,13 @@ async function sendMessage() {
     const isFirst = document.getElementById('messagesContainer')?.querySelectorAll('.message').length === 1;
     if (isFirst) await autoTitle(currentSessionId, text);
     
-    // Show typing indicator and send message
+    // Show typing indicator
     showTyping();
     const sendBtn = document.getElementById('sendMsgBtn');
     if (sendBtn) sendBtn.disabled = true;
     
     try {
+        // If file uploaded, FORCE closed mode (only search document)
         const searchMode = uploadedFileData ? 'closed' : currentMode;
         
         const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
