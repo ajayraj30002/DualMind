@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from .rag.hybrid import hybrid_search
 import os
 import shutil
@@ -167,7 +168,7 @@ async def get_messages(session_id: str, current_user: dict = Depends(get_current
         if not session.data:
             raise HTTPException(404, "Session not found")
         
-        # Get messages - NO order() to avoid the 500 error
+        # Get messages
         response = supabase.table("chat_messages")\
             .select("*")\
             .eq("session_id", session_id)\
@@ -194,6 +195,7 @@ async def send_message(
 ):
     """Send a message and get AI response with conversation context"""
     
+    # Verify session belongs to user
     session = supabase.table("chat_sessions")\
         .select("*")\
         .eq("id", session_id)\
@@ -231,10 +233,13 @@ async def send_message(
     # Build conversation context
     conversation = []
     for msg in context_messages:
-        conversation.append(f"{msg['role'].upper()}: {msg['content']}")
-    conversation_context = "\n".join(conversation)
+        if msg['role'] == 'user':
+            conversation.append(f"USER: {msg['content']}")
+        else:
+            conversation.append(f"ASSISTANT: {msg['content']}")
+    conversation_context = "\n".join(conversation) if conversation else None
     
-    # Hybrid search with conversation context
+    # Perform hybrid search with conversation context
     result = await hybrid_search(
         question=request.question,
         user_id=current_user["user_id"],
@@ -262,34 +267,7 @@ async def send_message(
         search_type_used=result["search_type_used"]
     )
 
-@app.post("/chat/sessions/{session_id}/attach")
-async def attach_document(
-    session_id: str,
-    filename: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Attach an existing document to a chat session"""
-    try:
-        doc = supabase.table("user_documents")\
-            .select("id")\
-            .eq("user_id", current_user["user_id"])\
-            .eq("filename", filename)\
-            .execute()
-        if not doc.data:
-            raise HTTPException(404, "Document not found")
-        
-        supabase.table("session_documents").insert({
-            "session_id": session_id,
-            "document_id": doc.data[0]["id"]
-        }).execute()
-        
-        return {"message": f"Document {filename} attached"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"Failed to attach document: {str(e)}")
-
-# ========== GET SESSION DOCUMENTS ENDPOINT ==========
+# ========== SESSION DOCUMENTS ENDPOINTS ==========
 
 @app.get("/chat/sessions/{session_id}/documents")
 async def get_session_documents(session_id: str, current_user: dict = Depends(get_current_user)):
@@ -306,7 +284,7 @@ async def get_session_documents(session_id: str, current_user: dict = Depends(ge
             raise HTTPException(404, "Session not found")
         
         response = supabase.table("session_documents")\
-            .select("document_id, user_documents(filename, id)")\
+            .select("document_id, user_documents(filename, id, uploaded_at)")\
             .eq("session_id", session_id)\
             .execute()
         
@@ -316,22 +294,62 @@ async def get_session_documents(session_id: str, current_user: dict = Depends(ge
                 if item.get('user_documents'):
                     documents.append({
                         "id": item['user_documents']['id'],
-                        "filename": item['user_documents']['filename']
+                        "filename": item['user_documents']['filename'],
+                        "uploaded_at": item['user_documents'].get('uploaded_at')
                     })
         return {"documents": documents}
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ Error getting session documents: {str(e)}")
-        return {"documents": [], "error": str(e)}
+        return {"documents": []}
+
+@app.post("/chat/sessions/{session_id}/attach")
+async def attach_document(
+    session_id: str,
+    filename: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Attach an existing document to a chat session"""
+    try:
+        # Find the document
+        doc = supabase.table("user_documents")\
+            .select("id")\
+            .eq("user_id", current_user["user_id"])\
+            .eq("filename", filename)\
+            .execute()
+        
+        if not doc.data:
+            raise HTTPException(404, "Document not found")
+        
+        # Check if already attached
+        existing = supabase.table("session_documents")\
+            .select("*")\
+            .eq("session_id", session_id)\
+            .eq("document_id", doc.data[0]["id"])\
+            .execute()
+        
+        if not existing.data:
+            supabase.table("session_documents").insert({
+                "session_id": session_id,
+                "document_id": doc.data[0]["id"]
+            }).execute()
+        
+        return {"message": f"Document {filename} attached"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to attach document: {str(e)}")
 
 # ========== DOCUMENT ENDPOINTS ==========
 
 @app.post("/upload")
 async def upload_pdf(
     file: UploadFile = File(...),
+    session_id: str = None,
     current_user: dict = Depends(get_current_user)
 ):
+    """Upload and process a PDF file, optionally attach to a session"""
     if not file.filename.endswith('.pdf'):
         raise HTTPException(400, "Only PDF files are supported")
     
@@ -340,14 +358,39 @@ async def upload_pdf(
     
     file_path = os.path.join(user_folder, file.filename)
     
+    # Save file
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
+    # Process and store in vector DB
     chunk_count = process_and_store_pdf(file_path, current_user["user_id"], file.filename)
     
-    # Also attach to current session if provided
-    session_id = None
-    # You can pass session_id via header or query param if needed
+    # Auto-attach to session if provided
+    if session_id:
+        try:
+            # Get document ID
+            doc_result = supabase.table("user_documents")\
+                .select("id")\
+                .eq("user_id", current_user["user_id"])\
+                .eq("filename", file.filename)\
+                .execute()
+            
+            if doc_result.data:
+                # Check if already attached
+                existing = supabase.table("session_documents")\
+                    .select("*")\
+                    .eq("session_id", session_id)\
+                    .eq("document_id", doc_result.data[0]["id"])\
+                    .execute()
+                
+                if not existing.data:
+                    supabase.table("session_documents").insert({
+                        "session_id": session_id,
+                        "document_id": doc_result.data[0]["id"]
+                    }).execute()
+                    print(f"✅ Auto-attached {file.filename} to session {session_id}")
+        except Exception as e:
+            print(f"Auto-attach error: {e}")
     
     return UploadResponse(
         message="File uploaded and processed successfully",
@@ -355,12 +398,43 @@ async def upload_pdf(
         chunk_count=chunk_count
     )
 
+@app.get("/documents")
+async def list_documents(current_user: dict = Depends(get_current_user)):
+    """List all uploaded documents for the current user"""
+    try:
+        response = supabase.table("user_documents")\
+            .select("*")\
+            .eq("user_id", current_user["user_id"])\
+            .order("uploaded_at", desc=True)\
+            .execute()
+        return {"documents": response.data}
+    except Exception as e:
+        return {"documents": [], "error": str(e)}
+
+@app.delete("/documents/{document_id}")
+async def delete_document(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a specific document"""
+    try:
+        # First, remove from session_documents
+        supabase.table("session_documents").delete().eq("document_id", document_id).execute()
+        
+        # Then delete the document
+        supabase.table("user_documents").delete()\
+            .eq("id", document_id)\
+            .eq("user_id", current_user["user_id"])\
+            .execute()
+        
+        return {"message": "Document deleted successfully"}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to delete: {str(e)}")
+
+# ========== LEGACY QUERY ENDPOINT ==========
 @app.post("/query", response_model=QueryResponse)
 async def query(
     request: QueryRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Ask a question using hybrid RAG"""
+    """Ask a question using hybrid RAG (legacy, no session)"""
     
     result = await hybrid_search(
         question=request.question,
@@ -373,21 +447,3 @@ async def query(
         sources=result["sources"],
         search_type_used=result["search_type_used"]
     )
-
-@app.get("/documents")
-async def list_documents(current_user: dict = Depends(get_current_user)):
-    """List all uploaded documents for the current user"""
-    try:
-        response = supabase.table("user_documents").select("*").eq("user_id", current_user["user_id"]).execute()
-        return {"documents": response.data}
-    except Exception as e:
-        return {"documents": [], "error": str(e)}
-
-@app.delete("/documents/{filename}")
-async def delete_document(filename: str, current_user: dict = Depends(get_current_user)):
-    """Delete a specific document"""
-    try:
-        supabase.table("user_documents").delete().eq("user_id", current_user["user_id"]).eq("filename", filename).execute()
-        return {"message": f"Document {filename} deleted"}
-    except Exception as e:
-        raise HTTPException(500, f"Failed to delete: {str(e)}")
