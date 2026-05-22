@@ -27,4 +27,4 @@ class Config:
     LLM_MODEL = "llama-3.3-70b-versatile"
     
     # CORS
-    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS").split(",")
