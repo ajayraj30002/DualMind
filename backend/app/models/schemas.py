@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 
 # ========== AUTH SCHEMAS ==========
-class SignUpRequest(BaseModel): 
+class SignUpRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
@@ -31,7 +31,9 @@ class TokenData(BaseModel):
 # ========== RAG SCHEMAS ==========
 class QueryRequest(BaseModel):
     question: str
-    search_type: str = "hybrid"  # "closed", "open", "hybrid"
+    search_type: str = "hybrid"
+    include_sources: bool = True
+    uploaded_document: Optional[str] = None  # ← ADD THIS
 
 class QueryResponse(BaseModel):
     answer: str
