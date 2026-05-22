@@ -7,22 +7,24 @@ from ..config import Config
 # Initialize Groq client
 groq_client = Groq(api_key=Config.GROQ_API_KEY)
 
-def combine_sources(closed_results: List[Dict], open_results: List[Dict], max_sources: int = 10) -> List[Dict]:
+def combine_sources(closed_results: List[Dict], open_results: List[Dict], max_sources: int = 8) -> List[Dict]:
     """Combine and deduplicate results from both sources"""
     
     all_sources = []
     
-    # Add closed domain results
+    # Add closed domain results (user documents) - PRIORITY
     for r in closed_results:
         r['source_type'] = '📁 My Documents'
+        r['priority'] = 1  # Higher priority
         all_sources.append(r)
     
-    # Add open domain results
+    # Add open domain results (web search)
     for r in open_results:
         r['source_type'] = '🌐 Web Search'
+        r['priority'] = 2  # Lower priority
         all_sources.append(r)
     
-    # Limit total sources
+    # Return limited sources
     return all_sources[:max_sources]
 
 def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
@@ -41,64 +43,70 @@ def generate_answer(question: str, sources: List[Dict], conversation_context: Op
     if not sources:
         # Polite response when no information found
         prompt = f"""{context_section}You are DualMind, a friendly, warm, and helpful AI assistant. 
-Your personality: polite, patient, encouraging, and genuinely eager to help.
 
 The user asked: "{question}"
 
-However, I don't have any relevant documents or web search results to answer this question.
+I don't have any relevant documents or web search results to answer this question.
 
-Please respond in a kind, helpful way that:
-1. Politely explains that you don't have enough information right now
-2. Suggests what the user could do (upload relevant documents or ask something else)
-3. Maintains a warm, encouraging tone
-4. Uses emojis occasionally to feel friendly 😊
-
-Example tone: "I'm sorry, I don't have enough information to answer that question yet. Could you please upload a relevant PDF document, or try asking something else? I'm here to help! 💫"
-
-Your response:"""
+Please respond kindly explaining that you need more information. Keep it concise and helpful."""
     else:
-        # Format sources
+        # Format sources - prioritize document sources
         context_parts = []
-        for source in sources:
-            context_parts.append(source['content'])
+        
+        # Separate document sources and web sources
+        doc_sources = [s for s in sources if s.get('source_type') == '📁 My Documents']
+        web_sources = [s for s in sources if s.get('source_type') == '🌐 Web Search']
+        
+        # Put document sources first (they have priority)
+        ordered_sources = doc_sources + web_sources
+        
+        for idx, source in enumerate(ordered_sources[:5], 1):
+            content = source.get('content', '')
+            source_type = source.get('source_type', 'Source')
+            
+            # Truncate if too long for memory efficiency
+            if len(content) > 1000:
+                content = content[:1000] + "..."
+            
+            context_parts.append(f"[Source {idx}] {content}")
         
         doc_context = "\n\n---\n\n".join(context_parts)
         
-        prompt = f"""{context_section}You are DualMind, a friendly, warm, and helpful AI assistant.
-Your personality: polite, patient, encouraging, and genuinely eager to help.
+        prompt = f"""{context_section}You are DualMind, a helpful AI assistant.
 
-Information from documents/web:
+Here is information to answer the user's question:
+
 {doc_context}
 
 Current question: "{question}"
 
-Instructions for your response:
-1. Be warm, friendly, and polite - like a helpful friend
-2. Answer naturally without mentioning "sources" or "documents"
-3. If you're unsure about something, say so kindly
-4. Use a positive, encouraging tone
-5. Add emojis occasionally to feel warm and approachable 😊 ✨ 💫
-6. If the information doesn't fully answer the question, offer to help further
+Instructions:
+1. Answer based ONLY on the information above
+2. If the information includes documents, prioritize that over web results
+3. Be concise and helpful (max 250 words)
+4. If unsure about something, say so politely
 
-Example tone: "Great question! Based on what I found... 💡 Let me know if you'd like more details!"
-
-Your friendly response:"""
+Your answer:"""
 
     try:
         completion = groq_client.chat.completions.create(
             model=Config.LLM_MODEL,
             messages=[
-                {"role": "system", "content": "You are DualMind, a warm, friendly, and helpful AI assistant. You are always polite, patient, and encouraging. You never get frustrated or rude. You use a kind tone and occasional emojis to make users feel comfortable. You genuinely want to help and make the user feel good about asking questions."},
+                {"role": "system", "content": "You are DualMind, a helpful AI assistant. Be concise, accurate, and friendly."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=400  # Limit tokens for faster response
         )
         
-        return completion.choices[0].message.content
+        return completion.choices[0].message.content.strip()
         
     except Exception as e:
-        return f"😊 I'm having a small technical issue right now. Could you please try again? I'm here to help!"
+        print(f"Groq error: {e}")
+        if sources:
+            return "I found some information that might help. Could you please rephrase your question more specifically?"
+        else:
+            return "I don't have enough information to answer that. Please upload a relevant PDF or try a different question."
 
 async def hybrid_search(
     question: str, 
@@ -109,47 +117,56 @@ async def hybrid_search(
     """
     Perform hybrid search based on specified type:
     - "closed": Only user's documents
-    - "open": Only web search
-    - "hybrid": Both sources
-    
-    Args:
-        question: User's question
-        user_id: User ID for document search
-        search_type: Type of search to perform
-        conversation_context: Previous conversation for context
+    - "open": Only web search  
+    - "hybrid": Both sources (documents take priority)
     """
     
     closed_results = []
     open_results = []
     
-    # Get closed-domain results (user's documents)
+    # Get closed-domain results (user's documents) - ALWAYS try this first for hybrid/closed
     if search_type in ["closed", "hybrid"]:
-        closed_results = search_closed_domain(question, user_id, top_k=4)
+        try:
+            closed_results = search_closed_domain(question, user_id, top_k=4)
+            print(f"📁 Documents found: {len(closed_results)} results")
+        except Exception as e:
+            print(f"Document search error: {e}")
+            closed_results = []
     
-    # Get open-domain results (web search)
+    # Get open-domain results (web search) - ONLY for open/hybrid modes
+    # For hybrid mode, only do web search if document results are insufficient
     if search_type in ["open", "hybrid"]:
-        open_results = search_open_domain(question, top_k=4)
+        # In hybrid mode, only search web if we have fewer than 2 document results
+        if search_type == "hybrid" and len(closed_results) >= 2:
+            print("🌐 Skipping web search - sufficient document results found")
+        else:
+            try:
+                open_results = search_open_domain(question, top_k=3)
+                print(f"🌐 Web results: {len(open_results)} results")
+            except Exception as e:
+                print(f"Web search error: {e}")
+                open_results = []
     
-    # Combine sources
+    # Combine sources (documents prioritized)
     all_sources = combine_sources(closed_results, open_results)
     
-    # Generate polite answer with conversation context
+    # Generate answer with context
     answer = generate_answer(question, all_sources, conversation_context)
     
-    # Prepare sources for response (clean UI format)
+    # Prepare clean sources for response
     response_sources = []
-    for source in all_sources[:4]:
+    for source in all_sources[:3]:
         source_type = source.get('source_type', 'Source')
-        # Clean up source display
+        
         if source_type == '📁 My Documents':
-            display_name = source.get('filename', 'Document')
+            display_name = source.get('filename', 'Document')[:40]
         else:
-            display_name = source.get('url', 'Web Search')
+            display_name = source.get('title', source.get('url', 'Web'))[:40]
         
         response_sources.append({
             "type": source_type,
             "title": display_name,
-            "content": source.get('content', '')[:200],
+            "content": source.get('content', '')[:150],
             "url": source.get('url', '')
         })
     
