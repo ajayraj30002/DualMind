@@ -335,29 +335,40 @@ function clearMessages() {
     messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
 }
 
-// NEW: Append message without removing welcome
+// CRITICAL FIX: This function adds message IMMEDIATELY to UI
 function appendMessageToUI(role, content, filename = null) {
     if (!messagesDiv) return;
     
-    // Remove welcome message if it exists
+    // Remove welcome message if it exists (only on first message)
     const welcome = messagesDiv.querySelector('.welcome');
-    if (welcome) welcome.remove();
+    if (welcome && role === 'user') {
+        welcome.remove();
+    }
     
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${role}`;
     
     let attachmentHtml = '';
     if (filename) {
-        attachmentHtml = `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>`;
+        attachmentHtml = `<div class="message-doc-attachment">
+            <i class="fas fa-file-pdf"></i> 
+            ${escapeHtml(filename)}
+        </div>`;
     }
     
+    // Format content with line breaks
+    const formattedContent = escapeHtml(content).replace(/\n/g, '<br>');
+    
     msgDiv.innerHTML = `
-        <div class="message-avatar"><i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
+        <div class="message-avatar">
+            <i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i>
+        </div>
         <div class="message-content">
             ${attachmentHtml}
-            ${escapeHtml(content).replace(/\n/g, '<br>')}
+            ${formattedContent}
         </div>
     `;
+    
     messagesDiv.appendChild(msgDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
@@ -368,7 +379,18 @@ function showTyping() {
     const typing = document.createElement('div');
     typing.className = 'message assistant';
     typing.id = 'typingIndicator';
-    typing.innerHTML = `<div class="message-avatar"><i class="fas fa-brain"></i></div><div class="message-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+    typing.innerHTML = `
+        <div class="message-avatar">
+            <i class="fas fa-brain"></i>
+        </div>
+        <div class="message-content">
+            <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    `;
     messagesDiv.appendChild(typing);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
@@ -394,52 +416,59 @@ function onFileSelect(e) {
 async function uploadFile(file, sessionId) {
     const fd = new FormData();
     fd.append('file', file);
+    
     const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: fd
     });
+    
     if (res.status === 401) { doLogout(); throw new Error('Unauth'); }
     if (!res.ok) throw new Error('Upload failed');
     return await res.json();
 }
 
+// MAIN SEND MESSAGE FUNCTION - FIXED
 async function sendMessage() {
     const text = messageInput?.value.trim();
     if (!text || !currentSessionId) return;
     
-    // Clear input
+    // Store file info before clearing
+    const hasFile = !!pendingFile;
+    const uploadedFilename = hasFile ? pendingFile.name : null;
+    
+    // CRITICAL: Clear input IMMEDIATELY
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
-    let uploadedFilename = null;
-    let hasFile = !!pendingFile;
-    
-    // CRITICAL: Show user message IMMEDIATELY with PDF attachment if present
-    if (pendingFile) {
-        uploadedFilename = pendingFile.name;
+    // CRITICAL: Show user message with PDF attachment IMMEDIATELY (before any async operations)
+    if (hasFile && uploadedFilename) {
         appendMessageToUI('user', text, uploadedFilename);
     } else {
         appendMessageToUI('user', text);
     }
     
     // Auto-title for first message
-    const isFirst = messagesDiv?.querySelectorAll('.message').length === 1;
-    if (isFirst) await autoTitle(currentSessionId, text);
+    const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
+    const isFirst = messageCount === 1; // Only the message we just added
+    if (isFirst) {
+        await autoTitle(currentSessionId, text);
+    }
     
-    // Upload file if exists (do this after showing UI)
+    // Now handle file upload (this happens in background)
     let fileUploaded = false;
-    if (pendingFile) {
+    if (hasFile) {
         try {
             showTyping();
             await uploadFile(pendingFile, currentSessionId);
             fileUploaded = true;
+            // Clear the pending file and badge
             pendingFile = null;
             if (fileBadge) fileBadge.classList.add('hidden');
             hideTyping();
         } catch (err) {
             hideTyping();
-            appendMessageToUI('assistant', `❌ Upload failed: ${err.message}`);
+            appendMessageToUI('assistant', `❌ Upload failed: ${err.message}. Please try again.`);
             return;
         }
     }
@@ -471,8 +500,9 @@ async function sendMessage() {
         hideTyping();
         
         if (res.ok) {
-            // Clean answer (remove excessive emojis)
             let cleanAnswer = data.answer;
+            // Clean up any excessive formatting
+            cleanAnswer = cleanAnswer.replace(/[\u{1F600}-\u{1F64F}]/gu, ''); // Remove emojis if causing issues
             appendMessageToUI('assistant', cleanAnswer);
         } else {
             appendMessageToUI('assistant', 'Sorry, something went wrong. Please try again.');
@@ -480,6 +510,7 @@ async function sendMessage() {
     } catch (err) {
         hideTyping();
         appendMessageToUI('assistant', 'Connection error. Please check your network.');
+        console.error('Send message error:', err);
     } finally {
         if (sendBtn) sendBtn.disabled = false;
         messageInput?.focus();
@@ -514,10 +545,10 @@ async function renameSession() {
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-    });
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
