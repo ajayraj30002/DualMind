@@ -284,6 +284,42 @@ async def attach_document(
     except Exception as e:
         raise HTTPException(500, f"Failed to attach document: {str(e)}")
 
+# ========== NEW ENDPOINT: GET SESSION DOCUMENTS ==========
+
+@app.get("/chat/sessions/{session_id}/documents")
+async def get_session_documents(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all documents attached to a session"""
+    try:
+        # Verify session belongs to user
+        session = supabase.table("chat_sessions")\
+            .select("*")\
+            .eq("id", session_id)\
+            .eq("user_id", current_user["user_id"])\
+            .execute()
+        
+        if not session.data:
+            raise HTTPException(404, "Session not found")
+        
+        response = supabase.table("session_documents")\
+            .select("document_id, user_documents(filename, id)")\
+            .eq("session_id", session_id)\
+            .execute()
+        
+        documents = []
+        if response.data:
+            for item in response.data:
+                if item.get('user_documents'):
+                    documents.append({
+                        "id": item['user_documents']['id'],
+                        "filename": item['user_documents']['filename']
+                    })
+        return {"documents": documents}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting session documents: {str(e)}")
+        return {"documents": [], "error": str(e)}
+
 # ========== DOCUMENT ENDPOINTS ==========
 
 @app.post("/upload")
