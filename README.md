@@ -49,10 +49,3 @@
 ---
 
 ## 🏗️ System Architecture
-
-
-┌───────────┐ ┌───────────┐ ┌───────────┐
-│ Supabase │ │ Groq │ │ Tavily │
-│ pgvector │ │ LLM API │ │ Search │
-│ (Vectors) │ │ (Llama 3.3│ │ API │
-└───────────┘ └───────────┘ └───────────┘
