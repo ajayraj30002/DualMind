@@ -8,6 +8,8 @@
 ![PostgreSQL](https://img.shields.io/badge/Supabase-pgvector-3b82f6?logo=supabase)
 ![CI/CD](https://img.shields.io/badge/CI/CD-GitHub_Actions-2088FF?logo=github-actions)
 ![Groq](https://img.shields.io/badge/Groq-LLM-orange?logo=groq)
+![RAG](https://img.shields.io/badge/RAG-Retrieval_Augmented_Generation-blue?style=for-the-badge)
+![Vector DB](https://img.shields.io/badge/Vector_Search-Pgvector-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 
 </div>
 
@@ -50,8 +52,6 @@
 
 ## 🏗️ System Architecture
 
-## 🏗️ System Architecture
-
 **Frontend (Vercel)** → HTML/CSS/JS + Dark UI
 
 **Backend (Render)** → FastAPI + Docker
@@ -65,4 +65,12 @@
    - Tavily Search API (Web Search)
 
 **CI/CD** → GitHub Actions builds Docker image → Pushes to Docker Hub → Render auto-deploys
+
+User → Frontend (Vercel) → Backend (Render) → Supabase (pgvector)
+↓
+Groq LLM API
+↓
+Tavily Web Search
+↓
+Response to User
 
