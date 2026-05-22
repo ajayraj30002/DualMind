@@ -42,8 +42,6 @@ def health_check():
 # ========== AUTH ENDPOINTS ==========
 @app.post("/auth/signup", response_model=SignUpResponse)
 async def signup(request: SignUpRequest):
-    """User signup with email and password"""
-    
     existing = supabase.table("users").select("*").eq("email", request.email).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -57,9 +55,7 @@ async def signup(request: SignUpRequest):
             "full_name": request.full_name,
             "created_at": "now()"
         }).execute()
-        
         user = response.data[0]
-        
         return SignUpResponse(
             message="User created successfully",
             user_id=user["id"],
@@ -70,22 +66,15 @@ async def signup(request: SignUpRequest):
 
 @app.post("/auth/signin", response_model=SignInResponse)
 async def signin(request: SignInRequest):
-    """User signin with email and password"""
-    
     response = supabase.table("users").select("*").eq("email", request.email).execute()
-    
     if not response.data:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     user = response.data[0]
-    
     if not bcrypt.checkpw(request.password.encode('utf-8'), user["hashed_password"].encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    access_token = create_access_token(
-        data={"sub": user["id"], "email": user["email"]}
-    )
-    
+    access_token = create_access_token(data={"sub": user["id"], "email": user["email"]})
     return SignInResponse(
         message="Login successful",
         access_token=access_token,
@@ -95,17 +84,12 @@ async def signin(request: SignInRequest):
 
 @app.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
-    """Get current user info"""
-    return {
-        "user_id": current_user["user_id"],
-        "email": current_user["email"]
-    }
+    return {"user_id": current_user["user_id"], "email": current_user["email"]}
 
 # ========== CHAT SESSION ENDPOINTS ==========
 
 @app.get("/chat/sessions")
 async def get_sessions(current_user: dict = Depends(get_current_user)):
-    """Get all chat sessions for current user"""
     try:
         response = supabase.table("chat_sessions")\
             .select("*")\
@@ -118,7 +102,6 @@ async def get_sessions(current_user: dict = Depends(get_current_user)):
 
 @app.post("/chat/sessions")
 async def create_session(current_user: dict = Depends(get_current_user)):
-    """Create a new chat session"""
     try:
         response = supabase.table("chat_sessions").insert({
             "user_id": current_user["user_id"],
@@ -132,7 +115,6 @@ async def create_session(current_user: dict = Depends(get_current_user)):
 
 @app.put("/chat/sessions/{session_id}")
 async def rename_session(session_id: str, title: str, current_user: dict = Depends(get_current_user)):
-    """Rename a chat session"""
     try:
         supabase.table("chat_sessions")\
             .update({"title": title, "updated_at": "now()"})\
@@ -145,7 +127,6 @@ async def rename_session(session_id: str, title: str, current_user: dict = Depen
 
 @app.delete("/chat/sessions/{session_id}")
 async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete a chat session and its messages"""
     try:
         supabase.table("chat_messages").delete().eq("session_id", session_id).execute()
         supabase.table("chat_sessions").delete().eq("id", session_id).eq("user_id", current_user["user_id"]).execute()
@@ -155,36 +136,27 @@ async def delete_session(session_id: str, current_user: dict = Depends(get_curre
 
 @app.get("/chat/sessions/{session_id}/messages")
 async def get_messages(session_id: str, current_user: dict = Depends(get_current_user)):
-    """Get all messages for a session"""
     try:
-        # Verify session belongs to user
         session = supabase.table("chat_sessions")\
             .select("*")\
             .eq("id", session_id)\
             .eq("user_id", current_user["user_id"])\
             .execute()
-        
         if not session.data:
             raise HTTPException(404, "Session not found")
         
-        # Get messages - NO order() to avoid the 500 error
         response = supabase.table("chat_messages")\
             .select("*")\
             .eq("session_id", session_id)\
             .execute()
         
-        # Sort messages manually
         messages = response.data if response.data else []
         messages.sort(key=lambda x: x.get('created_at', ''))
-        
-        print(f"✅ Retrieved {len(messages)} messages for session {session_id}")
         return {"messages": messages}
-        
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in get_messages: {str(e)}")
-        # Return empty array instead of crashing
+        print(f"Error in get_messages: {str(e)}")
         return {"messages": []}
 
 @app.post("/chat/sessions/{session_id}/messages")
@@ -193,7 +165,7 @@ async def send_message(
     request: QueryRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Send a message and get AI response with conversation context"""
+    """Send a message - PRIORITIZES PDF if uploaded_document is provided"""
     
     session = supabase.table("chat_sessions")\
         .select("*")\
@@ -203,37 +175,40 @@ async def send_message(
     if not session.data:
         raise HTTPException(404, "Session not found")
     
-    # Save user message
-    supabase.table("chat_messages").insert({
+    # Save user message with metadata (filename if uploaded)
+    user_message = {
         "session_id": session_id,
         "role": "user",
         "content": request.question
-    }).execute()
+    }
+    if request.uploaded_document:
+        user_message["metadata"] = {"filename": request.uploaded_document}
+    supabase.table("chat_messages").insert(user_message).execute()
     
     # Get previous messages for context
     previous = supabase.table("chat_messages")\
         .select("*")\
         .eq("session_id", session_id)\
         .execute()
-    
-    # Sort manually
     prev_list = previous.data if previous.data else []
     prev_list.sort(key=lambda x: x.get('created_at', ''))
-    
-    # Get last 10 for context
     context_messages = prev_list[-10:] if len(prev_list) > 10 else prev_list
-    
-    # Build conversation context
     conversation = []
     for msg in context_messages:
         conversation.append(f"{msg['role'].upper()}: {msg['content']}")
     conversation_context = "\n".join(conversation)
     
-    # Hybrid search with conversation context
+    # CRITICAL: If document uploaded, FORCE closed mode (90% PDF priority)
+    effective_mode = request.search_type
+    if request.uploaded_document:
+        effective_mode = 'closed'
+        print(f"📄 Document '{request.uploaded_document}' uploaded - forcing PDF-only mode")
+    
+    # Hybrid search with the effective mode
     result = await hybrid_search(
         question=request.question,
         user_id=current_user["user_id"],
-        search_type=request.search_type,
+        search_type=effective_mode,
         conversation_context=conversation_context
     )
     
@@ -258,12 +233,7 @@ async def send_message(
     )
 
 @app.post("/chat/sessions/{session_id}/attach")
-async def attach_document(
-    session_id: str,
-    filename: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Attach an existing document to a chat session"""
+async def attach_document(session_id: str, filename: str, current_user: dict = Depends(get_current_user)):
     try:
         doc = supabase.table("user_documents")\
             .select("id")\
@@ -277,26 +247,20 @@ async def attach_document(
             "session_id": session_id,
             "document_id": doc.data[0]["id"]
         }).execute()
-        
         return {"message": f"Document {filename} attached"}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(500, f"Failed to attach document: {str(e)}")
 
-# ========== NEW ENDPOINT: GET SESSION DOCUMENTS ==========
-
 @app.get("/chat/sessions/{session_id}/documents")
 async def get_session_documents(session_id: str, current_user: dict = Depends(get_current_user)):
-    """Get all documents attached to a session"""
     try:
-        # Verify session belongs to user
         session = supabase.table("chat_sessions")\
             .select("*")\
             .eq("id", session_id)\
             .eq("user_id", current_user["user_id"])\
             .execute()
-        
         if not session.data:
             raise HTTPException(404, "Session not found")
         
@@ -317,29 +281,23 @@ async def get_session_documents(session_id: str, current_user: dict = Depends(ge
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error getting session documents: {str(e)}")
         return {"documents": [], "error": str(e)}
 
 # ========== DOCUMENT ENDPOINTS ==========
 
 @app.post("/upload")
-async def upload_pdf(
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
-):
+async def upload_pdf(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     if not file.filename.endswith('.pdf'):
         raise HTTPException(400, "Only PDF files are supported")
     
     user_folder = os.path.join(Config.UPLOAD_DIR, current_user["user_id"])
     os.makedirs(user_folder, exist_ok=True)
-    
     file_path = os.path.join(user_folder, file.filename)
     
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
     chunk_count = process_and_store_pdf(file_path, current_user["user_id"], file.filename)
-    
     return UploadResponse(
         message="File uploaded and processed successfully",
         filename=file.filename,
@@ -347,18 +305,12 @@ async def upload_pdf(
     )
 
 @app.post("/query", response_model=QueryResponse)
-async def query(
-    request: QueryRequest,
-    current_user: dict = Depends(get_current_user)
-):
-    """Ask a question using hybrid RAG"""
-    
+async def query(request: QueryRequest, current_user: dict = Depends(get_current_user)):
     result = await hybrid_search(
         question=request.question,
         user_id=current_user["user_id"],
         search_type=request.search_type
     )
-    
     return QueryResponse(
         answer=result["answer"],
         sources=result["sources"],
@@ -367,7 +319,6 @@ async def query(
 
 @app.get("/documents")
 async def list_documents(current_user: dict = Depends(get_current_user)):
-    """List all uploaded documents for the current user"""
     try:
         response = supabase.table("user_documents").select("*").eq("user_id", current_user["user_id"]).execute()
         return {"documents": response.data}
@@ -376,7 +327,6 @@ async def list_documents(current_user: dict = Depends(get_current_user)):
 
 @app.delete("/documents/{filename}")
 async def delete_document(filename: str, current_user: dict = Depends(get_current_user)):
-    """Delete a specific document"""
     try:
         supabase.table("user_documents").delete().eq("user_id", current_user["user_id"]).eq("filename", filename).execute()
         return {"message": f"Document {filename} deleted"}
