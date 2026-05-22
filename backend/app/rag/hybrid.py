@@ -27,65 +27,78 @@ def combine_sources(closed_results: List[Dict], open_results: List[Dict], max_so
 
 def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
     """
-    Generate a clean, natural answer using Groq LLM
-    Supports conversation context for follow-up questions
+    Generate a polite, helpful answer using Groq LLM
     """
     
     # Build conversation context if available
     context_section = ""
     if conversation_context:
-        context_section = f"""PREVIOUS CONVERSATION:
+        context_section = f"""Previous conversation:
 {conversation_context}
 
 """
     
     if not sources:
-        # No sources found - ask LLM to answer from its knowledge with context
-        prompt = f"""{context_section}You are DualMind, a helpful AI assistant. Answer the following question based on your knowledge and the conversation history. If you don't know, say so honestly.
+        # Polite response when no information found
+        prompt = f"""{context_section}You are DualMind, a friendly, warm, and helpful AI assistant. 
+Your personality: polite, patient, encouraging, and genuinely eager to help.
 
-Current Question: {question}
+The user asked: "{question}"
 
-Answer:"""
+However, I don't have any relevant documents or web search results to answer this question.
+
+Please respond in a kind, helpful way that:
+1. Politely explains that you don't have enough information right now
+2. Suggests what the user could do (upload relevant documents or ask something else)
+3. Maintains a warm, encouraging tone
+4. Uses emojis occasionally to feel friendly 😊
+
+Example tone: "I'm sorry, I don't have enough information to answer that question yet. Could you please upload a relevant PDF document, or try asking something else? I'm here to help! 💫"
+
+Your response:"""
     else:
-        # Format sources without citations
+        # Format sources
         context_parts = []
         for source in sources:
             context_parts.append(source['content'])
         
         doc_context = "\n\n---\n\n".join(context_parts)
         
-        prompt = f"""{context_section}You are DualMind, a helpful AI assistant. Answer the question based ONLY on the information below and the conversation history.
+        prompt = f"""{context_section}You are DualMind, a friendly, warm, and helpful AI assistant.
+Your personality: polite, patient, encouraging, and genuinely eager to help.
 
-INFORMATION FROM DOCUMENTS/WEB:
+Information from documents/web:
 {doc_context}
 
-CURRENT QUESTION: {question}
+Current question: "{question}"
 
-INSTRUCTIONS:
-1. Answer naturally - don't mention "source" or "document"
-2. Don't use phrases like "according to" or "based on"
-3. Just give the answer directly
-4. If the information doesn't contain the answer, say "I don't have enough information to answer that"
-5. Use the conversation history to understand follow-up questions
+Instructions for your response:
+1. Be warm, friendly, and polite - like a helpful friend
+2. Answer naturally without mentioning "sources" or "documents"
+3. If you're unsure about something, say so kindly
+4. Use a positive, encouraging tone
+5. Add emojis occasionally to feel warm and approachable 😊 ✨ 💫
+6. If the information doesn't fully answer the question, offer to help further
 
-ANSWER:"""
+Example tone: "Great question! Based on what I found... 💡 Let me know if you'd like more details!"
+
+Your friendly response:"""
 
     try:
-        # Call Groq API
         completion = groq_client.chat.completions.create(
             model=Config.LLM_MODEL,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that gives direct, natural answers without citing sources. Use conversation history to understand context."},
+                {"role": "system", "content": "You are DualMind, a warm, friendly, and helpful AI assistant. You are always polite, patient, and encouraging. You never get frustrated or rude. You use a kind tone and occasional emojis to make users feel comfortable. You genuinely want to help and make the user feel good about asking questions."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
+            temperature=0.7,
             max_tokens=1000
         )
         
         return completion.choices[0].message.content
         
     except Exception as e:
-        return f"Error generating response: {str(e)}"
+        return f"😊 I'm having a small technical issue right now. Could you please try again? I'm here to help!"
 
 async def hybrid_search(
     question: str, 
@@ -120,7 +133,7 @@ async def hybrid_search(
     # Combine sources
     all_sources = combine_sources(closed_results, open_results)
     
-    # Generate answer with conversation context
+    # Generate polite answer with conversation context
     answer = generate_answer(question, all_sources, conversation_context)
     
     # Prepare sources for response (clean UI format)
