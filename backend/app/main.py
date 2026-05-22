@@ -184,7 +184,6 @@ async def get_messages(session_id: str, current_user: dict = Depends(get_current
         raise
     except Exception as e:
         print(f"❌ Error in get_messages: {str(e)}")
-        # Return empty array instead of crashing
         return {"messages": []}
 
 @app.post("/chat/sessions/{session_id}/messages")
@@ -203,12 +202,18 @@ async def send_message(
     if not session.data:
         raise HTTPException(404, "Session not found")
     
-    # Save user message
-    supabase.table("chat_messages").insert({
+    # Save user message with metadata (including filename if present)
+    user_message = {
         "session_id": session_id,
         "role": "user",
         "content": request.question
-    }).execute()
+    }
+    
+    # Add filename to metadata if document was uploaded
+    if request.uploaded_document:
+        user_message["metadata"] = {"filename": request.uploaded_document}
+    
+    supabase.table("chat_messages").insert(user_message).execute()
     
     # Get previous messages for context
     previous = supabase.table("chat_messages")\
@@ -284,7 +289,7 @@ async def attach_document(
     except Exception as e:
         raise HTTPException(500, f"Failed to attach document: {str(e)}")
 
-# ========== NEW ENDPOINT: GET SESSION DOCUMENTS ==========
+# ========== GET SESSION DOCUMENTS ENDPOINT ==========
 
 @app.get("/chat/sessions/{session_id}/documents")
 async def get_session_documents(session_id: str, current_user: dict = Depends(get_current_user)):
@@ -339,6 +344,10 @@ async def upload_pdf(
         shutil.copyfileobj(file.file, buffer)
     
     chunk_count = process_and_store_pdf(file_path, current_user["user_id"], file.filename)
+    
+    # Also attach to current session if provided
+    session_id = None
+    # You can pass session_id via header or query param if needed
     
     return UploadResponse(
         message="File uploaded and processed successfully",
