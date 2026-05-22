@@ -33,7 +33,7 @@ class QueryRequest(BaseModel):
     question: str
     search_type: str = "hybrid"
     include_sources: bool = True
-    uploaded_document: Optional[str] = None  # ← ADD THIS
+    uploaded_document: Optional[str] = None  # CRITICAL: For PDF priority
 
 class QueryResponse(BaseModel):
     answer: str
