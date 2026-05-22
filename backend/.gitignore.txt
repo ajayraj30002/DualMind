@@ -17,4 +17,4 @@ backend/.env
 .DS_Store
 
 # Docker
-*.log
+*.log 
