@@ -409,3 +409,14 @@ body {
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+/* File badge inline - for messages */
+.file-badge-inline {
+    background: rgba(249, 115, 22, 0.15);
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.7rem;
+    margin-bottom: 0.5rem;
+    display: inline-block;
+    color: #f97316;
+}
