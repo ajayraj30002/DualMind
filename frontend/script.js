@@ -7,6 +7,7 @@ let currentMode = 'hybrid';
 let pendingFile = null;
 let currentSessionDocuments = [];
 
+// DOM elements
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
 let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
 let modeBtns, loadingOverlay;
@@ -279,11 +280,12 @@ async function loadSession(sessionId) {
                 for (const msg of data.messages) {
                     const msgDiv = document.createElement('div');
                     msgDiv.className = `message ${msg.role}`;
-                    const hasDoc = msg.metadata?.filename;
+                    // Check if message has filename in metadata
+                    const filename = msg.metadata?.filename;
                     msgDiv.innerHTML = `
                         <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
                         <div class="message-content">
-                            ${hasDoc ? `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(hasDoc)}</div>` : ''}
+                            ${filename ? `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>` : ''}
                             ${escapeHtml(msg.content).replace(/\n/g, '<br>')}
                         </div>
                     `;
@@ -412,6 +414,7 @@ async function sendMessage() {
     let uploadedFilename = null;
     let uploadedFileData = null;
     
+    // Upload file if exists
     if (pendingFile) {
         showTyping();
         try {
@@ -427,6 +430,7 @@ async function sendMessage() {
         }
     }
     
+    // Add user message with document attachment display
     addMessage('user', text, uploadedFilename);
     
     const isFirst = messagesDiv?.querySelectorAll('.message').length === 1;
@@ -436,6 +440,7 @@ async function sendMessage() {
     if (sendBtn) sendBtn.disabled = true;
     
     try {
+        // If document was uploaded, force search to closed (documents only)
         const searchMode = uploadedFileData ? 'closed' : currentMode;
         
         const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
@@ -448,13 +453,14 @@ async function sendMessage() {
                 question: text,
                 search_type: searchMode,
                 include_sources: false,
-                uploaded_document: uploadedFilename
+                uploaded_document: uploadedFilename  // ← Send filename to backend
             })
         });
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
         hideTyping();
         if (res.ok) {
+            // Remove emojis for minimal style
             let cleanAnswer = data.answer;
             cleanAnswer = cleanAnswer.replace(/[\u{1F600}-\u{1F64F}]/gu, '');
             cleanAnswer = cleanAnswer.replace(/[\u{1F300}-\u{1F5FF}]/gu, '');
