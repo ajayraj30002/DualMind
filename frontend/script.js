@@ -278,7 +278,7 @@ async function loadSession(sessionId) {
             } else {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
-                    appendMessageToUI(msg.role, msg.content, msg.metadata?.filename);
+                    addMessageToChat(msg.role, msg.content, msg.metadata?.filename);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
@@ -296,7 +296,6 @@ async function loadSessionDocuments(sessionId) {
         if (res.ok) {
             const data = await res.json();
             currentSessionDocuments = data.documents || [];
-            console.log('Session documents:', currentSessionDocuments);
         }
     } catch (err) {
         console.error('Load session docs error:', err);
@@ -335,39 +334,48 @@ function clearMessages() {
     messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
 }
 
-function appendMessageToUI(role, content, filename = null) {
+// THIS IS THE KEY FUNCTION - Shows PDF badge above user message
+function addMessageToChat(role, content, filename = null) {
     if (!messagesDiv) return;
     
+    // Remove welcome message if it's the first user message
     const welcome = messagesDiv.querySelector('.welcome');
     if (welcome && role === 'user') {
         welcome.remove();
     }
     
-    const msgDiv = document.createElement('div');
-    msgDiv.className = `message ${role}`;
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}`;
     
-    let attachmentHtml = '';
+    // Create attachment HTML if filename exists
+    let attachmentHTML = '';
     if (filename) {
-        attachmentHtml = `<div class="message-doc-attachment">
+        attachmentHTML = `<div class="message-doc-attachment">
             <i class="fas fa-file-pdf"></i> 
             ${escapeHtml(filename)}
         </div>`;
     }
     
+    // Format the content with line breaks
     const formattedContent = escapeHtml(content).replace(/\n/g, '<br>');
     
-    msgDiv.innerHTML = `
+    messageDiv.innerHTML = `
         <div class="message-avatar">
             <i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i>
         </div>
         <div class="message-content">
-            ${attachmentHtml}
+            ${attachmentHTML}
             ${formattedContent}
         </div>
     `;
     
-    messagesDiv.appendChild(msgDiv);
+    messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    // Log for debugging
+    if (filename) {
+        console.log(`✅ Added ${role} message with PDF attachment: ${filename}`);
+    }
 }
 
 function showTyping() {
@@ -405,17 +413,17 @@ function onFileSelect(e) {
     }
     pendingFile = file;
     if (fileBadge) {
-        fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${file.name} <i class="fas fa-check-circle"></i>`;
+        fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${escapeHtml(file.name)} <i class="fas fa-check-circle"></i>`;
         fileBadge.classList.remove('hidden');
     }
-    console.log('File selected:', file.name);
+    console.log('📎 File selected:', file.name);
 }
 
 async function uploadFile(file, sessionId) {
     const fd = new FormData();
     fd.append('file', file);
     
-    console.log('Uploading file:', file.name, 'to session:', sessionId);
+    console.log('📤 Uploading file:', file.name);
     
     const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, {
         method: 'POST',
@@ -423,32 +431,36 @@ async function uploadFile(file, sessionId) {
         body: fd
     });
     
-    if (res.status === 401) { doLogout(); throw new Error('Unauth'); }
+    if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
     if (!res.ok) {
         const error = await res.json();
         throw new Error(error.detail || 'Upload failed');
     }
     const result = await res.json();
-    console.log('Upload success:', result);
+    console.log('✅ Upload success:', result);
     return result;
 }
 
+// MAIN SEND FUNCTION - FIXED
 async function sendMessage() {
     const text = messageInput?.value.trim();
     if (!text || !currentSessionId) return;
     
+    // Save file info before clearing
     const hasFile = !!pendingFile;
     const uploadedFilename = hasFile ? pendingFile.name : null;
     
-    // Clear input
+    // Clear input immediately
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
-    // Show user message IMMEDIATELY
+    // CRITICAL: Add user message with PDF attachment IMMEDIATELY
     if (hasFile && uploadedFilename) {
-        appendMessageToUI('user', text, uploadedFilename);
+        addMessageToChat('user', text, uploadedFilename);
+        console.log('📄 Added user message with PDF:', uploadedFilename);
     } else {
-        appendMessageToUI('user', text);
+        addMessageToChat('user', text);
+        console.log('💬 Added user message without PDF');
     }
     
     // Auto-title for first message
@@ -470,14 +482,14 @@ async function sendMessage() {
             hideTyping();
         } catch (err) {
             hideTyping();
-            appendMessageToUI('assistant', `Upload failed: ${err.message}. Please try again.`);
+            addMessageToChat('assistant', `❌ Upload failed: ${err.message}. Please try again.`);
             return;
         }
     }
     
-    // If file was uploaded, force closed mode to search ONLY the PDF
+    // Force closed mode if file was uploaded (only search PDFs)
     const searchMode = fileUploaded ? 'closed' : currentMode;
-    console.log('Search mode:', searchMode, 'File uploaded:', fileUploaded);
+    console.log('🔍 Search mode:', searchMode, 'File uploaded:', fileUploaded);
     
     showTyping();
     if (sendBtn) sendBtn.disabled = true;
@@ -502,24 +514,24 @@ async function sendMessage() {
         hideTyping();
         
         if (res.ok) {
-            // Check if we have sources from the PDF
-            const hasSources = data.sources && data.sources.length > 0;
-            console.log('Response sources:', data.sources);
-            
             let answer = data.answer;
             
-            // If no sources found and file was uploaded, add a helpful message
-            if (!hasSources && fileUploaded) {
+            // Check if we got sources from the PDF
+            const hasSources = data.sources && data.sources.length > 0;
+            console.log('📚 Response sources:', data.sources);
+            
+            // If file was uploaded but no sources found, show helpful message
+            if (fileUploaded && !hasSources) {
                 answer = "I couldn't find the specific information in the PDF you uploaded. The file has been processed but the answer to your question wasn't found in its contents. Could you please rephrase your question or make sure the PDF contains the information you're looking for?";
             }
             
-            appendMessageToUI('assistant', answer);
+            addMessageToChat('assistant', answer);
         } else {
-            appendMessageToUI('assistant', 'Sorry, something went wrong. Please try again.');
+            addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
         }
     } catch (err) {
         hideTyping();
-        appendMessageToUI('assistant', 'Connection error. Please check your network.');
+        addMessageToChat('assistant', 'Connection error. Please check your network.');
         console.error('Send message error:', err);
     } finally {
         if (sendBtn) sendBtn.disabled = false;
