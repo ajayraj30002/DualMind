@@ -13,7 +13,6 @@ let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileB
 let modeBtns, loadingOverlay;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Get elements
     loginPage = document.getElementById('loginPage');
     chatPage = document.getElementById('chatPage');
     sessionListDiv = document.getElementById('sessionList');
@@ -297,6 +296,7 @@ async function loadSessionDocuments(sessionId) {
         if (res.ok) {
             const data = await res.json();
             currentSessionDocuments = data.documents || [];
+            console.log('Session documents:', currentSessionDocuments);
         }
     } catch (err) {
         console.error('Load session docs error:', err);
@@ -335,11 +335,9 @@ function clearMessages() {
     messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
 }
 
-// CRITICAL FIX: This function adds message IMMEDIATELY to UI
 function appendMessageToUI(role, content, filename = null) {
     if (!messagesDiv) return;
     
-    // Remove welcome message if it exists (only on first message)
     const welcome = messagesDiv.querySelector('.welcome');
     if (welcome && role === 'user') {
         welcome.remove();
@@ -356,7 +354,6 @@ function appendMessageToUI(role, content, filename = null) {
         </div>`;
     }
     
-    // Format content with line breaks
     const formattedContent = escapeHtml(content).replace(/\n/g, '<br>');
     
     msgDiv.innerHTML = `
@@ -411,11 +408,14 @@ function onFileSelect(e) {
         fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${file.name} <i class="fas fa-check-circle"></i>`;
         fileBadge.classList.remove('hidden');
     }
+    console.log('File selected:', file.name);
 }
 
 async function uploadFile(file, sessionId) {
     const fd = new FormData();
     fd.append('file', file);
+    
+    console.log('Uploading file:', file.name, 'to session:', sessionId);
     
     const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, {
         method: 'POST',
@@ -424,24 +424,27 @@ async function uploadFile(file, sessionId) {
     });
     
     if (res.status === 401) { doLogout(); throw new Error('Unauth'); }
-    if (!res.ok) throw new Error('Upload failed');
-    return await res.json();
+    if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.detail || 'Upload failed');
+    }
+    const result = await res.json();
+    console.log('Upload success:', result);
+    return result;
 }
 
-// MAIN SEND MESSAGE FUNCTION - FIXED
 async function sendMessage() {
     const text = messageInput?.value.trim();
     if (!text || !currentSessionId) return;
     
-    // Store file info before clearing
     const hasFile = !!pendingFile;
     const uploadedFilename = hasFile ? pendingFile.name : null;
     
-    // CRITICAL: Clear input IMMEDIATELY
+    // Clear input
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
-    // CRITICAL: Show user message with PDF attachment IMMEDIATELY (before any async operations)
+    // Show user message IMMEDIATELY
     if (hasFile && uploadedFilename) {
         appendMessageToUI('user', text, uploadedFilename);
     } else {
@@ -450,32 +453,31 @@ async function sendMessage() {
     
     // Auto-title for first message
     const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
-    const isFirst = messageCount === 1; // Only the message we just added
+    const isFirst = messageCount === 1;
     if (isFirst) {
         await autoTitle(currentSessionId, text);
     }
     
-    // Now handle file upload (this happens in background)
+    // Upload file if exists
     let fileUploaded = false;
     if (hasFile) {
         try {
             showTyping();
             await uploadFile(pendingFile, currentSessionId);
             fileUploaded = true;
-            // Clear the pending file and badge
             pendingFile = null;
             if (fileBadge) fileBadge.classList.add('hidden');
             hideTyping();
         } catch (err) {
             hideTyping();
-            appendMessageToUI('assistant', `❌ Upload failed: ${err.message}. Please try again.`);
+            appendMessageToUI('assistant', `Upload failed: ${err.message}. Please try again.`);
             return;
         }
     }
     
-    // CRITICAL: If a file was uploaded, FORCE closed mode (documents only)
-    // This ensures PDF gets priority over web search
+    // If file was uploaded, force closed mode to search ONLY the PDF
     const searchMode = fileUploaded ? 'closed' : currentMode;
+    console.log('Search mode:', searchMode, 'File uploaded:', fileUploaded);
     
     showTyping();
     if (sendBtn) sendBtn.disabled = true;
@@ -490,7 +492,7 @@ async function sendMessage() {
             body: JSON.stringify({
                 question: text,
                 search_type: searchMode,
-                include_sources: false,
+                include_sources: true,
                 uploaded_document: uploadedFilename
             })
         });
@@ -500,10 +502,18 @@ async function sendMessage() {
         hideTyping();
         
         if (res.ok) {
-            let cleanAnswer = data.answer;
-            // Clean up any excessive formatting
-            cleanAnswer = cleanAnswer.replace(/[\u{1F600}-\u{1F64F}]/gu, ''); // Remove emojis if causing issues
-            appendMessageToUI('assistant', cleanAnswer);
+            // Check if we have sources from the PDF
+            const hasSources = data.sources && data.sources.length > 0;
+            console.log('Response sources:', data.sources);
+            
+            let answer = data.answer;
+            
+            // If no sources found and file was uploaded, add a helpful message
+            if (!hasSources && fileUploaded) {
+                answer = "I couldn't find the specific information in the PDF you uploaded. The file has been processed but the answer to your question wasn't found in its contents. Could you please rephrase your question or make sure the PDF contains the information you're looking for?";
+            }
+            
+            appendMessageToUI('assistant', answer);
         } else {
             appendMessageToUI('assistant', 'Sorry, something went wrong. Please try again.');
         }
