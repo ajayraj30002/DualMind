@@ -1,38 +1,15 @@
+# rag/hybrid.py
 from typing import List, Dict, Any, Optional
 from groq import Groq
 from .closed_domain import search_closed_domain
 from .open_domain import search_open_domain
 from ..config import Config
 
-# Initialize Groq client
 groq_client = Groq(api_key=Config.GROQ_API_KEY)
 
-def combine_sources(closed_results: List[Dict], open_results: List[Dict], max_sources: int = 8) -> List[Dict]:
-    """Combine and deduplicate results from both sources"""
-    
-    all_sources = []
-    
-    # Add closed domain results (user documents) - PRIORITY
-    for r in closed_results:
-        r['source_type'] = '📁 My Documents'
-        r['priority'] = 1  # Higher priority
-        all_sources.append(r)
-    
-    # Add open domain results (web search)
-    for r in open_results:
-        r['source_type'] = '🌐 Web Search'
-        r['priority'] = 2  # Lower priority
-        all_sources.append(r)
-    
-    # Return limited sources
-    return all_sources[:max_sources]
-
 def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
-    """
-    Generate a polite, helpful answer using Groq LLM
-    """
+    """Generate answer using Groq LLM - PRIORITIZES PDF CONTENT"""
     
-    # Build conversation context if available
     context_section = ""
     if conversation_context:
         context_section = f"""Previous conversation:
@@ -41,72 +18,56 @@ def generate_answer(question: str, sources: List[Dict], conversation_context: Op
 """
     
     if not sources:
-        # Polite response when no information found
-        prompt = f"""{context_section}You are DualMind, a friendly, warm, and helpful AI assistant. 
+        prompt = f"""{context_section}The user asked: "{question}"
 
-The user asked: "{question}"
+I have no information from documents or web search to answer this question.
 
-I don't have any relevant documents or web search results to answer this question.
-
-Please respond kindly explaining that you need more information. Keep it concise and helpful."""
+Please respond: "I couldn't find any information about this in your uploaded documents. Please make sure your PDF contains the relevant information or try rephrasing your question." Keep it concise."""
     else:
-        # Format sources - prioritize document sources
+        # Build context from sources
         context_parts = []
-        
-        # Separate document sources and web sources
-        doc_sources = [s for s in sources if s.get('source_type') == '📁 My Documents']
-        web_sources = [s for s in sources if s.get('source_type') == '🌐 Web Search']
-        
-        # Put document sources first (they have priority)
-        ordered_sources = doc_sources + web_sources
-        
-        for idx, source in enumerate(ordered_sources[:5], 1):
+        for idx, source in enumerate(sources[:5], 1):
             content = source.get('content', '')
             source_type = source.get('source_type', 'Source')
             
-            # Truncate if too long for memory efficiency
-            if len(content) > 1000:
-                content = content[:1000] + "..."
+            if len(content) > 1500:
+                content = content[:1500] + "..."
             
-            context_parts.append(f"[Source {idx}] {content}")
+            context_parts.append(f"[Source {idx} - {source_type}]\n{content}")
         
         doc_context = "\n\n---\n\n".join(context_parts)
         
-        prompt = f"""{context_section}You are DualMind, a helpful AI assistant.
-
-Here is information to answer the user's question:
+        prompt = f"""{context_section}Here is information from the user's uploaded PDF documents:
 
 {doc_context}
 
-Current question: "{question}"
+The user asked: "{question}"
 
-Instructions:
-1. Answer based ONLY on the information above
-2. If the information includes documents, prioritize that over web results
-3. Be concise and helpful (max 250 words)
-4. If unsure about something, say so politely
+IMPORTANT INSTRUCTIONS:
+1. Answer ONLY based on the information above from the PDF documents
+2. Do NOT make up or hallucinate any information not found in the documents
+3. If the exact answer is not in the documents, say "I couldn't find this information in the uploaded PDF"
+4. Be concise and direct - no generic advice
+5. Quote specific information from the documents when possible
 
-Your answer:"""
+Your answer based ONLY on the PDF content:"""
 
     try:
         completion = groq_client.chat.completions.create(
             model=Config.LLM_MODEL,
             messages=[
-                {"role": "system", "content": "You are DualMind, a helpful AI assistant. Be concise, accurate, and friendly."},
+                {"role": "system", "content": "You are a document search assistant. You ONLY answer based on the provided document content. NEVER make up information. If the answer isn't in the documents, say so directly."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_tokens=400  # Limit tokens for faster response
+            temperature=0.3,  # Lower temperature = less hallucination
+            max_tokens=500
         )
         
         return completion.choices[0].message.content.strip()
         
     except Exception as e:
         print(f"Groq error: {e}")
-        if sources:
-            return "I found some information that might help. Could you please rephrase your question more specifically?"
-        else:
-            return "I don't have enough information to answer that. Please upload a relevant PDF or try a different question."
+        return "I had trouble processing your request. Please try again."
 
 async def hybrid_search(
     question: str, 
@@ -115,65 +76,74 @@ async def hybrid_search(
     conversation_context: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Perform hybrid search based on specified type:
-    - "closed": Only user's documents
-    - "open": Only web search  
-    - "hybrid": Both sources (documents take priority)
+    Perform search based on type:
+    - "closed": ONLY user's documents (PDFs) - HIGHEST PRIORITY
+    - "open": Only web search
+    - "hybrid": Both (but documents take priority)
     """
     
     closed_results = []
     open_results = []
     
-    # Get closed-domain results (user's documents) - ALWAYS try this first for hybrid/closed
+    print(f"🔍 Search type requested: {search_type}")
+    
+    # ALWAYS search closed domain for 'closed' or 'hybrid'
     if search_type in ["closed", "hybrid"]:
         try:
-            closed_results = search_closed_domain(question, user_id, top_k=4)
-            print(f"📁 Documents found: {len(closed_results)} results")
+            closed_results = search_closed_domain(question, user_id, top_k=5)
+            print(f"📁 Closed domain (PDF) results: {len(closed_results)}")
+            if closed_results:
+                for r in closed_results[:2]:
+                    print(f"   - From: {r.get('filename', 'Unknown')}")
         except Exception as e:
-            print(f"Document search error: {e}")
-            closed_results = []
+            print(f"Closed domain error: {e}")
     
-    # Get open-domain results (web search) - ONLY for open/hybrid modes
-    # For hybrid mode, only do web search if document results are insufficient
-    if search_type in ["open", "hybrid"]:
-        # In hybrid mode, only search web if we have fewer than 2 document results
-        if search_type == "hybrid" and len(closed_results) >= 2:
-            print("🌐 Skipping web search - sufficient document results found")
-        else:
-            try:
-                open_results = search_open_domain(question, top_k=3)
-                print(f"🌐 Web results: {len(open_results)} results")
-            except Exception as e:
-                print(f"Web search error: {e}")
-                open_results = []
+    # ONLY search web if explicitly 'open' mode or 'hybrid' with NO document results
+    if search_type == "open":
+        try:
+            open_results = search_open_domain(question, top_k=3)
+            print(f"🌐 Web results: {len(open_results)}")
+        except Exception as e:
+            print(f"Web search error: {e}")
+    elif search_type == "hybrid" and len(closed_results) == 0:
+        # Only search web if no documents found
+        try:
+            open_results = search_open_domain(question, top_k=3)
+            print(f"🌐 Web results (fallback): {len(open_results)}")
+        except Exception as e:
+            print(f"Web search error: {e}")
     
-    # Combine sources (documents prioritized)
-    all_sources = combine_sources(closed_results, open_results)
+    # Combine sources - documents FIRST
+    all_sources = []
+    for r in closed_results:
+        r['source_type'] = '📁 PDF Document'
+        all_sources.append(r)
+    for r in open_results:
+        r['source_type'] = '🌐 Web Search'
+        all_sources.append(r)
     
-    # Generate answer with context
+    # Generate answer
     answer = generate_answer(question, all_sources, conversation_context)
     
-    # Prepare clean sources for response
+    # Prepare response sources
     response_sources = []
     for source in all_sources[:3]:
-        source_type = source.get('source_type', 'Source')
-        
-        if source_type == '📁 My Documents':
-            display_name = source.get('filename', 'Document')[:40]
+        if source.get('source_type') == '📁 PDF Document':
+            display_name = source.get('filename', 'PDF Document')[:50]
         else:
-            display_name = source.get('title', source.get('url', 'Web'))[:40]
+            display_name = source.get('title', 'Web Result')[:50]
         
         response_sources.append({
-            "type": source_type,
+            "type": source.get('source_type'),
             "title": display_name,
-            "content": source.get('content', '')[:150],
+            "content": source.get('content', '')[:200],
             "url": source.get('url', '')
         })
     
     return {
         "answer": answer,
         "sources": response_sources,
-        "search_type_used": search_type,
+        "search_type_used": "closed (PDF only)" if closed_results and search_type != "open" else search_type,
         "closed_source_count": len(closed_results),
         "open_source_count": len(open_results)
     }
