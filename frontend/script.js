@@ -5,7 +5,7 @@ let user = null;
 let currentSessionId = null;
 let currentMode = 'hybrid';
 let pendingFile = null;
-let currentSessionDocuments = []; // Track documents for current session
+let currentSessionDocuments = [];
 
 // DOM elements
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
@@ -57,7 +57,12 @@ function setupEventListeners() {
     document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
     
     sendBtn?.addEventListener('click', sendMessage);
-    messageInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    messageInput?.addEventListener('keydown', (e) => { 
+        if (e.key === 'Enter' && !e.shiftKey) { 
+            e.preventDefault(); 
+            sendMessage(); 
+        } 
+    });
     newChatBtn?.addEventListener('click', createNewSession);
     renameBtn?.addEventListener('click', renameSession);
     logoutBtn?.addEventListener('click', async () => {
@@ -251,17 +256,14 @@ async function loadSession(sessionId) {
     currentSessionId = sessionId;
     
     try {
-        // Load session documents
         await loadSessionDocuments(sessionId);
         
-        // Fetch messages
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
         
-        // Get session title
         const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -271,25 +273,13 @@ async function loadSession(sessionId) {
             chatTitleSpan.innerText = sessionInfo.title;
         }
         
-        // Render messages
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
                 messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
             } else {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = `message ${msg.role}`;
-                    // Check if message has attached document
-                    const hasDoc = msg.metadata?.filename;
-                    msgDiv.innerHTML = `
-                        <div class="message-avatar"><i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
-                        <div class="message-content">
-                            ${hasDoc ? `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(hasDoc)}</div>` : ''}
-                            ${escapeHtml(msg.content).replace(/\n/g, '<br>')}
-                        </div>
-                    `;
-                    messagesDiv.appendChild(msgDiv);
+                    appendMessageToUI(msg.role, msg.content, msg.metadata?.filename);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
@@ -345,16 +335,26 @@ function clearMessages() {
     messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
 }
 
-function addMessage(role, content, filename = null) {
+// NEW: Append message without removing welcome
+function appendMessageToUI(role, content, filename = null) {
     if (!messagesDiv) return;
+    
+    // Remove welcome message if it exists
     const welcome = messagesDiv.querySelector('.welcome');
     if (welcome) welcome.remove();
+    
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${role}`;
+    
+    let attachmentHtml = '';
+    if (filename) {
+        attachmentHtml = `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>`;
+    }
+    
     msgDiv.innerHTML = `
         <div class="message-avatar"><i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i></div>
         <div class="message-content">
-            ${filename ? `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>` : ''}
+            ${attachmentHtml}
             ${escapeHtml(content).replace(/\n/g, '<br>')}
         </div>
     `;
@@ -394,8 +394,7 @@ function onFileSelect(e) {
 async function uploadFile(file, sessionId) {
     const fd = new FormData();
     fd.append('file', file);
-    fd.append('session_id', sessionId);
-    const res = await fetch(`${API_URL}/upload`, {
+    const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: fd
@@ -409,41 +408,50 @@ async function sendMessage() {
     const text = messageInput?.value.trim();
     if (!text || !currentSessionId) return;
     
+    // Clear input
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
     let uploadedFilename = null;
-    let uploadedFileData = null;
+    let hasFile = !!pendingFile;
     
-    // Upload file if exists - force closed mode for this query
+    // CRITICAL: Show user message IMMEDIATELY with PDF attachment if present
     if (pendingFile) {
-        showTyping();
+        uploadedFilename = pendingFile.name;
+        appendMessageToUI('user', text, uploadedFilename);
+    } else {
+        appendMessageToUI('user', text);
+    }
+    
+    // Auto-title for first message
+    const isFirst = messagesDiv?.querySelectorAll('.message').length === 1;
+    if (isFirst) await autoTitle(currentSessionId, text);
+    
+    // Upload file if exists (do this after showing UI)
+    let fileUploaded = false;
+    if (pendingFile) {
         try {
-            uploadedFileData = await uploadFile(pendingFile, currentSessionId);
-            uploadedFilename = pendingFile.name;
+            showTyping();
+            await uploadFile(pendingFile, currentSessionId);
+            fileUploaded = true;
             pendingFile = null;
             if (fileBadge) fileBadge.classList.add('hidden');
             hideTyping();
         } catch (err) {
             hideTyping();
-            addMessage('assistant', `Upload failed: ${err.message}`);
+            appendMessageToUI('assistant', `❌ Upload failed: ${err.message}`);
             return;
         }
     }
     
-    // Add user message with document attachment display
-    addMessage('user', text, uploadedFilename);
-    
-    const isFirst = messagesDiv?.querySelectorAll('.message').length === 1;
-    if (isFirst) await autoTitle(currentSessionId, text);
+    // CRITICAL: If a file was uploaded, FORCE closed mode (documents only)
+    // This ensures PDF gets priority over web search
+    const searchMode = fileUploaded ? 'closed' : currentMode;
     
     showTyping();
     if (sendBtn) sendBtn.disabled = true;
     
     try {
-        // If document was uploaded, force search to closed (documents only)
-        const searchMode = uploadedFileData ? 'closed' : currentMode;
-        
         const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
             headers: {
@@ -457,25 +465,21 @@ async function sendMessage() {
                 uploaded_document: uploadedFilename
             })
         });
+        
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
         hideTyping();
+        
         if (res.ok) {
-            // Clean response - remove emojis for minimal style
+            // Clean answer (remove excessive emojis)
             let cleanAnswer = data.answer;
-            // Remove excessive emojis (keep only basic punctuation)
-            cleanAnswer = cleanAnswer.replace(/[\u{1F600}-\u{1F64F}]/gu, '');
-            cleanAnswer = cleanAnswer.replace(/[\u{1F300}-\u{1F5FF}]/gu, '');
-            cleanAnswer = cleanAnswer.replace(/[\u{1F680}-\u{1F6FF}]/gu, '');
-            cleanAnswer = cleanAnswer.replace(/[\u{2600}-\u{26FF}]/gu, '');
-            cleanAnswer = cleanAnswer.replace(/[\u{2700}-\u{27BF}]/gu, '');
-            addMessage('assistant', cleanAnswer);
+            appendMessageToUI('assistant', cleanAnswer);
         } else {
-            addMessage('assistant', 'Sorry, something went wrong.');
+            appendMessageToUI('assistant', 'Sorry, something went wrong. Please try again.');
         }
     } catch (err) {
         hideTyping();
-        addMessage('assistant', 'Connection error.');
+        appendMessageToUI('assistant', 'Connection error. Please check your network.');
     } finally {
         if (sendBtn) sendBtn.disabled = false;
         messageInput?.focus();
