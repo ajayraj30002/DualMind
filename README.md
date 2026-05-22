@@ -50,3 +50,17 @@
 
 ## 🏗️ System Architecture
 
+
+```markdown
+## 🏗️ System Architecture
+
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | Vercel (HTML/CSS/JS) |
+| **Backend** | Render + Docker (FastAPI) |
+| **Auth** | JWT + Supabase |
+| **Vector DB** | Supabase pgvector |
+| **LLM** | Groq API (Llama 3.3 70B) |
+| **Web Search** | Tavily API |
+| **CI/CD** | GitHub Actions |
+
