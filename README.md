@@ -50,17 +50,19 @@
 
 ## 🏗️ System Architecture
 
-
-```markdown
 ## 🏗️ System Architecture
 
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | Vercel (HTML/CSS/JS) |
-| **Backend** | Render + Docker (FastAPI) |
-| **Auth** | JWT + Supabase |
-| **Vector DB** | Supabase pgvector |
-| **LLM** | Groq API (Llama 3.3 70B) |
-| **Web Search** | Tavily API |
-| **CI/CD** | GitHub Actions |
+**Frontend (Vercel)** → HTML/CSS/JS + Dark UI
+
+**Backend (Render)** → FastAPI + Docker
+   - JWT Authentication
+   - PDF Processing
+   - Hybrid Search
+
+**APIs & Databases**
+   - Supabase pgvector (Vector Database)
+   - Groq LLM API (Llama 3.3 70B)
+   - Tavily Search API (Web Search)
+
+**CI/CD** → GitHub Actions builds Docker image → Pushes to Docker Hub → Render auto-deploys
 
