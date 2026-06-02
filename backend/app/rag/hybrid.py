@@ -1,7 +1,7 @@
 import os
 from typing import Any, Dict, List, Optional
 
-import httpx 
+import httpx
 from groq import Groq
 
 try:
@@ -138,7 +138,7 @@ I have no information from any PDF documents.
 
 Please respond: "I couldn't find any information about this in your uploaded PDF documents. Please make sure your PDF contains the relevant information or try uploading a different document."
 
-Keep it concise and helpful."""
+Keep it concise and helpful.""
     else:
         pdf_sources = [s for s in sources if s.get("source_type") == "PDF Document"]
         web_sources = [s for s in sources if s.get("source_type") == "Web Search"]
