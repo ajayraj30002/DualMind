@@ -10,7 +10,7 @@ from .config import Config
 from .models.schemas import (
     SignUpRequest, SignUpResponse, 
     SignInRequest, SignInResponse,
-    QueryRequest, QueryResponse, 
+    QueryRequest, QueryResponse,  
     UploadResponse
 )
 from .auth import create_access_token, get_current_user, supabase
