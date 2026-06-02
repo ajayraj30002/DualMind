@@ -17,4 +17,4 @@ def search_closed_domain(question: str, user_id: str, top_k: int = 5) -> List[Di
             "source_type": "closed"
         })
     
-    return formatted_results
+    return formatted_results 
