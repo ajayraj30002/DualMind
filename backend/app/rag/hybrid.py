@@ -9,8 +9,8 @@ try:
 except ImportError:
     from ..vector_store import search_similar_chunks
 
-    def search_closed_domain(question: str, user_id: str, top_k: int = 5):
-        return search_similar_chunks(question, user_id, top_k=top_k)
+    def search_closed_domain(question: str, user_id: str, top_k: int = 5, filename: Optional[str] = None):
+        return search_similar_chunks(question, user_id, top_k=top_k, filename=filename)
 
 try:
     from .open_domain import search_open_domain
@@ -204,6 +204,7 @@ async def hybrid_search(
     user_id: str,
     search_type: str = "hybrid",
     conversation_context: Optional[str] = None,
+    filename: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Search PDFs first, then optional web, with query rewriting and reranking."""
     retrieval_query = rewrite_query_for_retrieval(question, conversation_context)
@@ -217,7 +218,7 @@ async def hybrid_search(
 
     if search_type != "open":
         try:
-            closed_results = search_closed_domain(retrieval_query, user_id, top_k=8)
+            closed_results = search_closed_domain(retrieval_query, user_id, top_k=8, filename=filename)
             print(f"PDF results: {len(closed_results)}")
             if closed_results:
                 for result in closed_results[:2]:

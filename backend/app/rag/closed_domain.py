@@ -1,10 +1,15 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from ..vector_store import search_similar_chunks
 
-def search_closed_domain(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
+def search_closed_domain(
+    question: str,
+    user_id: str,
+    top_k: int = 5,
+    filename: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Search user's uploaded PDF documents"""
     
-    results = search_similar_chunks(question, user_id, top_k)
+    results = search_similar_chunks(question, user_id, top_k, filename=filename)
     
     print(f"📄 PDF search: {len(results)} chunks found")
     
