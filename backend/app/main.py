@@ -175,16 +175,6 @@ async def send_message(
     if not session.data:
         raise HTTPException(404, "Session not found")
     
-    # Save user message with metadata (filename if uploaded)
-    user_message = {
-        "session_id": session_id,
-        "role": "user",
-        "content": request.question
-    }
-    if request.uploaded_document:
-        user_message["metadata"] = {"filename": request.uploaded_document}
-    supabase.table("chat_messages").insert(user_message).execute()
-    
     # Get previous messages for context
     previous = supabase.table("chat_messages")\
         .select("*")\
@@ -197,6 +187,16 @@ async def send_message(
     for msg in context_messages:
         conversation.append(f"{msg['role'].upper()}: {msg['content']}")
     conversation_context = "\n".join(conversation)
+    
+    # Save user message with metadata (filename if uploaded)
+    user_message = {
+        "session_id": session_id,
+        "role": "user",
+        "content": request.question
+    }
+    if request.uploaded_document:
+        user_message["metadata"] = {"filename": request.uploaded_document}
+    supabase.table("chat_messages").insert(user_message).execute()
     
     # CRITICAL: If document uploaded, FORCE closed mode (90% PDF priority)
     effective_mode = request.search_type
