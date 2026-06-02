@@ -129,7 +129,18 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
     return successful
 
 
-def search_semantic_chunks(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
+def _filter_by_filename(results: List[Dict[str, Any]], filename: Optional[str]) -> List[Dict[str, Any]]:
+    if not filename:
+        return results
+    return [result for result in results if result.get("filename") == filename]
+
+
+def search_semantic_chunks(
+    question: str,
+    user_id: str,
+    top_k: int = 5,
+    filename: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Search for similar chunks using Supabase vector similarity."""
     print(f"Semantic search for: {question[:50]}...", flush=True)
 
@@ -144,7 +155,7 @@ def search_semantic_chunks(question: str, user_id: str, top_k: int = 5) -> List[
             {
                 "query_embedding": question_embedding,
                 "match_user_id": user_id,
-                "match_count": top_k,
+                "match_count": top_k * 3 if filename else top_k,
             },
         ).execute()
 
@@ -165,26 +176,33 @@ def search_semantic_chunks(question: str, user_id: str, top_k: int = 5) -> List[
         else:
             print("No semantic results found", flush=True)
 
-        return results
+        results = _filter_by_filename(results, filename)
+        return results[:top_k]
     except Exception as e:
         print(f"Semantic search error: {e}", flush=True)
         return []
 
 
-def search_keyword_chunks(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
+def search_keyword_chunks(
+    question: str,
+    user_id: str,
+    top_k: int = 5,
+    filename: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Lightweight BM25-style keyword search over a capped chunk set."""
     query_terms = _tokenize(question)
     if not query_terms:
         return []
 
     try:
-        response = (
+        query = (
             supabase.table("document_chunks")
             .select("filename,chunk_text,chunk_index")
             .eq("user_id", user_id)
-            .limit(KEYWORD_CANDIDATE_LIMIT)
-            .execute()
         )
+        if filename:
+            query = query.eq("filename", filename)
+        response = query.limit(KEYWORD_CANDIDATE_LIMIT).execute()
     except Exception as e:
         print(f"Keyword fetch error: {e}", flush=True)
         return []
@@ -239,11 +257,16 @@ def search_keyword_chunks(question: str, user_id: str, top_k: int = 5) -> List[D
     return results
 
 
-def search_similar_chunks(question: str, user_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
+def search_similar_chunks(
+    question: str,
+    user_id: str,
+    top_k: int = 5,
+    filename: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Hybrid PDF retrieval: semantic search plus capped keyword matching."""
-    semantic_results = search_semantic_chunks(question, user_id, top_k=top_k)
+    semantic_results = search_semantic_chunks(question, user_id, top_k=top_k, filename=filename)
     keyword_top_k = max(top_k, top_k * KEYWORD_TOP_K_MULTIPLIER)
-    keyword_results = search_keyword_chunks(question, user_id, top_k=keyword_top_k)
+    keyword_results = search_keyword_chunks(question, user_id, top_k=keyword_top_k, filename=filename)
 
     combined = _dedupe_results(semantic_results + keyword_results)
     print(f"Combined PDF results: {len(combined[:top_k])}", flush=True)

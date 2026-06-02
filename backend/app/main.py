@@ -209,7 +209,8 @@ async def send_message(
         question=request.question,
         user_id=current_user["user_id"],
         search_type=effective_mode,
-        conversation_context=conversation_context
+        conversation_context=conversation_context,
+        filename=request.uploaded_document
     )
     
     # Save assistant message
