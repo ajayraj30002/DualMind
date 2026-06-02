@@ -12,6 +12,14 @@ let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
 let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
 let modeBtns, loadingOverlay;
 
+const WELCOME_HTML = `
+    <div class="welcome">
+        <i class="fas fa-brain"></i>
+        <h3>Ready when you are</h3>
+        <p>Ask from your PDFs, the web, or both. Use Hybrid for the best experience.</p>
+    </div>
+`;
+
 document.addEventListener('DOMContentLoaded', () => {
     loginPage = document.getElementById('loginPage');
     chatPage = document.getElementById('chatPage');
@@ -274,7 +282,7 @@ async function loadSession(sessionId) {
         
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
-                messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
+                messagesDiv.innerHTML = WELCOME_HTML;
             } else {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
@@ -331,7 +339,7 @@ async function deleteSession(sessionId) {
 
 function clearMessages() {
     if (!messagesDiv) return;
-    messagesDiv.innerHTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>How can I help?</h3><p>Upload PDFs or ask anything</p></div>`;
+    messagesDiv.innerHTML = WELCOME_HTML;
 }
 
 // THIS IS THE KEY FUNCTION - Shows PDF badge above user message
