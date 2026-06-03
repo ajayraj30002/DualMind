@@ -18,6 +18,9 @@ except ImportError:
     def search_open_domain(question: str, top_k: int = 3):
         return []
 
+# Import the new response formatter
+from .response_formatter import format_response_for_query
+
 from ..config import Config
 
 groq_client = Groq(api_key=Config.GROQ_API_KEY)
@@ -134,11 +137,11 @@ def generate_answer(question: str, sources: List[Dict], conversation_context: Op
     if not sources:
         prompt = f"""{context_section}The user asked: "{question}"
 
-I have no information from any PDF documents.
+I have no information from any PDF documents or web search.
 
-Please respond: "I couldn't find any information about this in your uploaded PDF documents. Please make sure your PDF contains the relevant information or try uploading a different document."
+Please respond naturally and briefly: "I don't have that information available."
 
-Keep it concise and helpful."""
+Keep it conversational and concise."""
     else:
         pdf_sources = [s for s in sources if s.get("source_type") == "PDF Document"]
         web_sources = [s for s in sources if s.get("source_type") == "Web Search"]
@@ -246,26 +249,20 @@ async def hybrid_search(
 
     answer = generate_answer(question, all_sources, conversation_context)
 
-    response_sources = []
-    for source in all_sources[:3]:
-        if source.get("source_type") == "PDF Document":
-            display_name = source.get("filename", "PDF Document")[:40]
-        else:
-            display_name = source.get("title", "Web Result")[:40]
-
-        response_sources.append(
-            {
-                "type": source.get("source_type"),
-                "title": display_name,
-                "content": source.get("content", "")[:200],
-                "url": source.get("url", ""),
-            }
-        )
-
+    # Use the new smart formatter to determine what to show
     mode_used = "PDF Document" if closed_results else ("Web Search" if open_results else "No results")
+    
+    formatted_answer, response_sources = format_response_for_query(
+        answer=answer,
+        sources=all_sources,
+        search_type_used=mode_used,
+        closed_source_count=len(closed_results),
+        open_source_count=len(open_results),
+        question=question
+    )
 
     return {
-        "answer": answer,
+        "answer": formatted_answer,
         "sources": response_sources,
         "search_type_used": mode_used,
         "closed_source_count": len(closed_results),
