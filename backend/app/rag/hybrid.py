@@ -25,6 +25,39 @@ groq_client = Groq(api_key=Config.GROQ_API_KEY)
 MAX_RERANK_CANDIDATES = int(os.getenv("MAX_RERANK_CANDIDATES", "10"))
 MAX_RERANK_DOC_CHARS = int(os.getenv("MAX_RERANK_DOC_CHARS", "1200"))
 
+# Relevance threshold for PDF search results (similarity score)
+MIN_RELEVANCE_SCORE = float(os.getenv("MIN_RELEVANCE_SCORE", "0.4"))
+
+
+def is_conversational_query(question: str) -> bool:
+    """Detect if query is casual/conversational vs. research-focused."""
+    import re
+    
+    question_lower = question.lower().strip()
+    
+    # Conversational patterns
+    casual_patterns = [
+        r'^(hey|hi|hello|how are you|what\'?s up|yo|sup|hiya)',
+        r'^(thanks|thank you|great|cool|awesome|nice)',
+        r'^(tell me|can you|help me)',
+    ]
+    
+    for pattern in casual_patterns:
+        if re.match(pattern, question_lower):
+            if len(question.split()) < 5:
+                return True
+    
+    # Very short questions tend to be casual
+    if len(question.split()) < 3:
+        return True
+    
+    return False
+
+
+def filter_results_by_relevance(results: List[Dict[str, Any]], min_score: float = MIN_RELEVANCE_SCORE) -> List[Dict[str, Any]]:
+    """Filter results by relevance score threshold. Returns only high-relevance results."""
+    return [r for r in results if r.get('similarity', r.get('score', 0)) >= min_score]
+
 
 def rewrite_query_for_retrieval(question: str, conversation_context: Optional[str] = None) -> str:
     """Turn a follow-up question into a standalone retrieval query."""
@@ -125,6 +158,11 @@ def rerank_with_cohere(query: str, sources: List[Dict[str, Any]], top_n: int = 5
         return sources[:top_n]
 
 
+def generate_friendly_no_result() -> str:
+    """Generate a friendly response when no relevant information is found."""
+    return "I don't have that information available."
+
+
 def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
     """Generate answer using Groq LLM. PDF content remains the primary source."""
     context_section = ""
@@ -134,11 +172,11 @@ def generate_answer(question: str, sources: List[Dict], conversation_context: Op
     if not sources:
         prompt = f"""{context_section}The user asked: "{question}"
 
-I have no information from any PDF documents.
+You have no relevant information to answer this question.
 
-Please respond: "I couldn't find any information about this in your uploaded PDF documents. Please make sure your PDF contains the relevant information or try uploading a different document."
+Please respond naturally and briefly: "I don't have that information available."
 
-Keep it concise and helpful."""
+Keep it conversational and concise."""
     else:
         pdf_sources = [s for s in sources if s.get("source_type") == "PDF Document"]
         web_sources = [s for s in sources if s.get("source_type") == "Web Search"]
@@ -199,6 +237,32 @@ Your answer based on the retrieved sources:"""
         return "I had trouble processing your request. Please try again."
 
 
+def sanitize_verbose_response(answer: str, is_conversational: bool = False) -> str:
+    """Clean up verbose no-match responses for better UX."""
+    import re
+    
+    # If it's a conversational query and no match, use simple friendly response
+    if is_conversational and "couldn't find" in answer.lower():
+        return "I don't see that in your documents."
+    
+    # Remove verbose source listings
+    patterns = [
+        r"The provided PDFs contain.*?(?:but|and) none of them",
+        r"The documents appear to contain.*?but none of them",
+        r"I couldn't find any relevant information related to .* in your uploaded PDF documents\.",
+        r"Please make sure your PDF contains the relevant information or try uploading a different document\.",
+    ]
+    
+    result = answer
+    for pattern in patterns:
+        result = re.sub(pattern, "", result, flags=re.IGNORECASE)
+    
+    # Clean extra whitespace
+    result = re.sub(r'\s+', ' ', result).strip()
+    
+    return result if result else "I don't have that information available."
+
+
 async def hybrid_search(
     question: str,
     user_id: str,
@@ -206,7 +270,11 @@ async def hybrid_search(
     conversation_context: Optional[str] = None,
     filename: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Search PDFs first, then optional web, with query rewriting and reranking."""
+    """Search PDFs first, then optional web, with smart fallback and conversation awareness."""
+    
+    is_casual = is_conversational_query(question)
+    print(f"Query type: {'conversational' if is_casual else 'research'}")
+    
     retrieval_query = rewrite_query_for_retrieval(question, conversation_context)
     if retrieval_query != question:
         print(f"Rewritten retrieval query: {retrieval_query}")
@@ -219,13 +287,19 @@ async def hybrid_search(
     if search_type != "open":
         try:
             closed_results = search_closed_domain(retrieval_query, user_id, top_k=8, filename=filename)
-            print(f"PDF results: {len(closed_results)}")
+            print(f"PDF results (before relevance filter): {len(closed_results)}")
+            
+            # Filter by relevance threshold
+            closed_results = filter_results_by_relevance(closed_results, MIN_RELEVANCE_SCORE)
+            print(f"PDF results (after relevance filter): {len(closed_results)}")
+            
             if closed_results:
                 for result in closed_results[:2]:
-                    print(f"   - From PDF: {result.get('filename', 'Unknown')}")
+                    print(f"   - From PDF: {result.get('filename', 'Unknown')} (score: {result.get('similarity', 0):.2f})")
         except Exception as e:
             print(f"PDF search error: {e}")
 
+    # Fall back to web search if: open search type OR (hybrid mode AND no good PDF results)
     if search_type == "open" or (search_type == "hybrid" and len(closed_results) == 0):
         try:
             open_results = search_open_domain(retrieval_query, top_k=3)
@@ -245,22 +319,29 @@ async def hybrid_search(
     all_sources = rerank_with_cohere(retrieval_query, all_sources, top_n=5)
 
     answer = generate_answer(question, all_sources, conversation_context)
+    
+    # Clean up verbose responses for better UX
+    answer = sanitize_verbose_response(answer, is_conversational=is_casual)
 
+    # Determine what sources to show
     response_sources = []
-    for source in all_sources[:3]:
-        if source.get("source_type") == "PDF Document":
-            display_name = source.get("filename", "PDF Document")[:40]
-        else:
-            display_name = source.get("title", "Web Result")[:40]
+    
+    # For casual queries with results, don't show sources
+    if not is_casual or len(all_sources) == 0:
+        for source in all_sources[:3]:
+            if source.get("source_type") == "PDF Document":
+                display_name = source.get("filename", "PDF Document")[:40]
+            else:
+                display_name = source.get("title", "Web Result")[:40]
 
-        response_sources.append(
-            {
-                "type": source.get("source_type"),
-                "title": display_name,
-                "content": source.get("content", "")[:200],
-                "url": source.get("url", ""),
-            }
-        )
+            response_sources.append(
+                {
+                    "type": source.get("source_type"),
+                    "title": display_name,
+                    "content": source.get("content", "")[:200],
+                    "url": source.get("url", ""),
+                }
+            )
 
     mode_used = "PDF Document" if closed_results else ("Web Search" if open_results else "No results")
 
