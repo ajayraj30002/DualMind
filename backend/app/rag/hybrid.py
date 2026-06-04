@@ -356,13 +356,22 @@ The user asked: "{question}"
 
 INSTRUCTIONS:
 1. Use the PDF content above as your primary source of truth.
-2. Understand the content deeply and answer the user's question in a clear, helpful, and well-structured way.
-3. Use your own words to explain, summarize, or present the information — do not just copy-paste raw sentences from the document.
-4. Extract and present ALL relevant details from the document that relate to the question — even if they are scattered across multiple chunks. For example, if asked about a person, include their name, role, skills, experience, contact info, goals, and any other relevant details present in the document.
-5. Use bullet points or sections where it genuinely improves readability (e.g. listing skills, experience, contact details).
-6. Do NOT fabricate or infer information that is not present in the document.
-7. If the document truly does not contain the answer, say: "I couldn't find this information in the uploaded document."
-8. Do not expose internal labels like "chunk", "PDF Document", or "source" in your answer.
+2. Understand the content deeply and answer clearly and completely.
+3. Use your own words — do not copy-paste raw sentences.
+4. Extract ALL relevant details, even if scattered across chunks.
+5. Do NOT fabricate or infer anything not in the document.
+6. If the document does not contain the answer, say: "I couldn't find this information in the uploaded document."
+7. Do not mention internal labels like "chunk", "PDF Document", or "source".
+
+FORMATTING RULES — follow these strictly:
+- Begin with a short 1-2 sentence intro that directly answers or frames the topic.
+- Use ## bold headers to separate major sections or categories (e.g. ## Program Outcomes, ## Program Specific Outcomes).
+- Under each header, use a clean bullet list using " - " for individual points.
+- Each bullet must be a complete, readable sentence or phrase — never a raw fragment.
+- If the document has numbered items (like PO1, PO2, PSO1), preserve that numbering inside the bullets: e.g. "- **PO1:** Description here."
+- Add a blank line between each section for visual breathing room.
+- Do NOT dump all text into one paragraph — always break into sections and bullets.
+- End with a short 1-2 sentence closing summary if the content warrants it.
 
 Answer:"""
         else:
@@ -376,8 +385,14 @@ INSTRUCTIONS:
 1. Answer using the web search results above as your source.
 2. Explain the information clearly and helpfully in your own words.
 3. If the snippets lack enough detail, say what is missing.
-4. Do not mention internal labels like "Web Source", "snippet", or "retrieved content" in the final answer.
+4. Do not mention internal labels like "Web Source", "snippet", or "retrieved content".
 5. Give a thorough, direct answer.
+
+FORMATTING RULES:
+- Use ## headers to separate major topics if the answer covers multiple areas.
+- Use bullet points ( - ) for lists of items, features, or steps.
+- Keep paragraphs short — 2-3 sentences max.
+- Add blank lines between sections.
 
 Answer:"""
 
@@ -388,17 +403,19 @@ Answer:"""
                 {
                     "role": "system",
                     "content": (
-                        "You are an intelligent AI assistant. When given document content, "
-                        "you read it carefully, understand it fully, and answer the user's question "
-                        "in a clear, well-structured, and informative way — like a knowledgeable human would. "
-                        "Never blindly copy-paste document text. Never fabricate information. "
-                        "Present extracted details in a readable format using bullet points or sections when helpful."
+                        "You are an intelligent AI assistant. When given document or web content, "
+                        "you read it carefully, understand it fully, and present your answer in a "
+                        "clean, well-structured format using markdown — with headers (##), bullet points ( - ), "
+                        "and bold text (**text**) where appropriate. "
+                        "Never dump text into a single congested paragraph. "
+                        "Always break content into clearly labelled sections with breathing room between them. "
+                        "Never fabricate information. Never copy-paste raw document text."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.4,
-            max_tokens=900,
+            max_tokens=1200,
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
