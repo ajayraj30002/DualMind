@@ -75,20 +75,15 @@ def is_live_web_query(question: str) -> bool:
 
 
 def is_document_query(question: str, filename: Optional[str] = None) -> bool:
-    """Fallback detector for document-oriented prompts."""
-    if not filename:
-        return False
-
+    """Check if question likely refers to an uploaded document."""
+    # If there's a file uploaded, treat ANY question as potentially document-related
+    if filename:
+        return True
+    
+    # Fallback: check for document-related words
     import re
-
     question_lower = question.lower().strip()
-    document_patterns = [
-        r"\b(pdf|document|file|attachment|uploaded|this)\b",
-        r"\b(summarize|summary|details|detail|explain|overview|key points|tell me about)\b",
-        r"^tell details$",
-        r"^what is this about",
-    ]
-    return any(re.search(pattern, question_lower) for pattern in document_patterns)
+    return bool(re.search(r"\b(pdf|document|file|attachment|this|uploaded)\b", question_lower))
 
 
 def classify_query_intent(
@@ -98,6 +93,13 @@ def classify_query_intent(
     conversation_context: Optional[str] = None,
 ) -> str:
     """Classify how the assistant should answer without generating the answer itself."""
+    
+    # CRITICAL: If a file is uploaded, automatically treat as document intent
+    # This overrides any other classification - PDF takes priority
+    if filename:
+        print(f"📄 File uploaded: {filename} - forcing document intent")
+        return "document"
+    
     search_type = (search_type or "hybrid").lower()
     if search_type == "closed":
         return "document"
@@ -143,6 +145,7 @@ Label only:"""
     except Exception as e:
         print(f"Intent routing error: {e}")
 
+    # Fallback detectors (only used if LLM routing fails)
     if is_conversational_query(question):
         return "conversation"
     if is_live_web_query(question):
