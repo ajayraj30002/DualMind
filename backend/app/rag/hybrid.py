@@ -348,23 +348,23 @@ Keep the answer useful and concise."""
         doc_context = "\n\n---\n\n".join(context_parts)
 
         if pdf_sources:
-            prompt = f"""{context_section}Here is information from the user's uploaded PDF documents:
+            prompt = f"""{context_section}Here is information extracted from the user's uploaded PDF document(s):
 
 {doc_context}
 
 The user asked: "{question}"
 
-CRITICAL INSTRUCTIONS:
-1. Answer based ONLY on the PDF DOCUMENTS above when PDF sources are present.
-2. If the PDF contains the answer, use it EXACTLY as stated. Do NOT add categories or sections that are not explicitly mentioned.
-3. Do NOT invent headings like "Interests:", "Background:", or any other labels that are not directly present in the document text.
-4. Only state what is explicitly written. For example, if the document lists "software engineering, artificial intelligence, and backend development" under a sentence about what the person is looking for, do NOT relabel it as "Interests".
-5. If the PDF does NOT contain the answer, say: "I couldn't find this information in your uploaded PDF document."
-6. Do NOT use general knowledge or make up information.
-7. Do not mention internal labels like "PDF Document", "source", "chunk", or "retrieved content" in the final answer.
-8. Keep the answer faithful to the original text - quote directly when possible.
+INSTRUCTIONS:
+1. Use the PDF content above as your primary source of truth.
+2. Understand the content deeply and answer the user's question in a clear, helpful, and well-structured way.
+3. Use your own words to explain, summarize, or present the information — do not just copy-paste raw sentences from the document.
+4. Extract and present ALL relevant details from the document that relate to the question — even if they are scattered across multiple chunks. For example, if asked about a person, include their name, role, skills, experience, contact info, goals, and any other relevant details present in the document.
+5. Use bullet points or sections where it genuinely improves readability (e.g. listing skills, experience, contact details).
+6. Do NOT fabricate or infer information that is not present in the document.
+7. If the document truly does not contain the answer, say: "I couldn't find this information in the uploaded document."
+8. Do not expose internal labels like "chunk", "PDF Document", or "source" in your answer.
 
-Your answer based ONLY on the PDF content:"""
+Answer:"""
         else:
             prompt = f"""{context_section}Here is current information from web search:
 
@@ -372,13 +372,14 @@ Your answer based ONLY on the PDF content:"""
 
 The user asked: "{question}"
 
-Instructions:
-1. Answer using ONLY the web search snippets above.
-2. If the snippets do not contain enough information, say what is missing.
-3. Do not mention internal labels like "Web Source", "source", "snippet", or "retrieved content" in the final answer.
-4. Give a medium-detailed, direct answer.
+INSTRUCTIONS:
+1. Answer using the web search results above as your source.
+2. Explain the information clearly and helpfully in your own words.
+3. If the snippets lack enough detail, say what is missing.
+4. Do not mention internal labels like "Web Source", "snippet", or "retrieved content" in the final answer.
+5. Give a thorough, direct answer.
 
-Your answer based on the retrieved sources:"""
+Answer:"""
 
     try:
         completion = groq_client.chat.completions.create(
@@ -386,12 +387,18 @@ Your answer based on the retrieved sources:"""
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful AI assistant that answers STRICTLY from the provided evidence. Never invent categories, headings, or information not explicitly present in the source text. Quote directly when possible.",
+                    "content": (
+                        "You are an intelligent AI assistant. When given document content, "
+                        "you read it carefully, understand it fully, and answer the user's question "
+                        "in a clear, well-structured, and informative way — like a knowledgeable human would. "
+                        "Never blindly copy-paste document text. Never fabricate information. "
+                        "Present extracted details in a readable format using bullet points or sections when helpful."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.2,
-            max_tokens=500,
+            temperature=0.4,
+            max_tokens=900,
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
