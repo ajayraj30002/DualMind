@@ -13,6 +13,12 @@ async def test_greeting_skips_retrieval_even_with_attached_document(monkeypatch)
 
     monkeypatch.setattr(hybrid, "search_closed_domain", fail_closed)
     monkeypatch.setattr(hybrid, "search_open_domain", fail_open)
+    monkeypatch.setattr(hybrid, "classify_query_intent", lambda **kwargs: "conversation")
+    monkeypatch.setattr(
+        hybrid,
+        "generate_conversational_answer",
+        lambda question, conversation_context=None: "Good to see you. What can we work on?",
+    )
 
     result = await hybrid.hybrid_search(
         "hi",
@@ -21,8 +27,12 @@ async def test_greeting_skips_retrieval_even_with_attached_document(monkeypatch)
         filename="KTU CGPA to Percentage Conversion Certificate.pdf",
     )
 
-    assert result["answer"] == "Hi! How can I help you today?"
+    assert result["answer"] == "Good to see you. What can we work on?"
     assert result["search_type_used"] == "Conversation"
+
+
+def test_joined_goodmorning_is_conversation():
+    assert hybrid.is_conversational_query("goodmorning") is True
 
 
 @pytest.mark.asyncio
@@ -41,6 +51,12 @@ async def test_tell_details_uses_pdf_retrieval(monkeypatch):
 
     monkeypatch.setattr(hybrid, "search_closed_domain", fake_closed)
     monkeypatch.setattr(hybrid, "search_open_domain", lambda *args, **kwargs: [])
+    monkeypatch.setattr(hybrid, "classify_query_intent", lambda **kwargs: "document")
+    monkeypatch.setattr(
+        hybrid,
+        "rewrite_query_for_retrieval",
+        lambda question, conversation_context=None, filename=None, intent="hybrid": "summary details from PlacementNews.pdf",
+    )
     monkeypatch.setattr(
         hybrid,
         "generate_answer",
@@ -65,6 +81,7 @@ async def test_live_query_uses_web_even_with_attached_document(monkeypatch):
         raise AssertionError("weather should not be trapped in PDF search")
 
     monkeypatch.setattr(hybrid, "search_closed_domain", fail_closed)
+    monkeypatch.setattr(hybrid, "classify_query_intent", lambda **kwargs: "web")
     monkeypatch.setattr(
         hybrid,
         "search_open_domain",
@@ -98,6 +115,7 @@ async def test_live_query_uses_web_even_with_attached_document(monkeypatch):
 @pytest.mark.asyncio
 async def test_hybrid_falls_back_to_web_when_pdf_has_no_relevant_results(monkeypatch):
     monkeypatch.setattr(hybrid, "search_closed_domain", lambda *args, **kwargs: [])
+    monkeypatch.setattr(hybrid, "classify_query_intent", lambda **kwargs: "hybrid")
     monkeypatch.setattr(
         hybrid,
         "search_open_domain",
