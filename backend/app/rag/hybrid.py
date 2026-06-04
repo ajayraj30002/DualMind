@@ -26,7 +26,7 @@ MAX_RERANK_CANDIDATES = int(os.getenv("MAX_RERANK_CANDIDATES", "10"))
 MAX_RERANK_DOC_CHARS = int(os.getenv("MAX_RERANK_DOC_CHARS", "1200"))
 
 # Relevance threshold for PDF search results (similarity score)
-MIN_RELEVANCE_SCORE = float(os.getenv("MIN_RELEVANCE_SCORE", "0.4"))
+MIN_RELEVANCE_SCORE = float(os.getenv("MIN_RELEVANCE_SCORE", "0.2"))  # from 0.4 to 0.2
 QUERY_INTENTS = {"conversation", "document", "web", "hybrid"}
 
 
