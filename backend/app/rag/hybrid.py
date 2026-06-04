@@ -353,13 +353,15 @@ The user asked: "{question}"
 
 CRITICAL INSTRUCTIONS:
 1. Answer based ONLY on the PDF DOCUMENTS above when PDF sources are present.
-2. If the PDF contains the answer, use it directly.
-3. If the PDF does NOT contain the answer, say: "I couldn't find this information in your uploaded PDF document."
-4. Do NOT use general knowledge or make up information.
-5. Do not mention internal labels like "PDF Document", "source", "chunk", or "retrieved content" in the final answer.
-6. Give a medium-detailed answer with clear bullets when several details are present.
+2. If the PDF contains the answer, use it EXACTLY as stated. Do NOT add categories or sections that are not explicitly mentioned.
+3. Do NOT invent headings like "Interests:", "Background:", or any other labels that are not directly present in the document text.
+4. Only state what is explicitly written. For example, if the document lists "software engineering, artificial intelligence, and backend development" under a sentence about what the person is looking for, do NOT relabel it as "Interests".
+5. If the PDF does NOT contain the answer, say: "I couldn't find this information in your uploaded PDF document."
+6. Do NOT use general knowledge or make up information.
+7. Do not mention internal labels like "PDF Document", "source", "chunk", or "retrieved content" in the final answer.
+8. Keep the answer faithful to the original text - quote directly when possible.
 
-Your answer based on the retrieved sources:"""
+Your answer based ONLY on the PDF content:"""
         else:
             prompt = f"""{context_section}Here is current information from web search:
 
@@ -381,7 +383,7 @@ Your answer based on the retrieved sources:"""
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful AI assistant. Answer from the provided evidence when sources are supplied. Do not expose internal source labels or retrieval mechanics.",
+                    "content": "You are a helpful AI assistant that answers STRICTLY from the provided evidence. Never invent categories, headings, or information not explicitly present in the source text. Quote directly when possible.",
                 },
                 {"role": "user", "content": prompt},
             ],
