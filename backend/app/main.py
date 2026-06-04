@@ -165,7 +165,7 @@ async def send_message(
     request: QueryRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Send a message - PRIORITIZES PDF if uploaded_document is provided"""
+    """Send a chat message using the user's selected retrieval mode."""
     
     session = supabase.table("chat_sessions")\
         .select("*")\
@@ -198,11 +198,7 @@ async def send_message(
         user_message["metadata"] = {"filename": request.uploaded_document}
     supabase.table("chat_messages").insert(user_message).execute()
     
-    # CRITICAL: If document uploaded, FORCE closed mode (90% PDF priority)
     effective_mode = request.search_type
-    if request.uploaded_document:
-        effective_mode = 'closed'
-        print(f"📄 Document '{request.uploaded_document}' uploaded - forcing PDF-only mode")
     
     # Hybrid search with the effective mode
     result = await hybrid_search(

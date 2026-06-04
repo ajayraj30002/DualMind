@@ -495,8 +495,7 @@ async function sendMessage() {
         }
     }
     
-    // Force closed mode if file was uploaded (only search PDFs)
-    const searchMode = fileUploaded ? 'closed' : currentMode;
+    const searchMode = currentMode;
     console.log('🔍 Search mode:', searchMode, 'File uploaded:', fileUploaded);
     
     showTyping();
@@ -522,18 +521,9 @@ async function sendMessage() {
         hideTyping();
         
         if (res.ok) {
-            let answer = data.answer;
-            
-            // Check if we got sources from the PDF
-            const hasSources = data.sources && data.sources.length > 0;
             console.log('📚 Response sources:', data.sources);
             
-            // If file was uploaded but no sources found, show helpful message
-            if (fileUploaded && !hasSources) {
-                answer = "I couldn't find the specific information in the PDF you uploaded. The file has been processed but the answer to your question wasn't found in its contents. Could you please rephrase your question or make sure the PDF contains the information you're looking for?";
-            }
-            
-            addMessageToChat('assistant', answer);
+            addMessageToChat('assistant', data.answer);
         } else {
             addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
         }

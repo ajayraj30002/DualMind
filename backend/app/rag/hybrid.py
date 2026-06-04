@@ -54,6 +54,37 @@ def is_conversational_query(question: str) -> bool:
     return False
 
 
+def is_live_web_query(question: str) -> bool:
+    """Detect questions that need current/open-web information."""
+    import re
+
+    question_lower = question.lower().strip()
+    live_patterns = [
+        r"\bweather\b",
+        r"\btemperature\b",
+        r"\bforecast\b",
+        r"\bnews\b",
+        r"\blatest\b",
+        r"\btoday\b",
+        r"\bcurrent\b",
+        r"\bnow\b",
+        r"\bstock\b",
+        r"\bprice\b",
+        r"\bscore\b",
+    ]
+    return any(re.search(pattern, question_lower) for pattern in live_patterns)
+
+
+def generate_conversational_answer(question: str) -> str:
+    """Handle simple assistant chatter without unnecessary retrieval."""
+    question_lower = question.lower().strip()
+    if question_lower.startswith(("hi", "hello", "hey", "yo", "sup", "hiya")):
+        return "Hi! How can I help you today?"
+    if question_lower.startswith(("thanks", "thank you")):
+        return "You're welcome."
+    return "I'm here. What would you like to work on?"
+
+
 def filter_results_by_relevance(results: List[Dict[str, Any]], min_score: float = MIN_RELEVANCE_SCORE) -> List[Dict[str, Any]]:
     """Filter results by relevance score threshold. Returns only high-relevance results."""
     return [r for r in results if r.get('similarity', r.get('score', 0)) >= min_score]
@@ -164,7 +195,7 @@ def generate_friendly_no_result() -> str:
 
 
 def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
-    """Generate answer using Groq LLM. PDF content remains the primary source."""
+    """Generate an answer using the source type that actually supplied evidence."""
     context_section = ""
     if conversation_context:
         context_section = f"Previous conversation:\n{conversation_context}\n\n"
@@ -193,7 +224,7 @@ Keep it conversational and concise."""
                 context_parts.append(f"[PDF Document: {filename}]\n{content}")
 
         if web_sources and not pdf_sources:
-            context_parts.append("\nFROM WEB SEARCH (no PDF found):")
+            context_parts.append("FROM WEB SEARCH:")
             for idx, source in enumerate(web_sources[:3], 1):
                 content = source.get("content", "")
                 if len(content) > 800:
@@ -202,7 +233,8 @@ Keep it conversational and concise."""
 
         doc_context = "\n\n---\n\n".join(context_parts)
 
-        prompt = f"""{context_section}Here is information from the user's uploaded PDF documents (PRIMARY SOURCE):
+        if pdf_sources:
+            prompt = f"""{context_section}Here is information from the user's uploaded PDF documents:
 
 {doc_context}
 
@@ -217,6 +249,19 @@ CRITICAL INSTRUCTIONS:
 6. Keep your answer concise (2-3 sentences max unless more is needed).
 
 Your answer based on the retrieved sources:"""
+        else:
+            prompt = f"""{context_section}Here is current information from web search:
+
+{doc_context}
+
+The user asked: "{question}"
+
+Instructions:
+1. Answer using ONLY the web search snippets above.
+2. If the snippets do not contain enough information, say what is missing.
+3. Keep your answer concise and useful.
+
+Your answer based on the retrieved sources:"""
 
     try:
         completion = groq_client.chat.completions.create(
@@ -224,7 +269,7 @@ Your answer based on the retrieved sources:"""
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a document search assistant. Answer only from the provided retrieved content. If the answer is not there, say so directly. Be concise.",
+                    "content": "You are a helpful AI assistant. Answer only from the provided retrieved content when sources are supplied. Be concise.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -271,9 +316,26 @@ async def hybrid_search(
     filename: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Search PDFs first, then optional web, with smart fallback and conversation awareness."""
-    
+    search_type = (search_type or "hybrid").lower()
+    if search_type not in {"closed", "open", "hybrid"}:
+        search_type = "hybrid"
+
     is_casual = is_conversational_query(question)
+    needs_live_web = is_live_web_query(question)
     print(f"Query type: {'conversational' if is_casual else 'research'}")
+
+    if is_casual and search_type != "closed" and not needs_live_web:
+        return {
+            "answer": generate_conversational_answer(question),
+            "sources": [],
+            "search_type_used": "Conversation",
+            "closed_source_count": 0,
+            "open_source_count": 0,
+            "rewritten_query": question,
+        }
+
+    if search_type == "hybrid" and needs_live_web:
+        search_type = "open"
     
     retrieval_query = rewrite_query_for_retrieval(question, conversation_context)
     if retrieval_query != question:
