@@ -26,6 +26,40 @@ async def test_greeting_skips_retrieval_even_with_attached_document(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_tell_details_uses_pdf_retrieval(monkeypatch):
+    closed_called = {"value": False}
+
+    def fake_closed(question, user_id, top_k=5, filename=None):
+        closed_called["value"] = True
+        return [
+            {
+                "content": "PlacementNews.pdf says placements begin in July.",
+                "filename": "PlacementNews.pdf",
+                "similarity": 0.91,
+            }
+        ]
+
+    monkeypatch.setattr(hybrid, "search_closed_domain", fake_closed)
+    monkeypatch.setattr(hybrid, "search_open_domain", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        hybrid,
+        "generate_answer",
+        lambda question, sources, conversation_context=None: "Placements begin in July.",
+    )
+
+    result = await hybrid.hybrid_search(
+        "tell details",
+        user_id="user-1",
+        search_type="hybrid",
+        filename="PlacementNews.pdf",
+    )
+
+    assert closed_called["value"] is True
+    assert result["answer"] == "Placements begin in July."
+    assert result["closed_source_count"] == 1
+
+
+@pytest.mark.asyncio
 async def test_live_query_uses_web_even_with_attached_document(monkeypatch):
     def fail_closed(*args, **kwargs):
         raise AssertionError("weather should not be trapped in PDF search")

@@ -34,24 +34,17 @@ def is_conversational_query(question: str) -> bool:
     import re
     
     question_lower = question.lower().strip()
-    
-    # Conversational patterns
-    casual_patterns = [
-        r'^(hey|hi|hello|how are you|what\'?s up|yo|sup|hiya)',
-        r'^(thanks|thank you|great|cool|awesome|nice)',
-        r'^(tell me|can you|help me)',
+
+    greeting_patterns = [
+        r'^(hey|hi|hello|yo|sup|hiya)(\b|[!.?]|$)',
+        r'^how are you(\b|[!.?]|$)',
+        r'^(thanks|thank you|great|cool|awesome|nice)(\b|[!.?]|$)',
+        r'^(good morning|good afternoon|good evening)(\b|[!.?]|$)',
+        r'^bye(\b|[!.?]|$)',
+        r'^goodbye(\b|[!.?]|$)',
     ]
-    
-    for pattern in casual_patterns:
-        if re.match(pattern, question_lower):
-            if len(question.split()) < 5:
-                return True
-    
-    # Very short questions tend to be casual
-    if len(question.split()) < 3:
-        return True
-    
-    return False
+
+    return any(re.match(pattern, question_lower) for pattern in greeting_patterns)
 
 
 def is_live_web_query(question: str) -> bool:
