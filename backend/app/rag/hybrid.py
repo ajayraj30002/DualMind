@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any, Dict, List, Optional
 
@@ -18,112 +19,102 @@ except ImportError:
     def search_open_domain(question: str, top_k: int = 3):
         return []
 
+try:
+    from .closed_domain import supabase as closed_supabase
+except ImportError:
+    closed_supabase = None
+
 from ..config import Config
 
 groq_client = Groq(api_key=Config.GROQ_API_KEY)
 
 MAX_RERANK_CANDIDATES = int(os.getenv("MAX_RERANK_CANDIDATES", "10"))
 MAX_RERANK_DOC_CHARS = int(os.getenv("MAX_RERANK_DOC_CHARS", "1200"))
+MIN_RELEVANCE_SCORE = float(os.getenv("MIN_RELEVANCE_SCORE", "0.2"))
 
-# Relevance threshold for PDF search results (similarity score)
-MIN_RELEVANCE_SCORE = float(os.getenv("MIN_RELEVANCE_SCORE", "0.2"))  # from 0.4 to 0.2
-QUERY_INTENTS = {"conversation", "document", "web", "hybrid"}
+# ─────────────────────────────────────────────
+# AGENTIC ROUTER
+# One Groq call that does 3 jobs:
+#   1. Classify intent
+#   2. Decide retrieval mode
+#   3. Rewrite query (handles follow-ups too)
+# ─────────────────────────────────────────────
 
+VALID_INTENTS = {
+    "FACTUAL_LOOKUP",
+    "SUMMARIZE",
+    "GENERATE_NOTES",
+    "COMPARE",
+    "WEB_SEARCH",
+    "CASUAL_CHAT",
+    "CONVERSATION_RECALL",
+}
 
-def is_conversational_query(question: str) -> bool:
-    """Fallback detector for casual conversation when LLM intent routing is unavailable."""
-    import re
-    
-    question_lower = re.sub(r"\s+", " ", question.lower().strip())
-    compact_question = re.sub(r"[^a-z0-9]", "", question_lower)
-
-    greeting_patterns = [
-        r'^(hey|hi|hello|yo|sup|hiya)(\b|[!.?]|$)',
-        r'^(good morning|good afternoon|good evening)(\b|[!.?]|$)',
-        r'^how are you(\b|[!.?]|$)',
-        r'^(thanks|thank you|great|cool|awesome|nice)(\b|[!.?]|$)',
-        r'^bye(\b|[!.?]|$)',
-        r'^goodbye(\b|[!.?]|$)',
-    ]
-    compact_greetings = {"goodmorning", "goodafternoon", "goodevening"}
-
-    return (
-        any(re.match(pattern, question_lower) for pattern in greeting_patterns)
-        or compact_question in compact_greetings
-    )
+VALID_RETRIEVAL_MODES = {"rag", "full_document", "web", "none"}
 
 
-def is_live_web_query(question: str) -> bool:
-    """Fallback detector for questions that need current/open-web information."""
-    import re
-
-    question_lower = question.lower().strip()
-    live_patterns = [
-        r"\bweather\b",
-        r"\btemperature\b",
-        r"\bforecast\b",
-        r"\bnews\b",
-        r"\blatest\b",
-        r"\btoday\b",
-        r"\bcurrent\b",
-        r"\bnow\b",
-        r"\bstock\b",
-        r"\bprice\b",
-        r"\bscore\b",
-    ]
-    return any(re.search(pattern, question_lower) for pattern in live_patterns)
-
-
-def is_document_query(question: str, filename: Optional[str] = None) -> bool:
-    """Check if question likely refers to an uploaded document."""
-    # If there's a file uploaded, treat ANY question as potentially document-related
-    if filename:
-        return True
-    
-    # Fallback: check for document-related words
-    import re
-    question_lower = question.lower().strip()
-    return bool(re.search(r"\b(pdf|document|file|attachment|this|uploaded)\b", question_lower))
-
-
-def classify_query_intent(
+def route_query(
     question: str,
-    search_type: str = "hybrid",
     filename: Optional[str] = None,
     conversation_context: Optional[str] = None,
-) -> str:
-    """Classify how the assistant should answer without generating the answer itself."""
-    
-    # CRITICAL: If a file is uploaded, automatically treat as document intent
-    # This overrides any other classification - PDF takes priority
-    if filename:
-        print(f"📄 File uploaded: {filename} - forcing document intent")
-        return "document"
-    
-    search_type = (search_type or "hybrid").lower()
+    search_type: str = "hybrid",
+) -> Dict[str, str]:
+    """
+    Single Groq call that acts as the agentic brain.
+    Returns intent, retrieval_mode, and rewritten_query.
+    Replaces both classify_query_intent() and rewrite_query_for_retrieval().
+    """
+    trimmed_context = (conversation_context or "")[-3000:]
+    file_info = f"Attached file: {filename}" if filename else "No file attached."
+    search_hint = ""
     if search_type == "closed":
-        return "document"
-    if search_type == "open":
-        return "web"
+        search_hint = "User explicitly wants document search only."
+    elif search_type == "open":
+        search_hint = "User explicitly wants web search only."
 
-    trimmed_context = (conversation_context or "")[-1500:]
-    prompt = f"""Classify the latest user message for an AI assistant.
+    prompt = f"""You are an intelligent query router for a hybrid RAG assistant.
 
-Return exactly one label:
-- conversation: greetings, small talk, thanks, chitchat, or meta conversation with the assistant.
-- document: asks about the attached/uploaded PDF or asks for details/summary/explanation while a PDF filename is present.
-- web: asks for current, latest, weather, news, prices, scores, or general internet lookup.
-- hybrid: could benefit from searching both private documents and web.
-
-Attached PDF filename: {filename or "none"}
+{file_info}
+{search_hint}
 
 Recent conversation:
 {trimmed_context or "none"}
 
-Latest user message:
-{question}
+Latest user message: "{question}"
 
-Label only:"""
+Your job:
+1. Classify the intent into exactly one of:
+   - FACTUAL_LOOKUP   : specific question about the document or a known topic
+   - SUMMARIZE        : vague queries like "whats this", "explain", "describe", "what is this", "overview", "tell me about this"
+   - GENERATE_NOTES   : "make notes", "bullet points", "key points", "summarize as notes"
+   - COMPARE          : "compare", "difference between", "vs"
+   - WEB_SEARCH       : needs current/live info — news, weather, prices, latest events (only if NO file attached or question is clearly about the web)
+   - CASUAL_CHAT      : greetings, thanks, chitchat, "how are you", "bye"
+   - CONVERSATION_RECALL : "what did we discuss", "earlier you said", "remind me"
+
+2. Choose retrieval_mode:
+   - "rag"           : for FACTUAL_LOOKUP, COMPARE (use vector + keyword search)
+   - "full_document" : for SUMMARIZE, GENERATE_NOTES (skip similarity search, use all chunks)
+   - "web"           : for WEB_SEARCH
+   - "none"          : for CASUAL_CHAT, CONVERSATION_RECALL
+
+3. Rewrite the query into a clean standalone retrieval query:
+   - Resolve pronouns using conversation (e.g. "he" → actual name from context)
+   - For SUMMARIZE/GENERATE_NOTES: use "document overview summary main topics introduction"
+   - For FACTUAL_LOOKUP: make it a specific searchable question
+   - For CASUAL_CHAT/CONVERSATION_RECALL: return the original question unchanged
+
+IMPORTANT RULES:
+- If a file is attached, NEVER choose WEB_SEARCH unless the question is clearly about live/current internet data
+- If a file is attached and query is vague ("whats this", "explain"), always choose SUMMARIZE
+- Return ONLY valid JSON, no explanation, no markdown, no extra text
+
+Return this exact JSON format:
+{{
+  "intent": "INTENT_HERE",
+  "retrieval_mode": "mode_here",
+  "rewritten_query": "rewritten query here"
+}}"""
 
     try:
         completion = groq_client.chat.completions.create(
@@ -131,32 +122,127 @@ Label only:"""
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an intent router. Return only one routing label.",
+                    "content": "You are a precise query router. Return only valid JSON with intent, retrieval_mode, and rewritten_query.",
                 },
                 {"role": "user", "content": prompt},
             ],
             temperature=0,
-            max_tokens=10,
+            max_tokens=120,
         )
-        intent = completion.choices[0].message.content.strip().lower()
-        intent = intent.split()[0].strip(".,:;")
-        if intent in QUERY_INTENTS:
-            return intent
+        raw = completion.choices[0].message.content.strip()
+        # Strip markdown code fences if present
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(raw)
+
+        intent = parsed.get("intent", "FACTUAL_LOOKUP").upper()
+        retrieval_mode = parsed.get("retrieval_mode", "rag").lower()
+        rewritten_query = parsed.get("rewritten_query", question).strip() or question
+
+        # Validate
+        if intent not in VALID_INTENTS:
+            intent = "FACTUAL_LOOKUP"
+        if retrieval_mode not in VALID_RETRIEVAL_MODES:
+            retrieval_mode = "rag"
+
+        # Safety override: if file attached and web mode chosen (not explicitly open), use rag
+        if filename and retrieval_mode == "web" and search_type != "open":
+            retrieval_mode = "rag"
+            intent = "FACTUAL_LOOKUP"
+
+        print(f"🧠 Router → intent: {intent} | mode: {retrieval_mode} | query: {rewritten_query[:60]}")
+        return {
+            "intent": intent,
+            "retrieval_mode": retrieval_mode,
+            "rewritten_query": rewritten_query,
+        }
+
     except Exception as e:
-        print(f"Intent routing error: {e}")
+        print(f"Router error: {e} — falling back to defaults")
+        # Fallback: basic heuristics
+        return _fallback_route(question, filename, search_type)
 
-    # Fallback detectors (only used if LLM routing fails)
-    if is_conversational_query(question):
-        return "conversation"
-    if is_live_web_query(question):
-        return "web"
-    if is_document_query(question, filename):
-        return "document"
-    return "hybrid"
 
+def _fallback_route(question: str, filename: Optional[str], search_type: str) -> Dict[str, str]:
+    """Fallback routing when Groq router fails."""
+    import re
+
+    q = question.lower().strip().rstrip("?!")
+
+    casual_patterns = [
+        r'^(hey|hi|hello|yo|sup|hiya|good morning|good afternoon|good evening)',
+        r'^(thanks|thank you|great|cool|awesome|nice|bye|goodbye)',
+        r'^how are you',
+    ]
+    if any(re.match(p, q) for p in casual_patterns):
+        return {"intent": "CASUAL_CHAT", "retrieval_mode": "none", "rewritten_query": question}
+
+    vague_doc_queries = {
+        "whats this", "what is this", "explain", "explain this", "describe",
+        "describe this", "summarize", "summarise", "what's this", "tell me about this",
+        "what does this say", "overview", "give me a summary", "what is in this",
+        "what is this document", "what is this file", "what is this about"
+    }
+    if q in vague_doc_queries and filename:
+        return {"intent": "SUMMARIZE", "retrieval_mode": "full_document", "rewritten_query": "document overview summary main topics introduction"}
+
+    if search_type == "open":
+        return {"intent": "WEB_SEARCH", "retrieval_mode": "web", "rewritten_query": question}
+
+    return {"intent": "FACTUAL_LOOKUP", "retrieval_mode": "rag", "rewritten_query": question}
+
+
+# ─────────────────────────────────────────────
+# FULL DOCUMENT FETCH (for SUMMARIZE / GENERATE_NOTES)
+# ─────────────────────────────────────────────
+
+def fetch_full_document(user_id: str, filename: str) -> str:
+    """Fetch all chunks for a file in order and reconstruct full text."""
+    try:
+        # Try to get supabase client from closed_domain or vector_store
+        sb = None
+        try:
+            from ..vector_store import supabase as vs_supabase
+            sb = vs_supabase
+        except ImportError:
+            pass
+
+        if sb is None and closed_supabase is not None:
+            sb = closed_supabase
+
+        if sb is None:
+            print("fetch_full_document: no supabase client available")
+            return ""
+
+        response = sb.table("document_chunks") \
+            .select("chunk_text, chunk_index") \
+            .eq("user_id", user_id) \
+            .eq("filename", filename) \
+            .order("chunk_index") \
+            .execute()
+
+        if not response.data:
+            return ""
+
+        full_text = "\n".join([c["chunk_text"] for c in response.data])
+        print(f"📄 Full document fetched: {len(response.data)} chunks, {len(full_text)} chars")
+
+        # Trim to fit context window safely (Llama 3.3 70B has 128k context)
+        if len(full_text) > 14000:
+            full_text = full_text[:14000] + "\n...[document truncated for context window]"
+
+        return full_text
+
+    except Exception as e:
+        print(f"fetch_full_document error: {e}")
+        return ""
+
+
+# ─────────────────────────────────────────────
+# ANSWER GENERATORS
+# ─────────────────────────────────────────────
 
 def generate_conversational_answer(question: str, conversation_context: Optional[str] = None) -> str:
-    """Let the LLM handle normal assistant conversation without retrieval."""
+    """Handle casual chat and conversation recall without retrieval."""
     context_section = ""
     if conversation_context:
         context_section = f"Recent conversation:\n{conversation_context[-2500:]}\n\n"
@@ -164,7 +250,17 @@ def generate_conversational_answer(question: str, conversation_context: Optional
     prompt = f"""{context_section}The user said:
 {question}
 
-Respond as a capable, natural AI assistant. Keep it friendly and concise, but do not mention documents, web search, sources, or internal routing unless the user asks."""
+INSTRUCTIONS:
+- Respond as a warm, capable AI assistant.
+- If the user is asking about something discussed earlier in the conversation, answer based on the conversation context above.
+- Do not mention documents, web search, sources, or internal routing unless the user asks.
+
+FORMATTING RULES:
+- For simple greetings or short answers, plain prose is fine.
+- If explaining something from the conversation that involves multiple points, use ## headers and - bullet points.
+- Never write a wall of text when structure would help.
+
+Answer:"""
 
     try:
         completion = groq_client.chat.completions.create(
@@ -172,58 +268,90 @@ Respond as a capable, natural AI assistant. Keep it friendly and concise, but do
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a warm, capable AI assistant. Reply naturally and helpfully.",
+                    "content": (
+                        "You are a warm, intelligent AI assistant. "
+                        "For casual conversation, reply naturally. "
+                        "When explaining topics, use clean markdown formatting with headers and bullets where helpful."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.5,
-            max_tokens=220,
+            max_tokens=900,
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
-        print(f"Conversation answer error: {e}")
+        print(f"Conversational answer error: {e}")
         return "I had trouble processing that. Please try again."
 
 
-def filter_results_by_relevance(results: List[Dict[str, Any]], min_score: float = MIN_RELEVANCE_SCORE) -> List[Dict[str, Any]]:
-    """Filter results by relevance score threshold. Returns only high-relevance results."""
-    return [r for r in results if r.get('similarity', r.get('score', 0)) >= min_score]
-
-
-def rewrite_query_for_retrieval(
+def generate_full_document_answer(
     question: str,
+    full_text: str,
+    filename: str,
+    intent: str,
     conversation_context: Optional[str] = None,
-    filename: Optional[str] = None,
-    intent: str = "hybrid",
 ) -> str:
-    """Turn a follow-up question into a standalone retrieval query."""
-    if not conversation_context and not filename:
-        return question
+    """
+    LLM-based answer using full document text.
+    Used for SUMMARIZE and GENERATE_NOTES intents.
+    No similarity search — entire document goes to LLM.
+    """
+    context_section = ""
+    if conversation_context:
+        context_section = f"Previous conversation:\n{conversation_context[-1500:]}\n\n"
 
-    trimmed_context = (conversation_context or "")[-3000:]
-    document_instruction = ""
-    if filename and intent == "document":
-        document_instruction = f"""
-The user has attached this PDF: {filename}
-If the latest question asks for details, summary, explanation, or "this", rewrite it as a query for the attached PDF.
-Ignore unrelated greetings, small talk, and prior web-search context."""
+    if intent == "GENERATE_NOTES":
+        task_instruction = """
+TASK: Generate clean, structured notes from this document.
 
-    prompt = f"""Rewrite the latest user question as a standalone search query.
+FORMATTING RULES:
+- Use ## headers for each major topic or section found in the document.
+- Under each header, use - bullet points for key points.
+- Each bullet should be a complete, informative sentence.
+- If the document has numbered items (like PO1, PO2), preserve numbering: e.g. "- **PO1:** Description."
+- Add a blank line between sections.
+- End with a ## Key Takeaways section summarizing the 3-5 most important points.
+"""
+    elif intent == "COMPARE":
+        task_instruction = """
+TASK: Compare and contrast the sections or topics the user is asking about.
 
-Conversation:
-{trimmed_context or "none"}
+FORMATTING RULES:
+- Use a ## header for each item being compared.
+- Use - bullets to list key attributes under each.
+- Add a ## Summary of Differences section at the end.
+"""
+    else:  # SUMMARIZE or default
+        task_instruction = """
+TASK: Summarize and explain this document clearly and completely.
 
-{document_instruction}
+FORMATTING RULES:
+- Begin with a 1-2 sentence intro describing what this document is about.
+- Use ## headers to separate major sections or categories found in the document.
+- Under each header, use - bullet points for key details.
+- If the document has numbered items (like PO1, PO2, PSO1), preserve numbering: e.g. "- **PO1:** Description here."
+- Add a blank line between each section.
+- End with a short ## Summary section (2-3 sentences).
+- Never dump all content into one paragraph.
+"""
 
-Latest question:
-{question}
+    prompt = f"""{context_section}The following is the full content of the uploaded document "{filename}":
 
-Rules:
-- Preserve names, dates, document-specific terms, and user intent.
-- Resolve pronouns and references using the conversation.
-- Prefer the attached PDF context when the intent is document.
-- Do not answer the question.
-- Return only the rewritten query, under 40 words."""
+---
+{full_text}
+---
+
+The user asked: "{question}"
+
+{task_instruction}
+
+IMPORTANT:
+- Use only information from the document above.
+- Do not fabricate or infer anything not present.
+- Do not mention "chunk", "PDF", "document_chunks", or internal labels in your answer.
+
+Answer:"""
 
     try:
         completion = groq_client.chat.completions.create(
@@ -231,86 +359,25 @@ Rules:
             messages=[
                 {
                     "role": "system",
-                    "content": "You rewrite follow-up questions into concise standalone retrieval queries.",
+                    "content": (
+                        "You are an intelligent AI assistant that reads documents carefully and presents "
+                        "information in clean, well-structured markdown. Use ## headers, - bullet points, "
+                        "and **bold** for emphasis. Never write walls of text. Never fabricate information."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
-            temperature=0,
-            max_tokens=80,
+            temperature=0.4,
+            max_tokens=1400,
         )
-        rewritten = completion.choices[0].message.content.strip().strip('"')
-        return rewritten if rewritten else question
+        return completion.choices[0].message.content.strip()
     except Exception as e:
-        print(f"Query rewrite error: {e}")
-        return question
-
-
-def _dedupe_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    seen = set()
-    unique = []
-    for source in sources:
-        key = (
-            source.get("filename", ""),
-            source.get("url", ""),
-            source.get("content", "")[:160],
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(source)
-    return unique
-
-
-def rerank_with_cohere(query: str, sources: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
-    """Rerank retrieved documents through Cohere without adding the Cohere SDK."""
-    api_key = getattr(Config, "COHERE_API_KEY", None) or os.getenv("COHERE_API_KEY")
-    if not api_key or len(sources) <= 1:
-        return sources[:top_n]
-
-    candidates = sources[:MAX_RERANK_CANDIDATES]
-    documents = [(source.get("content") or "")[:MAX_RERANK_DOC_CHARS] for source in candidates]
-
-    try:
-        response = httpx.post(
-            "https://api.cohere.com/v2/rerank",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": getattr(
-                    Config,
-                    "COHERE_RERANK_MODEL",
-                    os.getenv("COHERE_RERANK_MODEL", "rerank-v3.5"),
-                ),
-                "query": query,
-                "documents": documents,
-                "top_n": min(top_n, len(candidates)),
-            },
-            timeout=6.0,
-        )
-        response.raise_for_status()
-        ranked = []
-        for item in response.json().get("results", []):
-            idx = item.get("index")
-            if idx is None or idx >= len(candidates):
-                continue
-            source = dict(candidates[idx])
-            source["rerank_score"] = item.get("relevance_score", 0)
-            ranked.append(source)
-        return ranked or sources[:top_n]
-    except Exception as e:
-        print(f"Cohere rerank error: {e}")
-        return sources[:top_n]
-
-
-def generate_friendly_no_result() -> str:
-    """Generate a friendly response when no relevant information is found."""
-    return "I don't have that information available."
+        print(f"Full document answer error: {e}")
+        return "I had trouble processing the document. Please try again."
 
 
 def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
-    """Generate an answer using the source type that actually supplied evidence."""
+    """Generate an answer using RAG-retrieved chunks (PDF or web sources)."""
     context_section = ""
     if conversation_context:
         context_section = f"Previous conversation:\n{conversation_context}\n\n"
@@ -365,12 +432,12 @@ INSTRUCTIONS:
 
 FORMATTING RULES — follow these strictly:
 - Begin with a short 1-2 sentence intro that directly answers or frames the topic.
-- Use ## bold headers to separate major sections or categories (e.g. ## Program Outcomes, ## Program Specific Outcomes).
-- Under each header, use a clean bullet list using " - " for individual points.
+- Use ## headers to separate major sections or categories.
+- Under each header, use - bullet points for individual points.
 - Each bullet must be a complete, readable sentence or phrase — never a raw fragment.
-- If the document has numbered items (like PO1, PO2, PSO1), preserve that numbering inside the bullets: e.g. "- **PO1:** Description here."
+- If the document has numbered items (like PO1, PO2, PSO1), preserve numbering: e.g. "- **PO1:** Description here."
 - Add a blank line between each section for visual breathing room.
-- Do NOT dump all text into one paragraph — always break into sections and bullets.
+- Do NOT dump all text into one paragraph.
 - End with a short 1-2 sentence closing summary if the content warrants it.
 
 Answer:"""
@@ -423,31 +490,98 @@ Answer:"""
         return "I had trouble processing your request. Please try again."
 
 
-def sanitize_verbose_response(answer: str, is_conversational: bool = False) -> str:
-    """Clean up verbose no-match responses for better UX."""
+# ─────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────
+
+def filter_results_by_relevance(
+    results: List[Dict[str, Any]], min_score: float = MIN_RELEVANCE_SCORE
+) -> List[Dict[str, Any]]:
+    """Filter by relevance score but always keep top 3 if everything gets filtered."""
+    filtered = [r for r in results if r.get("similarity", r.get("score", 0)) >= min_score]
+    # Safety net: never return empty if we had results
+    return filtered if filtered else results[:3]
+
+
+def _dedupe_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    unique = []
+    for source in sources:
+        key = (
+            source.get("filename", ""),
+            source.get("url", ""),
+            source.get("content", "")[:160],
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(source)
+    return unique
+
+
+def rerank_with_cohere(query: str, sources: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
+    """Rerank retrieved documents through Cohere."""
+    api_key = getattr(Config, "COHERE_API_KEY", None) or os.getenv("COHERE_API_KEY")
+    if not api_key or len(sources) <= 1:
+        return sources[:top_n]
+
+    candidates = sources[:MAX_RERANK_CANDIDATES]
+    documents = [(source.get("content") or "")[:MAX_RERANK_DOC_CHARS] for source in candidates]
+
+    try:
+        response = httpx.post(
+            "https://api.cohere.com/v2/rerank",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": getattr(Config, "COHERE_RERANK_MODEL", os.getenv("COHERE_RERANK_MODEL", "rerank-v3.5")),
+                "query": query,
+                "documents": documents,
+                "top_n": min(top_n, len(candidates)),
+            },
+            timeout=6.0,
+        )
+        response.raise_for_status()
+        ranked = []
+        for item in response.json().get("results", []):
+            idx = item.get("index")
+            if idx is None or idx >= len(candidates):
+                continue
+            source = dict(candidates[idx])
+            source["rerank_score"] = item.get("relevance_score", 0)
+            ranked.append(source)
+        return ranked or sources[:top_n]
+    except Exception as e:
+        print(f"Cohere rerank error: {e}")
+        return sources[:top_n]
+
+
+def sanitize_verbose_response(answer: str) -> str:
+    """Clean up verbose no-match responses."""
     import re
-    
-    # If it's a conversational query and no match, use simple friendly response
-    if is_conversational and "couldn't find" in answer.lower():
-        return "I don't see that in your documents."
-    
-    # Remove verbose source listings
+
     patterns = [
         r"The provided PDFs contain.*?(?:but|and) none of them",
         r"The documents appear to contain.*?but none of them",
         r"I couldn't find any relevant information related to .* in your uploaded PDF documents\.",
         r"Please make sure your PDF contains the relevant information or try uploading a different document\.",
     ]
-    
     result = answer
     for pattern in patterns:
         result = re.sub(pattern, "", result, flags=re.IGNORECASE)
-    
-    # Clean extra whitespace
     result = re.sub(r'\s+', ' ', result).strip()
-    
     return result if result else "I don't have that information available."
 
+
+def generate_friendly_no_result() -> str:
+    return "I don't have that information available."
+
+
+# ─────────────────────────────────────────────
+# MAIN ENTRY POINT
+# ─────────────────────────────────────────────
 
 async def hybrid_search(
     question: str,
@@ -456,20 +590,37 @@ async def hybrid_search(
     conversation_context: Optional[str] = None,
     filename: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Search PDFs first, then optional web, with smart fallback and conversation awareness."""
+    """
+    Agentic Hybrid RAG pipeline.
+
+    Flow:
+      1. route_query()  → intent + retrieval_mode + rewritten_query  [Groq call 1]
+      2. Execute the right retrieval based on retrieval_mode
+      3. generate_answer() or generate_full_document_answer()        [Groq call 2]
+    """
     search_type = (search_type or "hybrid").lower()
     if search_type not in {"closed", "open", "hybrid"}:
         search_type = "hybrid"
 
-    intent = classify_query_intent(
+    # ── Step 1: Agentic Router ──
+    route = route_query(
         question=question,
-        search_type=search_type,
         filename=filename,
         conversation_context=conversation_context,
+        search_type=search_type,
     )
-    print(f"Query intent: {intent}")
+    intent = route["intent"]
+    retrieval_mode = route["retrieval_mode"]
+    rewritten_query = route["rewritten_query"]
 
-    if intent == "conversation":
+    # Override retrieval_mode based on explicit search_type from frontend
+    if search_type == "closed":
+        retrieval_mode = "full_document" if intent in ("SUMMARIZE", "GENERATE_NOTES") else "rag"
+    elif search_type == "open":
+        retrieval_mode = "web"
+
+    # ── Step 2: CASUAL_CHAT / CONVERSATION_RECALL — no retrieval ──
+    if retrieval_mode == "none" or intent in ("CASUAL_CHAT", "CONVERSATION_RECALL"):
         return {
             "answer": generate_conversational_answer(question, conversation_context),
             "sources": [],
@@ -479,48 +630,69 @@ async def hybrid_search(
             "rewritten_query": question,
         }
 
-    if intent == "document":
-        search_type = "closed"
-    elif intent == "web":
-        search_type = "open"
-    
-    retrieval_query = rewrite_query_for_retrieval(
-        question,
-        conversation_context,
-        filename=filename,
-        intent=intent,
-    )
-    if retrieval_query != question:
-        print(f"Rewritten retrieval query: {retrieval_query}")
+    # ── Step 3: FULL DOCUMENT MODE (SUMMARIZE / GENERATE_NOTES) ──
+    if retrieval_mode == "full_document" and filename:
+        full_text = fetch_full_document(user_id, filename)
+        if full_text:
+            answer = generate_full_document_answer(
+                question=question,
+                full_text=full_text,
+                filename=filename,
+                intent=intent,
+                conversation_context=conversation_context,
+            )
+            sources = [{
+                "type": "PDF Document",
+                "title": filename[:40],
+                "content": full_text[:200],
+                "url": "",
+            }]
+            return {
+                "answer": answer,
+                "sources": sources,
+                "search_type_used": "PDF Document",
+                "closed_source_count": 1,
+                "open_source_count": 0,
+                "rewritten_query": rewritten_query,
+            }
+        else:
+            # Full doc fetch failed — fall through to RAG
+            print("Full document fetch failed — falling back to RAG")
+            retrieval_mode = "rag"
 
+    # ── Step 4: RAG PIPELINE (FACTUAL_LOOKUP / COMPARE) ──
     closed_results = []
     open_results = []
 
-    print(f"Search type: {search_type}")
-
-    if search_type != "open":
+    if retrieval_mode == "rag":
         try:
-            closed_results = search_closed_domain(retrieval_query, user_id, top_k=8, filename=filename)
+            closed_results = search_closed_domain(rewritten_query, user_id, top_k=8, filename=filename)
             print(f"PDF results (before relevance filter): {len(closed_results)}")
-            
-            # Filter by relevance threshold
             closed_results = filter_results_by_relevance(closed_results, MIN_RELEVANCE_SCORE)
             print(f"PDF results (after relevance filter): {len(closed_results)}")
-            
             if closed_results:
                 for result in closed_results[:2]:
                     print(f"   - From PDF: {result.get('filename', 'Unknown')} (score: {result.get('similarity', 0):.2f})")
         except Exception as e:
             print(f"PDF search error: {e}")
 
-    # Fall back to web search if: open search type OR (hybrid mode AND no good PDF results)
-    if search_type == "open" or (search_type == "hybrid" and len(closed_results) == 0):
+        # Web fallback if hybrid mode and no PDF results
+        if search_type == "hybrid" and not closed_results:
+            try:
+                open_results = search_open_domain(rewritten_query, top_k=3)
+                print(f"Web fallback results: {len(open_results)}")
+            except Exception as e:
+                print(f"Web fallback error: {e}")
+
+    # ── Step 5: WEB SEARCH MODE ──
+    elif retrieval_mode == "web":
         try:
-            open_results = search_open_domain(retrieval_query, top_k=3)
+            open_results = search_open_domain(rewritten_query, top_k=3)
             print(f"Web results: {len(open_results)}")
         except Exception as e:
             print(f"Web search error: {e}")
 
+    # ── Step 6: Build sources ──
     all_sources = []
     for result in closed_results:
         result["source_type"] = "PDF Document"
@@ -530,30 +702,25 @@ async def hybrid_search(
         all_sources.append(result)
 
     all_sources = _dedupe_sources(all_sources)
-    all_sources = rerank_with_cohere(retrieval_query, all_sources, top_n=5)
+    all_sources = rerank_with_cohere(rewritten_query, all_sources, top_n=5)
 
+    # ── Step 7: Generate answer ──
     answer = generate_answer(question, all_sources, conversation_context)
-    
-    # Clean up verbose responses for better UX
-    answer = sanitize_verbose_response(answer, is_conversational=False)
+    answer = sanitize_verbose_response(answer)
 
-    # Determine what sources to show
+    # ── Step 8: Build response sources ──
     response_sources = []
-    
     for source in all_sources[:3]:
         if source.get("source_type") == "PDF Document":
             display_name = source.get("filename", "PDF Document")[:40]
         else:
             display_name = source.get("title", "Web Result")[:40]
-
-        response_sources.append(
-            {
-                "type": source.get("source_type"),
-                "title": display_name,
-                "content": source.get("content", "")[:200],
-                "url": source.get("url", ""),
-            }
-        )
+        response_sources.append({
+            "type": source.get("source_type"),
+            "title": display_name,
+            "content": source.get("content", "")[:200],
+            "url": source.get("url", ""),
+        })
 
     mode_used = "PDF Document" if closed_results else ("Web Search" if open_results else "No results")
 
@@ -563,5 +730,5 @@ async def hybrid_search(
         "search_type_used": mode_used,
         "closed_source_count": len(closed_results),
         "open_source_count": len(open_results),
-        "rewritten_query": retrieval_query,
+        "rewritten_query": rewritten_query,
     }
