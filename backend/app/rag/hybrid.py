@@ -31,6 +31,8 @@ groq_client = Groq(api_key=Config.GROQ_API_KEY)
 MAX_RERANK_CANDIDATES = int(os.getenv("MAX_RERANK_CANDIDATES", "10"))
 MAX_RERANK_DOC_CHARS = int(os.getenv("MAX_RERANK_DOC_CHARS", "1200"))
 MIN_RELEVANCE_SCORE = float(os.getenv("MIN_RELEVANCE_SCORE", "0.2"))
+# New: Minimum score to consider PDF results "useful" (prevents hallucination)
+MIN_USEFUL_PDF_SCORE = float(os.getenv("MIN_USEFUL_PDF_SCORE", "0.3"))
 
 # ─────────────────────────────────────────────
 # AGENTIC ROUTER
@@ -51,6 +53,15 @@ VALID_INTENTS = {
 }
 
 VALID_RETRIEVAL_MODES = {"rag", "full_document", "web", "none"}
+
+# Keywords that should trigger web search even with a file attached
+WEB_OVERRIDE_KEYWORDS = {
+    "exam", "entry", "requirements", "application", "admission", "fees",
+    "dates", "result", "score", "ranking", "cutoff", "eligibility",
+    "syllabus", "pattern", "selection process", "afcat", "nda", "cds", "upsc",
+    "weather", "news", "today", "current", "latest", "price", "stock",
+    "match score", "live", "breaking", "update"
+}
 
 
 def route_query(
@@ -88,7 +99,7 @@ Your job:
    - SUMMARIZE        : vague queries like "whats this", "explain", "describe", "what is this", "overview", "tell me about this"
    - GENERATE_NOTES   : "make notes", "bullet points", "key points", "summarize as notes"
    - COMPARE          : "compare", "difference between", "vs"
-   - WEB_SEARCH       : needs current/live info — news, weather, prices, latest events (only if NO file attached or question is clearly about the web)
+   - WEB_SEARCH       : needs current/live info — news, weather, prices, latest events, exam details, entry requirements, application process, fees, admission dates, results, scores, rankings, or any time-sensitive information
    - CASUAL_CHAT      : greetings, thanks, chitchat, "how are you", "bye"
    - CONVERSATION_RECALL : "what did we discuss", "earlier you said", "remind me"
 
@@ -105,8 +116,8 @@ Your job:
    - For CASUAL_CHAT/CONVERSATION_RECALL: return the original question unchanged
 
 IMPORTANT RULES:
-- If a file is attached, NEVER choose WEB_SEARCH unless the question is clearly about live/current internet data
-- If a file is attached and query is vague ("whats this", "explain"), always choose SUMMARIZE
+- If a file is attached, PREFER WEB_SEARCH when the question asks for exam details, current information, or time-sensitive data (even if the file might contain something else)
+- If a file is attached and query is vague ("whats this", "explain") and NOT time-sensitive, choose SUMMARIZE
 - Return ONLY valid JSON, no explanation, no markdown, no extra text
 
 Return this exact JSON format:
@@ -144,10 +155,16 @@ Return this exact JSON format:
         if retrieval_mode not in VALID_RETRIEVAL_MODES:
             retrieval_mode = "rag"
 
-        # Safety override: if file attached and web mode chosen (not explicitly open), use rag
-        if filename and retrieval_mode == "web" and search_type != "open":
-            retrieval_mode = "rag"
-            intent = "FACTUAL_LOOKUP"
+        # Override: Check for web-search keywords even with file attached
+        if filename and retrieval_mode != "web" and search_type != "closed":
+            question_lower = question.lower()
+            if any(kw in question_lower for kw in WEB_OVERRIDE_KEYWORDS):
+                print(f"🌐 Web override triggered for: {question[:50]}...")
+                retrieval_mode = "web"
+                intent = "WEB_SEARCH"
+
+        # Safety override: if file attached and web mode chosen (not explicitly open), use web (allowing web search)
+        # Removed the override that forced rag - now web is allowed even with files
 
         print(f"🧠 Router → intent: {intent} | mode: {retrieval_mode} | query: {rewritten_query[:60]}")
         return {
@@ -175,6 +192,10 @@ def _fallback_route(question: str, filename: Optional[str], search_type: str) ->
     ]
     if any(re.match(p, q) for p in casual_patterns):
         return {"intent": "CASUAL_CHAT", "retrieval_mode": "none", "rewritten_query": question}
+
+    # Check for web search keywords in fallback
+    if any(kw in q for kw in WEB_OVERRIDE_KEYWORDS):
+        return {"intent": "WEB_SEARCH", "retrieval_mode": "web", "rewritten_query": question}
 
     vague_doc_queries = {
         "whats this", "what is this", "explain", "explain this", "describe",
@@ -497,10 +518,31 @@ Answer:"""
 def filter_results_by_relevance(
     results: List[Dict[str, Any]], min_score: float = MIN_RELEVANCE_SCORE
 ) -> List[Dict[str, Any]]:
-    """Filter by relevance score but always keep top 3 if everything gets filtered."""
+    """
+    Filter by relevance score.
+    FIXED: Returns empty list if no results meet threshold.
+    Prevents low-quality results from blocking web fallback.
+    """
     filtered = [r for r in results if r.get("similarity", r.get("score", 0)) >= min_score]
-    # Safety net: never return empty if we had results
-    return filtered if filtered else results[:3]
+    # FIXED: Return empty list instead of forcing top results
+    return filtered
+
+
+def check_pdf_quality(results: List[Dict[str, Any]], min_useful_score: float = MIN_USEFUL_PDF_SCORE) -> tuple[bool, float]:
+    """
+    Check if PDF results are actually useful for answering the question.
+    Returns (has_useful_results, max_score)
+    """
+    if not results:
+        return False, 0.0
+    
+    max_score = max([r.get("similarity", r.get("score", 0)) for r in results], default=0.0)
+    has_useful = max_score >= min_useful_score
+    
+    if not has_useful:
+        print(f"⚠️ PDF results have low quality (max score: {max_score:.2f} < {min_useful_score}) — will fall back to web")
+    
+    return has_useful, max_score
 
 
 def _dedupe_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -670,17 +712,27 @@ async def hybrid_search(
             print(f"PDF results (before relevance filter): {len(closed_results)}")
             closed_results = filter_results_by_relevance(closed_results, MIN_RELEVANCE_SCORE)
             print(f"PDF results (after relevance filter): {len(closed_results)}")
+            
+            # NEW: Check quality of PDF results
+            has_useful_pdf, max_pdf_score = check_pdf_quality(closed_results, MIN_USEFUL_PDF_SCORE)
+            
             if closed_results:
                 for result in closed_results[:2]:
                     print(f"   - From PDF: {result.get('filename', 'Unknown')} (score: {result.get('similarity', 0):.2f})")
+            
+            # FIXED: Clear closed_results if they're not useful
+            if not has_useful_pdf:
+                print(f"⚠️ No useful PDF results (max score: {max_pdf_score:.2f}) — clearing for web fallback")
+                closed_results = []
+                
         except Exception as e:
             print(f"PDF search error: {e}")
 
-        # Web fallback if hybrid mode and no PDF results
-        if search_type == "hybrid" and not closed_results:
+        # FIXED: Web fallback if hybrid mode AND no USEFUL PDF results
+        if search_type == "hybrid" and len(closed_results) == 0:
             try:
                 open_results = search_open_domain(rewritten_query, top_k=3)
-                print(f"Web fallback results: {len(open_results)}")
+                print(f"🌐 Web fallback results: {len(open_results)}")
             except Exception as e:
                 print(f"Web fallback error: {e}")
 
@@ -688,7 +740,7 @@ async def hybrid_search(
     elif retrieval_mode == "web":
         try:
             open_results = search_open_domain(rewritten_query, top_k=3)
-            print(f"Web results: {len(open_results)}")
+            print(f"🌐 Web results: {len(open_results)}")
         except Exception as e:
             print(f"Web search error: {e}")
 
@@ -701,10 +753,13 @@ async def hybrid_search(
         result["source_type"] = "Web Search"
         all_sources.append(result)
 
-    all_sources = _dedupe_sources(all_sources)
-    all_sources = rerank_with_cohere(rewritten_query, all_sources, top_n=5)
+    # Only rerank if we have mix or more than 1 source
+    if len(all_sources) > 1:
+        all_sources = _dedupe_sources(all_sources)
+        all_sources = rerank_with_cohere(rewritten_query, all_sources, top_n=5)
 
     # ── Step 7: Generate answer ──
+    # Add a note if we fell back to web search
     answer = generate_answer(question, all_sources, conversation_context)
     answer = sanitize_verbose_response(answer)
 
