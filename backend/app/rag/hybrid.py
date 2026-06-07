@@ -1,5 +1,3 @@
-# hybrid.py - Optimized for DualMind
-
 import json
 import os
 import re
@@ -37,14 +35,14 @@ MIN_RELEVANCE_SCORE = float(os.getenv("MIN_RELEVANCE_SCORE", "0.1"))
 MIN_USEFUL_PDF_SCORE = float(os.getenv("MIN_USEFUL_PDF_SCORE", "0.15"))
 
 # ─────────────────────────────────────────────
-# FAST PATTERN MATCHING (90% OF QUERIES)
+# FAST PATTERN-BASED INTENT DETECTION
 # ─────────────────────────────────────────────
 
 def detect_intent_fast(question: str, has_file: bool = False) -> Dict[str, str]:
     """Fast pattern matching for common queries - NO LLM CALL"""
     q = question.lower().strip().rstrip("?!")
 
-    # 1. Casual chat (instant response)
+    # 1. Casual chat
     casual = ['hi', 'hello', 'hey', 'thanks', 'thank you', 'great', 'bye', 'goodbye', 
               'how are you', 'what\'s up', 'good morning', 'good evening']
     if any(q.startswith(word) for word in casual):
@@ -82,135 +80,289 @@ def detect_intent_fast(question: str, has_file: bool = False) -> Dict[str, str]:
     return {"intent": "FACTUAL_LOOKUP", "retrieval_mode": "rag", "rewritten_query": rewritten}
 
 
-def is_complex_query(question: str, conversation_context: Optional[str]) -> bool:
-    """Determine if query needs LLM for intent detection"""
-    q = question.lower()
-    
-    # Complex query indicators
-    complex_indicators = [
-        'but', 'however', 'although', 'whereas',  # Conditional logic
-        'referring to', 'as we discussed', 'earlier you said',  # Conversation recall
-        'what did we', 'remind me', 'you mentioned',  # Memory-based
-        'compare and contrast', 'difference between',  # Complex comparison
-        'analyze', 'evaluate', 'critique'  # Complex analysis
-    ]
-    
-    # Use LLM if:
-    # 1. Has complex indicators
-    if any(indicator in q for indicator in complex_indicators):
-        return True
-    
-    # 2. Long conversation context (>500 chars) AND question is vague
-    if conversation_context and len(conversation_context) > 500:
-        vague_words = ['it', 'that', 'this', 'there', 'those', 'these']
-        if len(q.split()) < 8 and any(word in q.split() for word in vague_words):
-            return True
-    
-    # 3. Question is very long and complex
-    if len(q.split()) > 20:
-        return True
-    
-    return False
-
-
-def route_with_llm(question: str, filename: Optional[str], conversation_context: Optional[str]) -> Dict[str, str]:
-    """Use LLM for complex intent detection (only when needed)"""
-    
-    context_section = ""
-    if conversation_context:
-        context_section = f"Previous conversation (last 1000 chars):\n{conversation_context[-1000:]}\n\n"
-    
-    file_info = f"Attached file: {filename}" if filename else "No file attached"
-    
-    prompt = f"""{context_section}{file_info}
-
-Current user question: "{question}"
-
-Classify this query into ONE intent:
-
-INTENTS:
-- FACTUAL_LOOKUP: Specific question about document content (e.g., "What are the skills?", "Find contact info")
-- SUMMARIZE: Vague document questions (e.g., "What is this?", "Summarize", "Explain this")
-- GENERATE_NOTES: "Make notes", "Bullet points", "Key points"
-- COMPARE: "Compare", "Difference between", "VS"
-- WEB_SEARCH: Current events, news, live data, external info
-- CASUAL_CHAT: Greetings, thanks, chitchat
-- CONVERSATION_RECALL: References to previous discussion ("Earlier you said", "As we discussed")
-
-Also provide:
-- retrieval_mode: "rag", "full_document", "web", or "none"
-- rewritten_query: Short keyword query for search (5-10 words max)
-
-Return ONLY JSON: {{"intent": "", "retrieval_mode": "", "rewritten_query": ""}}"""
-
-    try:
-        completion = groq_client.chat.completions.create(
-            model=Config.LLM_MODEL,
-            messages=[
-                {"role": "system", "content": "Return only valid JSON. No markdown, no explanation."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0,
-            max_tokens=120,
-        )
-        raw = completion.choices[0].message.content.strip()
-        raw = raw.replace("```json", "").replace("```", "").strip()
-        parsed = json.loads(raw)
-        
-        return {
-            "intent": parsed.get("intent", "FACTUAL_LOOKUP").upper(),
-            "retrieval_mode": parsed.get("retrieval_mode", "rag").lower(),
-            "rewritten_query": parsed.get("rewritten_query", question)[:60]
-        }
-    except Exception as e:
-        print(f"LLM router error: {e}")
-        return None
-
-
 def route_query(
     question: str,
     filename: Optional[str] = None,
     conversation_context: Optional[str] = None,
     search_type: str = "hybrid",
 ) -> Dict[str, str]:
-    """
-    Hybrid routing: Use fast pattern matching first, LLM only for complex queries.
-    """
+    """Route query using fast pattern matching"""
     has_file = filename is not None
-    
-    # Check if query needs LLM
-    needs_llm = is_complex_query(question, conversation_context)
-    
-    if not needs_llm:
-        # Fast path - 90% of queries
-        result = detect_intent_fast(question, has_file)
-        print(f"⚡ Fast router → {result['intent']} | {result['retrieval_mode']}")
-        return result
-    
-    # Complex path - use LLM
-    print(f"🧠 Complex query detected - using LLM router")
-    llm_result = route_with_llm(question, filename, conversation_context)
-    
-    if llm_result:
-        return llm_result
-    
-    # Fallback to fast router if LLM fails
-    return detect_intent_fast(question, has_file)
+    result = detect_intent_fast(question, has_file)
+    print(f"⚡ Fast router → {result['intent']} | {result['retrieval_mode']}")
+    return result
 
 
 # ─────────────────────────────────────────────
-# REST OF YOUR EXISTING CODE...
-# (keep your existing fetch_full_document, 
-#  generate_conversational_answer, 
-#  generate_full_document_answer,
-#  get_score, filter_results_by_relevance,
-#  check_pdf_quality, _dedupe_sources,
-#  rerank_with_cohere, generate_answer,
-#  and hybrid_search function)
+# FULL DOCUMENT FETCH
 # ─────────────────────────────────────────────
 
-# ... [Keep all your existing helper functions here] ...
+def fetch_full_document(user_id: str, filename: str) -> str:
+    """Fetch all chunks for a file in order and reconstruct full text."""
+    try:
+        sb = None
+        try:
+            from ..vector_store import supabase as vs_supabase
+            sb = vs_supabase
+        except ImportError:
+            pass
 
+        if sb is None and closed_supabase is not None:
+            sb = closed_supabase
+
+        if sb is None:
+            print("fetch_full_document: no supabase client available")
+            return ""
+
+        response = sb.table("document_chunks") \
+            .select("chunk_text, chunk_index") \
+            .eq("user_id", user_id) \
+            .eq("filename", filename) \
+            .order("chunk_index") \
+            .execute()
+
+        if not response.data:
+            return ""
+
+        full_text = "\n".join([c["chunk_text"] for c in response.data])
+        print(f"📄 Full document fetched: {len(response.data)} chunks, {len(full_text)} chars")
+
+        if len(full_text) > 14000:
+            full_text = full_text[:14000] + "\n...[document truncated]"
+
+        return full_text
+
+    except Exception as e:
+        print(f"fetch_full_document error: {e}")
+        return ""
+
+
+# ─────────────────────────────────────────────
+# ANSWER GENERATORS
+# ─────────────────────────────────────────────
+
+def generate_conversational_answer(question: str, conversation_context: Optional[str] = None) -> str:
+    """Simple plain text response for casual chat."""
+    prompt = f"""User: "{question}"
+Respond naturally, no markdown, just friendly conversation."""
+
+    try:
+        completion = groq_client.chat.completions.create(
+            model=Config.LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+            max_tokens=150,
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Conversational answer error: {e}")
+        return "Hello! How can I help you today?"
+
+
+def generate_full_document_answer(
+    question: str,
+    full_text: str,
+    filename: str,
+    intent: str,
+    conversation_context: Optional[str] = None,
+) -> str:
+    """Generate answer using full document text."""
+    
+    prompt = f"""Document "{filename}":
+
+{full_text[:8000]}
+
+User asked: "{question}"
+
+Answer using ONLY the document above.
+Use ## headers and - bullet points for organization.
+If the answer is not in the document, say "I cannot find this information."
+
+Answer:"""
+
+    try:
+        completion = groq_client.chat.completions.create(
+            model=Config.LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "You summarize documents clearly. Use ## headers and - bullet points."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            max_tokens=1000,
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Full document answer error: {e}")
+        return "I had trouble processing the document."
+
+
+# ─────────────────────────────────────────────
+# SCORE HANDLING FUNCTIONS
+# ─────────────────────────────────────────────
+
+def get_score(result: Dict[str, Any]) -> float:
+    """Extract score from result - handles multiple field names."""
+    # Try different field names that might contain the score
+    score_fields = ["similarity", "score", "keyword_score", "relevance_score", "rerank_score"]
+    for field in score_fields:
+        if field in result and result[field] is not None:
+            val = float(result[field])
+            if val > 0:
+                return val
+    # Default score if none found (assume moderately relevant)
+    return 0.3
+
+
+def filter_results_by_relevance(
+    results: List[Dict[str, Any]], min_score: float = MIN_RELEVANCE_SCORE
+) -> List[Dict[str, Any]]:
+    """Filter results by relevance score."""
+    if not results:
+        return []
+    
+    # Ensure all results have scores
+    for r in results:
+        if "extracted_score" not in r:
+            r["extracted_score"] = get_score(r)
+    
+    # If min_score is low or we have few results, keep them
+    if min_score <= 0.1 or len(results) <= 2:
+        return results
+    
+    filtered = [r for r in results if r.get("extracted_score", 0) >= min_score]
+    
+    # If filtering removed everything, return top 2 anyway
+    if not filtered and results:
+        print(f"⚠️ Keeping top {min(2, len(results))} results despite low scores")
+        return results[:2]
+    
+    return filtered
+
+
+def check_pdf_quality(results: List[Dict[str, Any]], min_useful_score: float = MIN_USEFUL_PDF_SCORE) -> tuple[bool, float]:
+    """Check if PDF results are useful."""
+    if not results:
+        return False, 0.0
+    
+    max_score = max([get_score(r) for r in results], default=0.0)
+    # Always consider results useful if we have at least 1 result
+    has_useful = len(results) >= 1
+    
+    return has_useful, max_score
+
+
+def _dedupe_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Remove duplicate sources."""
+    seen = set()
+    unique = []
+    for source in sources:
+        key = (
+            source.get("filename", ""),
+            source.get("url", ""),
+            source.get("content", "")[:160],
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(source)
+    return unique
+
+
+def rerank_with_cohere(query: str, sources: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
+    """Rerank with Cohere (optional)."""
+    api_key = getattr(Config, "COHERE_API_KEY", None) or os.getenv("COHERE_API_KEY")
+    if not api_key or len(sources) <= 1:
+        return sources[:top_n]
+
+    candidates = sources[:MAX_RERANK_CANDIDATES]
+    documents = [(source.get("content") or "")[:MAX_RERANK_DOC_CHARS] for source in candidates]
+
+    try:
+        response = httpx.post(
+            "https://api.cohere.com/v2/rerank",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": getattr(Config, "COHERE_RERANK_MODEL", os.getenv("COHERE_RERANK_MODEL", "rerank-v3.5")),
+                "query": query,
+                "documents": documents,
+                "top_n": min(top_n, len(candidates)),
+            },
+            timeout=6.0,
+        )
+        response.raise_for_status()
+        ranked = []
+        for item in response.json().get("results", []):
+            idx = item.get("index")
+            if idx is None or idx >= len(candidates):
+                continue
+            source = dict(candidates[idx])
+            source["rerank_score"] = item.get("relevance_score", 0)
+            source["extracted_score"] = source["rerank_score"]
+            ranked.append(source)
+        return ranked or sources[:top_n]
+    except Exception as e:
+        print(f"Cohere rerank error: {e}")
+        return sources[:top_n]
+
+
+def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
+    """Generate answer from sources."""
+    
+    if not sources:
+        prompt = f"""User asked: "{question}"
+
+Answer based on your general knowledge. If unsure, say so honestly.
+
+Answer:"""
+    else:
+        context_parts = []
+        for i, source in enumerate(sources[:3]):
+            content = source.get("content", "")[:1000]
+            source_type = source.get("source_type", "Document")
+            context_parts.append(f"[{source_type}]\n{content}")
+        
+        context = "\n\n---\n\n".join(context_parts)
+        
+        prompt = f"""Context information:
+{context}
+
+User question: "{question}"
+
+Answer using the context above. 
+- Use ## headers for sections
+- Use - bullet points for lists
+- Be clear and direct
+
+Answer:"""
+
+    try:
+        completion = groq_client.chat.completions.create(
+            model=Config.LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "You answer questions clearly. Use ## headers and - bullet points. Be direct and helpful."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            max_tokens=1000,
+        )
+        answer = completion.choices[0].message.content.strip()
+        
+        # Ensure answer has proper formatting
+        if len(answer) > 200 and '##' not in answer and '# ' not in answer:
+            answer = "## Answer\n\n" + answer
+            
+        return answer
+    except Exception as e:
+        print(f"Generate answer error: {e}")
+        return "I had trouble processing your request. Please try again."
+
+
+# ─────────────────────────────────────────────
+# MAIN ENTRY POINT
+# ─────────────────────────────────────────────
 
 async def hybrid_search(
     question: str,
@@ -220,7 +372,7 @@ async def hybrid_search(
     filename: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Main entry point - uses hybrid routing for intent detection.
+    Main entry point for hybrid search.
     """
     search_type = (search_type or "hybrid").lower()
     if search_type not in {"closed", "open", "hybrid"}:
@@ -231,7 +383,7 @@ async def hybrid_search(
     print(f"📎 File: {filename or 'None'}")
     print(f"{'='*50}")
 
-    # Route the query (uses fast pattern matching or LLM)
+    # Route the query
     route = route_query(
         question=question,
         filename=filename,
@@ -282,6 +434,9 @@ async def hybrid_search(
                 "open_source_count": 0,
                 "rewritten_query": rewritten_query,
             }
+        else:
+            print("Full document fetch failed - falling back to RAG")
+            retrieval_mode = "rag"
 
     # RAG mode
     closed_results = []
@@ -323,6 +478,9 @@ async def hybrid_search(
         result["source_type"] = "Web Search"
         all_sources.append(result)
 
+    if len(all_sources) > 1:
+        all_sources = _dedupe_sources(all_sources)
+
     # Generate answer
     answer = generate_answer(question, all_sources, conversation_context)
 
@@ -345,9 +503,3 @@ async def hybrid_search(
         "open_source_count": len(open_results),
         "rewritten_query": rewritten_query,
     }
-
-
-# Keep all your existing helper functions here
-# (generate_conversational_answer, generate_full_document_answer,
-#  get_score, filter_results_by_relevance, check_pdf_quality,
-#  _dedupe_sources, rerank_with_cohere, generate_answer)
