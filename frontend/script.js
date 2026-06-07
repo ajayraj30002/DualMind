@@ -21,7 +21,7 @@ const WELCOME_HTML = `
 `;
 
 // ─────────────────────────────────────────────
-// CLEAN DUALMIND RESPONSE - REMOVE RAW SYMBOLS
+// CLEAN RESPONSE - PRESERVES MARKDOWN FORMATTING
 // ─────────────────────────────────────────────
 
 function cleanDualMindResponse(rawText) {
@@ -29,25 +29,25 @@ function cleanDualMindResponse(rawText) {
     
     let cleaned = rawText;
     
-    // Remove standalone numbers like "33" on their own line
+    // Remove standalone numbers (chunk indices) on their own line
     cleaned = cleaned.replace(/^\d+\s*$/gm, '');
     
-    // Remove "33." patterns at start of lines (numbered lists that break)
-    cleaned = cleaned.replace(/^\d+\.\s+/gm, '');
+    // Remove standalone "33." patterns (chunk numbers without content)
+    cleaned = cleaned.replace(/^(\d+)\.\s*$/gm, '');
     
-    // Ensure proper spacing after headings (## Heading -> no extra spaces)
-    cleaned = cleaned.replace(/^##\s+/gm, '## ');
+    // Remove internal source labels that might leak
+    cleaned = cleaned.replace(/\[(Web Search|PDF Document|RAG|Hybrid)\]/gi, '');
     
-    // Fix bullet points - ensure dash followed by space
-    cleaned = cleaned.replace(/^-\s*/gm, '- ');
+    // Fix any malformed headers (ensure ## has space)
+    cleaned = cleaned.replace(/^##([^ ])/gm, '## $1');
     
-    // Remove multiple consecutive newlines (more than 2)
-    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    // Fix malformed bullet points
+    cleaned = cleaned.replace(/^[•\-*]\s*/gm, '- ');
     
-    // Remove "Web Search" raw text label (will be added as badge separately)
-    cleaned = cleaned.replace(/Web Search/gi, '');
+    // Clean up excessive newlines (but preserve markdown structure)
+    cleaned = cleaned.replace(/\n{4,}/g, '\n\n');
     
-    // Trim extra whitespace
+    // Trim
     cleaned = cleaned.trim();
     
     return cleaned;
@@ -158,7 +158,7 @@ function buildSourceBadge(searchTypeUsed) {
 }
 
 // ─────────────────────────────────────────────
-// ADD MESSAGE TO CHAT
+// ADD MESSAGE TO CHAT - PRESERVES MARKDOWN FOR ALL
 // ─────────────────────────────────────────────
 
 async function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
@@ -169,23 +169,22 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
 
     const messageDiv = document.createElement('div');
     
-    // Clean the content if it's an assistant message
+    // Clean the content for assistant messages (remove chunk numbers, preserve markdown)
     let finalContent = content;
     if (role === 'assistant') {
         finalContent = cleanDualMindResponse(content);
     }
     
-    const hasMarkdownSymbols = String(finalContent).includes('##') || String(finalContent).includes('**') || String(finalContent).includes('- ');
-    const normalizedRole = (role === 'user' && !hasMarkdownSymbols) ? 'user' : 'assistant';
-    
-    messageDiv.className = `message ${normalizedRole}`;
+    // ALWAYS render assistant messages with markdown (they contain ## headers, bullets, etc.)
+    // User messages get plain text rendering
+    messageDiv.className = `message ${role}`;
 
     let attachmentHTML = '';
     if (filename) {
         attachmentHTML = `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>`;
     }
 
-    if (normalizedRole === 'user') {
+    if (role === 'user') {
         const plainText = escapeHtml(finalContent).replace(/\n/g, '<br>');
         messageDiv.innerHTML = `
             <div class="message-avatar"><i class="fas fa-user"></i></div>
@@ -195,7 +194,7 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
             </div>
         `;
     } else {
-        // Render markdown to HTML
+        // Assistant messages get FULL markdown rendering
         const renderedContent = await renderMarkdown(finalContent);
         const effectiveSource = searchTypeUsed || (String(finalContent).toLowerCase().includes('web') ? 'Web Search' : currentMode);
         const sourceBadge = buildSourceBadge(effectiveSource);
@@ -214,7 +213,7 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
 }
 
 // ─────────────────────────────────────────────
-// SEND MESSAGE - FIXED VERSION
+// SEND MESSAGE
 // ─────────────────────────────────────────────
 
 async function sendMessage() {
@@ -271,10 +270,10 @@ async function sendMessage() {
         if (res.ok) {
             let finalAnswer = data.answer || data.response || data.content || '';
             
-            // Clean the response before rendering
+            // Clean but preserve markdown structure
             finalAnswer = cleanDualMindResponse(finalAnswer);
             
-            const searchSource = data.search_type_used || (currentMode === 'hybrid' ? 'Web Search' : currentMode);
+            const searchSource = data.search_type_used || (currentMode === 'hybrid' ? 'Hybrid Search' : currentMode);
             await addMessageToChat('assistant', finalAnswer, null, searchSource);
         } else {
             await addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
@@ -289,7 +288,7 @@ async function sendMessage() {
 }
 
 // ─────────────────────────────────────────────
-// LOAD SESSION MESSAGES (FIXED)
+// LOAD SESSION MESSAGES
 // ─────────────────────────────────────────────
 
 async function loadSession(sessionId) {
@@ -321,7 +320,7 @@ async function loadSession(sessionId) {
                     const searchType = msg.metadata?.search_type_used || null;
                     let cleanMessageContent = msg.content || msg.answer || msg.response || '';
                     
-                    // Clean assistant messages
+                    // Clean assistant messages but preserve markdown
                     if (msg.role === 'assistant') {
                         cleanMessageContent = cleanDualMindResponse(cleanMessageContent);
                     }
@@ -607,7 +606,7 @@ function clearMessages() {
 }
 
 // ─────────────────────────────────────────────
-// STREAM VISUAL ANIMATION
+// TYPING ANIMATION
 // ─────────────────────────────────────────────
 
 function showTyping() {
@@ -632,7 +631,7 @@ function hideTyping() {
 }
 
 // ─────────────────────────────────────────────
-// FILE REPOSITORY CONTROL
+// FILE HANDLING
 // ─────────────────────────────────────────────
 
 function onFileSelect(e) {
@@ -664,7 +663,7 @@ async function uploadFile(file, sessionId) {
 }
 
 // ─────────────────────────────────────────────
-// COMPLEMENTARY RESTRUCTURING UTILITIES
+// UTILITIES
 // ─────────────────────────────────────────────
 
 async function autoTitle(sessionId, firstMsg) {
