@@ -21,52 +21,75 @@ const WELCOME_HTML = `
 `;
 
 // ─────────────────────────────────────────────
-// MARKDOWN RENDERER SETUP
-// Configure marked.js once at startup
+// MARKDOWN RENDERER SETUP - FIXED
 // ─────────────────────────────────────────────
 
 function setupMarked() {
-    // Custom renderer for extra control
-    const renderer = new marked.Renderer();
-
-    // Open links in new tab
-    renderer.link = (href, title, text) => {
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer" ${title ? `title="${title}"` : ''}>${text}</a>`;
-    };
-
-    // Code blocks with syntax highlighting
-    renderer.code = (code, language) => {
-        let highlighted = code;
-        if (language && hljs.getLanguage(language)) {
-            try {
-                highlighted = hljs.highlight(code, { language }).value;
-            } catch (_) {}
-        } else {
-            try {
-                highlighted = hljs.highlightAuto(code).value;
-            } catch (_) {}
+    if (typeof marked === 'undefined') {
+        console.error('Marked library not loaded');
+        return;
+    }
+    
+    try {
+        // Configure marked with custom options
+        if (marked.setOptions) {
+            marked.setOptions({
+                gfm: true,
+                breaks: true,
+                pedantic: false,
+                mangle: false,
+                headerIds: false
+            });
         }
-        return `<pre><code class="hljs ${language || ''}">${highlighted}</code></pre>`;
-    };
-
-    marked.setOptions({
-        renderer,
-        gfm: true,         // GitHub Flavored Markdown (tables, strikethrough)
-        breaks: true,      // Convert \n to <br> inside paragraphs
-        pedantic: false,
-    });
+        
+        // Custom renderer for links and code blocks
+        const renderer = {
+            link(href, title, text) {
+                return `<a href="${href}" target="_blank" rel="noopener noreferrer" ${title ? `title="${title}"` : ''}>${text}</a>`;
+            },
+            code(code, language) {
+                let highlighted = code;
+                if (language && hljs.getLanguage(language)) {
+                    try {
+                        highlighted = hljs.highlight(code, { language }).value;
+                    } catch (_) {}
+                } else {
+                    try {
+                        highlighted = hljs.highlightAuto(code).value;
+                    } catch (_) {}
+                }
+                return `<pre><code class="hljs ${language || ''}">${highlighted}</code></pre>`;
+            }
+        };
+        
+        // Apply custom renderer if marked.use exists
+        if (marked.use) {
+            marked.use({ renderer });
+        }
+        
+        console.log('✅ Markdown renderer configured');
+    } catch (e) {
+        console.error('Markdown setup error:', e);
+    }
 }
 
 // ─────────────────────────────────────────────
-// RENDER MARKDOWN SAFELY
-// For assistant messages only — user messages stay plain text
+// RENDER MARKDOWN - FIXED (ASYNC)
 // ─────────────────────────────────────────────
 
-function renderMarkdown(text) {
-    if (!text) return '';
+async function renderMarkdown(text) {
+    if (!text) return '<div class="md-body"></div>';
+    
     try {
-        // marked.parse returns HTML string
-        const html = marked.parse(text);
+        let html;
+        // marked.parse is ASYNC in version 9+
+        if (typeof marked.parse === 'function') {
+            html = await marked.parse(text);
+        } else if (typeof marked === 'function') {
+            html = marked(text);
+        } else {
+            html = text;
+        }
         return `<div class="md-body">${html}</div>`;
     } catch (e) {
         console.error('Markdown render error:', e);
@@ -77,20 +100,22 @@ function renderMarkdown(text) {
 
 // ─────────────────────────────────────────────
 // SOURCE BADGE
-// Shows a small pill under assistant message indicating source
 // ─────────────────────────────────────────────
 
 function buildSourceBadge(searchTypeUsed) {
     if (!searchTypeUsed || searchTypeUsed === 'Conversation') return '';
 
-    let icon, label, color;
+    let icon, label;
 
     if (searchTypeUsed === 'PDF Document' || searchTypeUsed === 'document_full') {
         icon = 'fa-file-pdf';
         label = 'PDF Document';
-    } else if (searchTypeUsed === 'Web Search') {
+    } else if (searchTypeUsed === 'Web Search' || searchTypeUsed === 'open') {
         icon = 'fa-globe';
         label = 'Web Search';
+    } else if (searchTypeUsed === 'hybrid') {
+        icon = 'fa-link';
+        label = 'Hybrid Search';
     } else if (searchTypeUsed === 'No results') {
         return '';
     } else {
@@ -102,10 +127,10 @@ function buildSourceBadge(searchTypeUsed) {
 }
 
 // ─────────────────────────────────────────────
-// ADD MESSAGE TO CHAT
+// ADD MESSAGE TO CHAT - FIXED (ASYNC)
 // ─────────────────────────────────────────────
 
-function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
+async function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
     if (!messagesDiv) return;
 
     // Remove welcome screen on first user message
@@ -136,8 +161,8 @@ function addMessageToChat(role, content, filename = null, searchTypeUsed = null)
             </div>
         `;
     } else {
-        // Assistant messages: full markdown rendering
-        const renderedContent = renderMarkdown(content);
+        // Assistant messages: Await the markdown rendering
+        const renderedContent = await renderMarkdown(content);
         const sourceBadge = buildSourceBadge(searchTypeUsed);
 
         messageDiv.innerHTML = `
@@ -417,7 +442,7 @@ async function loadSession(sessionId) {
                 for (const msg of data.messages) {
                     // Pass search type from stored metadata if available
                     const searchType = msg.metadata?.search_type_used || null;
-                    addMessageToChat(msg.role, msg.content, msg.metadata?.filename, searchType);
+                    await addMessageToChat(msg.role, msg.content, msg.metadata?.filename, searchType);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
@@ -550,8 +575,8 @@ async function sendMessage() {
     messageInput.value = '';
     messageInput.style.height = 'auto';
 
-    // Show user message right away
-    addMessageToChat('user', text, uploadedFilename);
+    // Show user message right away (await is important)
+    await addMessageToChat('user', text, uploadedFilename);
 
     // Auto-title on first message
     const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
@@ -567,7 +592,7 @@ async function sendMessage() {
             hideTyping();
         } catch (err) {
             hideTyping();
-            addMessageToChat('assistant', `❌ Upload failed: ${err.message}. Please try again.`);
+            await addMessageToChat('assistant', `❌ Upload failed: ${err.message}. Please try again.`);
             return;
         }
     }
@@ -596,13 +621,13 @@ async function sendMessage() {
 
         if (res.ok) {
             // Pass search_type_used so the source badge renders correctly
-            addMessageToChat('assistant', data.answer, null, data.search_type_used);
+            await addMessageToChat('assistant', data.answer, null, data.search_type_used || currentMode);
         } else {
-            addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
+            await addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
         }
     } catch (err) {
         hideTyping();
-        addMessageToChat('assistant', 'Connection error. Please check your network.');
+        await addMessageToChat('assistant', 'Connection error. Please check your network.');
         console.error('Send message error:', err);
     } finally {
         if (sendBtn) sendBtn.disabled = false;
