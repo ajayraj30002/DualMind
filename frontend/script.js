@@ -21,7 +21,7 @@ const WELCOME_HTML = `
 `;
 
 // ─────────────────────────────────────────────
-// MARKDOWN RENDERER SETUP - FIXED
+// MARKDOWN RENDERER SETUP
 // ─────────────────────────────────────────────
 
 function setupMarked() {
@@ -31,7 +31,6 @@ function setupMarked() {
     }
     
     try {
-        // Configure marked with custom options
         if (marked.setOptions) {
             marked.setOptions({
                 gfm: true,
@@ -42,7 +41,6 @@ function setupMarked() {
             });
         }
         
-        // Custom renderer for links and code blocks
         const renderer = {
             link(href, title, text) {
                 return `<a href="${href}" target="_blank" rel="noopener noreferrer" ${title ? `title="${title}"` : ''}>${text}</a>`;
@@ -62,11 +60,9 @@ function setupMarked() {
             }
         };
         
-        // Apply custom renderer if marked.use exists
         if (marked.use) {
             marked.use({ renderer });
         }
-        
         console.log('✅ Markdown renderer configured');
     } catch (e) {
         console.error('Markdown setup error:', e);
@@ -74,18 +70,15 @@ function setupMarked() {
 }
 
 // ─────────────────────────────────────────────
-// RENDER MARKDOWN - FIXED (ASYNC)
+// RENDER MARKDOWN (ASYNC)
 // ─────────────────────────────────────────────
 
 async function renderMarkdown(text) {
     if (!text) return '<div class="md-body"></div>';
-    
-    // Ensure text parameter is strictly evaluated as a clean string data type
     let cleanText = String(text);
     
     try {
         let html;
-        // Try different marked.js API patterns safely
         if (marked.parse && typeof marked.parse === 'function') {
             const result = marked.parse(cleanText);
             html = (result && typeof result.then === 'function') ? await result : result;
@@ -97,11 +90,9 @@ async function renderMarkdown(text) {
         } else {
             html = cleanText;
         }
-        
         return `<div class="md-body">${html}</div>`;
     } catch (e) {
         console.error('Markdown render error:', e);
-        // Fallback that manual converts text spacing without breaking raw heading text styling layout
         return `<div class="md-body">${cleanText.replace(/\n/g, '<br>')}</div>`;
     }
 }
@@ -114,18 +105,17 @@ function buildSourceBadge(searchTypeUsed) {
     if (!searchTypeUsed || searchTypeUsed === 'Conversation') return '';
 
     let icon, label;
+    const type = String(searchTypeUsed).toLowerCase();
 
-    if (searchTypeUsed === 'PDF Document' || searchTypeUsed === 'document_full') {
+    if (type.includes('pdf') || type.includes('document')) {
         icon = 'fa-file-pdf';
         label = 'PDF Document';
-    } else if (searchTypeUsed === 'Web Search' || searchTypeUsed === 'open') {
+    } else if (type.includes('web') || type.includes('open') || type.includes('fallback')) {
         icon = 'fa-globe';
         label = 'Web Search';
-    } else if (searchTypeUsed === 'hybrid') {
+    } else if (type.includes('hybrid')) {
         icon = 'fa-link';
         label = 'Hybrid Search';
-    } else if (searchTypeUsed === 'No results') {
-        return '';
     } else {
         icon = 'fa-database';
         label = searchTypeUsed;
@@ -135,48 +125,45 @@ function buildSourceBadge(searchTypeUsed) {
 }
 
 // ─────────────────────────────────────────────
-// ADD MESSAGE TO CHAT - FIXED (ASYNC)
+// ADD MESSAGE TO CHAT - CORE STYLING FIX
 // ─────────────────────────────────────────────
 
 async function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
     if (!messagesDiv) return;
 
-    // Remove welcome screen on first user message
     const welcome = messagesDiv.querySelector('.welcome'); 
     if (welcome && role === 'user') welcome.remove();
 
     const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}`;
+    
+    // FORCE ASSISTANT FORMATTING IF TEXT CONTAINS MARKDOWN SYMBOLS
+    const hasMarkdownSymbols = String(content).includes('##') || String(content).includes('**') || String(content).includes('- ');
+    const normalizedRole = (role === 'user' && !hasMarkdownSymbols) ? 'user' : 'assistant';
+    
+    messageDiv.className = `message ${normalizedRole}`;
 
-    // PDF attachment badge (shown above message content)
     let attachmentHTML = '';
     if (filename) {
-        attachmentHTML = `<div class="message-doc-attachment">
-            <i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}
-        </div>`;
+        attachmentHTML = `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>`;
     }
 
-    if (role === 'user') {
-        // User messages: plain text, escaped (no markdown)
+    if (normalizedRole === 'user') {
         const plainText = escapeHtml(content).replace(/\n/g, '<br>');
         messageDiv.innerHTML = `
-            <div class="message-avatar">
-                <i class="fas fa-user"></i>
-            </div>
+            <div class="message-avatar"><i class="fas fa-user"></i></div>
             <div class="message-content">
                 ${attachmentHTML}
                 <span>${plainText}</span>
             </div>
         `;
     } else {
-        // Assistant messages: Await the markdown rendering
+        // Run through parser block to turn '## Heading' into actual <h2> HTML tags
         const renderedContent = await renderMarkdown(content);
-        const sourceBadge = buildSourceBadge(searchTypeUsed);
+        const effectiveSource = searchTypeUsed || (String(content).toLowerCase().includes('web') ? 'Web Search' : currentMode);
+        const sourceBadge = buildSourceBadge(effectiveSource);
 
         messageDiv.innerHTML = `
-            <div class="message-avatar">
-                <i class="fas fa-brain"></i>
-            </div>
+            <div class="message-avatar"><i class="fas fa-brain"></i></div>
             <div class="message-content">
                 ${renderedContent}
                 ${sourceBadge}
@@ -189,11 +176,10 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
 }
 
 // ─────────────────────────────────────────────
-// INIT
+// INTERFACE INITIALIZATION
 // ─────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Setup marked.js before anything renders
     setupMarked();
 
     loginPage = document.getElementById('loginPage');
@@ -219,17 +205,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function showLoading() { if (loadingOverlay) loadingOverlay.classList.remove('hidden'); }
 function hideLoading() { if (loadingOverlay) loadingOverlay.classList.add('hidden'); }
 
-// ─────────────────────────────────────────────
-// EVENT LISTENERS
-// ─────────────────────────────────────────────
-
 function setupEventListeners() {
-    document.getElementById('loginBtn')?.addEventListener('click', async () => {
-        showLoading(); await doLogin(); hideLoading();
-    });
-    document.getElementById('registerBtn')?.addEventListener('click', async () => {
-        showLoading(); await doRegister(); hideLoading();
-    });
+    document.getElementById('loginBtn')?.addEventListener('click', async () => { showLoading(); await doLogin(); hideLoading(); });
+    document.getElementById('registerBtn')?.addEventListener('click', async () => { showLoading(); await doRegister(); hideLoading(); });
     document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
     document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
 
@@ -238,7 +216,6 @@ function setupEventListeners() {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
 
-    // Auto-resize textarea
     messageInput?.addEventListener('input', () => {
         messageInput.style.height = 'auto';
         messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
@@ -260,7 +237,7 @@ function setupEventListeners() {
 }
 
 // ─────────────────────────────────────────────
-// AUTH
+// AUTH MANAGEMENT
 // ─────────────────────────────────────────────
 
 async function doLogin() {
@@ -348,7 +325,7 @@ function toggleForms(showRegister) {
 }
 
 // ─────────────────────────────────────────────
-// SESSIONS
+// CHAT SESSION DATABASE INTERACTION
 // ─────────────────────────────────────────────
 
 async function loadSessions() {
@@ -449,7 +426,6 @@ async function loadSession(sessionId) {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
                     const searchType = msg.metadata?.search_type_used || null;
-                    // Safely extract text logic from alternative saved content attributes
                     const cleanMessageContent = msg.content || msg.answer || msg.response || '';
                     await addMessageToChat(msg.role, cleanMessageContent, msg.metadata?.filename, searchType);
                 }
@@ -508,7 +484,7 @@ function clearMessages() {
 }
 
 // ─────────────────────────────────────────────
-// TYPING INDICATOR
+// STREAM VISUAL ANIMATION
 // ─────────────────────────────────────────────
 
 function showTyping() {
@@ -533,7 +509,7 @@ function hideTyping() {
 }
 
 // ─────────────────────────────────────────────
-// FILE HANDLING
+// FILE REPOSITORY CONTROL
 // ─────────────────────────────────────────────
 
 function onFileSelect(e) {
@@ -544,14 +520,11 @@ function onFileSelect(e) {
         fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${escapeHtml(file.name)} <i class="fas fa-check-circle"></i>`;
         fileBadge.classList.remove('hidden');
     }
-    console.log('📎 File selected:', file.name);
 }
 
 async function uploadFile(file, sessionId) {
     const fd = new FormData();
     fd.append('file', file);
-
-    console.log('📤 Uploading file:', file.name);
 
     const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, {
         method: 'POST',
@@ -564,13 +537,11 @@ async function uploadFile(file, sessionId) {
         const error = await res.json();
         throw new Error(error.detail || 'Upload failed');
     }
-    const result = await res.json();
-    console.log('✅ Upload success:', result);
-    return result;
+    return await res.json();
 }
 
 // ─────────────────────────────────────────────
-// SEND MESSAGE — MAIN FLOW
+// OUTBOUND DATA POST ROUTINE
 // ─────────────────────────────────────────────
 
 async function sendMessage() {
@@ -580,18 +551,14 @@ async function sendMessage() {
     const hasFile = !!pendingFile;
     const uploadedFilename = hasFile ? pendingFile.name : null;
 
-    // Clear input immediately
     messageInput.value = '';
     messageInput.style.height = 'auto';
 
-    // Show user message right away
     await addMessageToChat('user', text, uploadedFilename);
 
-    // Auto-title on first message
     const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
     if (messageCount === 1) await autoTitle(currentSessionId, text);
 
-    // Upload file if attached
     if (hasFile) {
         try {
             showTyping();
@@ -629,16 +596,15 @@ async function sendMessage() {
         hideTyping();
 
         if (res.ok) {
-            // Safeguard inspection for web search responses using alternate payload properties
             const finalAnswer = data.answer || data.response || data.content || '';
-            await addMessageToChat('assistant', finalAnswer, null, data.search_type_used || currentMode);
+            const searchSource = data.search_type_used || (currentMode === 'hybrid' ? 'Web Search' : currentMode);
+            await addMessageToChat('assistant', finalAnswer, null, searchSource);
         } else {
             await addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
         }
     } catch (err) {
         hideTyping();
         await addMessageToChat('assistant', 'Connection error. Please check your network.');
-        console.error('Send message error:', err);
     } finally {
         if (sendBtn) sendBtn.disabled = false;
         messageInput?.focus();
@@ -646,7 +612,7 @@ async function sendMessage() {
 }
 
 // ─────────────────────────────────────────────
-// HELPERS
+// COMPLEMENTARY RESTRUCTURING UTILITIES
 // ─────────────────────────────────────────────
 
 async function autoTitle(sessionId, firstMsg) {
