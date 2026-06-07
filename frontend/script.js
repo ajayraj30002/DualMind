@@ -77,41 +77,35 @@ function setupMarked() {
 // RENDER MARKDOWN - FIXED (ASYNC)
 // ─────────────────────────────────────────────
 
-// REPLACE the renderMarkdown function with this FIXED version
 async function renderMarkdown(text) {
     if (!text) return '<div class="md-body"></div>';
+    
+    // Ensure text parameter is strictly evaluated as a clean string data type
+    let cleanText = String(text);
+    
     try {
         let html;
-        // Try different marked.js API patterns
-        if (typeof marked === 'function') {
-            // Old version (synchronous)
-            html = marked(text);
-        } else if (marked.parse && typeof marked.parse === 'function') {
-            // New version - could be sync or async
-            const result = marked.parse(text);
-            if (result && typeof result.then === 'function') {
-                html = await result; // It's a Promise
-            } else {
-                html = result; // It's a string
-            }
+        // Try different marked.js API patterns safely
+        if (marked.parse && typeof marked.parse === 'function') {
+            const result = marked.parse(cleanText);
+            html = (result && typeof result.then === 'function') ? await result : result;
+        } else if (typeof marked === 'function') {
+            html = marked(cleanText);
         } else if (marked.default && typeof marked.default.parse === 'function') {
-            const result = marked.default.parse(text);
-            if (result && typeof result.then === 'function') {
-                html = await result;
-            } else {
-                html = result;
-            }
+            const result = marked.default.parse(cleanText);
+            html = (result && typeof result.then === 'function') ? await result : result;
         } else {
-            html = text;
+            html = cleanText;
         }
         
-        console.log('Markdown rendered successfully, length:', html.length);
         return `<div class="md-body">${html}</div>`;
     } catch (e) {
         console.error('Markdown render error:', e);
-        return `<div class="md-body"><p>${escapeHtml(text).replace(/\n/g, '<br>')}</p></div>`;
+        // Fallback that manual converts text spacing without breaking raw heading text styling layout
+        return `<div class="md-body">${cleanText.replace(/\n/g, '<br>')}</div>`;
     }
 }
+
 // ─────────────────────────────────────────────
 // SOURCE BADGE
 // ─────────────────────────────────────────────
@@ -454,9 +448,10 @@ async function loadSession(sessionId) {
             } else {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
-                    // Pass search type from stored metadata if available
                     const searchType = msg.metadata?.search_type_used || null;
-                    await addMessageToChat(msg.role, msg.content, msg.metadata?.filename, searchType);
+                    // Safely extract text logic from alternative saved content attributes
+                    const cleanMessageContent = msg.content || msg.answer || msg.response || '';
+                    await addMessageToChat(msg.role, cleanMessageContent, msg.metadata?.filename, searchType);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
@@ -589,7 +584,7 @@ async function sendMessage() {
     messageInput.value = '';
     messageInput.style.height = 'auto';
 
-    // Show user message right away (await is important)
+    // Show user message right away
     await addMessageToChat('user', text, uploadedFilename);
 
     // Auto-title on first message
@@ -634,8 +629,9 @@ async function sendMessage() {
         hideTyping();
 
         if (res.ok) {
-            // Pass search_type_used so the source badge renders correctly
-            await addMessageToChat('assistant', data.answer, null, data.search_type_used || currentMode);
+            // Safeguard inspection for web search responses using alternate payload properties
+            const finalAnswer = data.answer || data.response || data.content || '';
+            await addMessageToChat('assistant', finalAnswer, null, data.search_type_used || currentMode);
         } else {
             await addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
         }
