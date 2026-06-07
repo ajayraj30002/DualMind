@@ -21,6 +21,39 @@ const WELCOME_HTML = `
 `;
 
 // ─────────────────────────────────────────────
+// CLEAN DUALMIND RESPONSE - REMOVE RAW SYMBOLS
+// ─────────────────────────────────────────────
+
+function cleanDualMindResponse(rawText) {
+    if (!rawText || typeof rawText !== 'string') return '';
+    
+    let cleaned = rawText;
+    
+    // Remove standalone numbers like "33" on their own line
+    cleaned = cleaned.replace(/^\d+\s*$/gm, '');
+    
+    // Remove "33." patterns at start of lines (numbered lists that break)
+    cleaned = cleaned.replace(/^\d+\.\s+/gm, '');
+    
+    // Ensure proper spacing after headings (## Heading -> no extra spaces)
+    cleaned = cleaned.replace(/^##\s+/gm, '## ');
+    
+    // Fix bullet points - ensure dash followed by space
+    cleaned = cleaned.replace(/^-\s*/gm, '- ');
+    
+    // Remove multiple consecutive newlines (more than 2)
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    
+    // Remove "Web Search" raw text label (will be added as badge separately)
+    cleaned = cleaned.replace(/Web Search/gi, '');
+    
+    // Trim extra whitespace
+    cleaned = cleaned.trim();
+    
+    return cleaned;
+}
+
+// ─────────────────────────────────────────────
 // MARKDOWN RENDERER SETUP
 // ─────────────────────────────────────────────
 
@@ -109,13 +142,13 @@ function buildSourceBadge(searchTypeUsed) {
 
     if (type.includes('pdf') || type.includes('document')) {
         icon = 'fa-file-pdf';
-        label = 'PDF Document';
+        label = '📄 PDF Document';
     } else if (type.includes('web') || type.includes('open') || type.includes('fallback')) {
         icon = 'fa-globe';
-        label = 'Web Search';
+        label = '🌐 Web Search';
     } else if (type.includes('hybrid')) {
         icon = 'fa-link';
-        label = 'Hybrid Search';
+        label = '🔗 Hybrid Search';
     } else {
         icon = 'fa-database';
         label = searchTypeUsed;
@@ -125,7 +158,7 @@ function buildSourceBadge(searchTypeUsed) {
 }
 
 // ─────────────────────────────────────────────
-// ADD MESSAGE TO CHAT - CORE STYLING FIX
+// ADD MESSAGE TO CHAT
 // ─────────────────────────────────────────────
 
 async function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
@@ -136,8 +169,13 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
 
     const messageDiv = document.createElement('div');
     
-    // FORCE ASSISTANT FORMATTING IF TEXT CONTAINS MARKDOWN SYMBOLS
-    const hasMarkdownSymbols = String(content).includes('##') || String(content).includes('**') || String(content).includes('- ');
+    // Clean the content if it's an assistant message
+    let finalContent = content;
+    if (role === 'assistant') {
+        finalContent = cleanDualMindResponse(content);
+    }
+    
+    const hasMarkdownSymbols = String(finalContent).includes('##') || String(finalContent).includes('**') || String(finalContent).includes('- ');
     const normalizedRole = (role === 'user' && !hasMarkdownSymbols) ? 'user' : 'assistant';
     
     messageDiv.className = `message ${normalizedRole}`;
@@ -148,7 +186,7 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
     }
 
     if (normalizedRole === 'user') {
-        const plainText = escapeHtml(content).replace(/\n/g, '<br>');
+        const plainText = escapeHtml(finalContent).replace(/\n/g, '<br>');
         messageDiv.innerHTML = `
             <div class="message-avatar"><i class="fas fa-user"></i></div>
             <div class="message-content">
@@ -157,9 +195,9 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
             </div>
         `;
     } else {
-        // Run through parser block to turn '## Heading' into actual <h2> HTML tags
-        const renderedContent = await renderMarkdown(content);
-        const effectiveSource = searchTypeUsed || (String(content).toLowerCase().includes('web') ? 'Web Search' : currentMode);
+        // Render markdown to HTML
+        const renderedContent = await renderMarkdown(finalContent);
+        const effectiveSource = searchTypeUsed || (String(finalContent).toLowerCase().includes('web') ? 'Web Search' : currentMode);
         const sourceBadge = buildSourceBadge(effectiveSource);
 
         messageDiv.innerHTML = `
@@ -173,6 +211,129 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
 
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// ─────────────────────────────────────────────
+// SEND MESSAGE - FIXED VERSION
+// ─────────────────────────────────────────────
+
+async function sendMessage() {
+    const text = messageInput?.value.trim();
+    if (!text || !currentSessionId) return;
+
+    const hasFile = !!pendingFile;
+    const uploadedFilename = hasFile ? pendingFile.name : null;
+
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+
+    await addMessageToChat('user', text, uploadedFilename);
+
+    const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
+    if (messageCount === 1) await autoTitle(currentSessionId, text);
+
+    if (hasFile) {
+        try {
+            showTyping();
+            await uploadFile(pendingFile, currentSessionId);
+            pendingFile = null;
+            if (fileBadge) fileBadge.classList.add('hidden');
+            hideTyping();
+        } catch (err) {
+            hideTyping();
+            await addMessageToChat('assistant', `❌ Upload failed: ${err.message}. Please try again.`);
+            return;
+        }
+    }
+
+    showTyping();
+    if (sendBtn) sendBtn.disabled = true;
+
+    try {
+        const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                question: text,
+                search_type: currentMode,
+                include_sources: true,
+                uploaded_document: uploadedFilename
+            })
+        });
+
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
+        hideTyping();
+
+        if (res.ok) {
+            let finalAnswer = data.answer || data.response || data.content || '';
+            
+            // Clean the response before rendering
+            finalAnswer = cleanDualMindResponse(finalAnswer);
+            
+            const searchSource = data.search_type_used || (currentMode === 'hybrid' ? 'Web Search' : currentMode);
+            await addMessageToChat('assistant', finalAnswer, null, searchSource);
+        } else {
+            await addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
+        }
+    } catch (err) {
+        hideTyping();
+        await addMessageToChat('assistant', 'Connection error. Please check your network.');
+    } finally {
+        if (sendBtn) sendBtn.disabled = false;
+        messageInput?.focus();
+    }
+}
+
+// ─────────────────────────────────────────────
+// LOAD SESSION MESSAGES (FIXED)
+// ─────────────────────────────────────────────
+
+async function loadSession(sessionId) {
+    if (sessionId === currentSessionId) return;
+    currentSessionId = sessionId;
+
+    try {
+        await loadSessionDocuments(sessionId);
+
+        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
+
+        const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const sessionsData = await sessionsRes.json();
+        const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
+        if (sessionInfo) chatTitleSpan.innerText = sessionInfo.title;
+
+        if (messagesDiv) {
+            if (!data.messages || data.messages.length === 0) {
+                messagesDiv.innerHTML = WELCOME_HTML;
+            } else {
+                messagesDiv.innerHTML = '';
+                for (const msg of data.messages) {
+                    const searchType = msg.metadata?.search_type_used || null;
+                    let cleanMessageContent = msg.content || msg.answer || msg.response || '';
+                    
+                    // Clean assistant messages
+                    if (msg.role === 'assistant') {
+                        cleanMessageContent = cleanDualMindResponse(cleanMessageContent);
+                    }
+                    
+                    await addMessageToChat(msg.role, cleanMessageContent, msg.metadata?.filename, searchType);
+                }
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        }
+
+        await loadSessions();
+    } catch (err) { console.error(err); }
 }
 
 // ─────────────────────────────────────────────
@@ -399,44 +560,6 @@ async function createNewSession() {
     } catch (err) { console.error(err); }
 }
 
-async function loadSession(sessionId) {
-    if (sessionId === currentSessionId) return;
-    currentSessionId = sessionId;
-
-    try {
-        await loadSessionDocuments(sessionId);
-
-        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.status === 401) { doLogout(); return; }
-        const data = await res.json();
-
-        const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const sessionsData = await sessionsRes.json();
-        const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
-        if (sessionInfo) chatTitleSpan.innerText = sessionInfo.title;
-
-        if (messagesDiv) {
-            if (!data.messages || data.messages.length === 0) {
-                messagesDiv.innerHTML = WELCOME_HTML;
-            } else {
-                messagesDiv.innerHTML = '';
-                for (const msg of data.messages) {
-                    const searchType = msg.metadata?.search_type_used || null;
-                    const cleanMessageContent = msg.content || msg.answer || msg.response || '';
-                    await addMessageToChat(msg.role, cleanMessageContent, msg.metadata?.filename, searchType);
-                }
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            }
-        }
-
-        await loadSessions();
-    } catch (err) { console.error(err); }
-}
-
 async function loadSessionDocuments(sessionId) {
     try {
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/documents`, {
@@ -538,77 +661,6 @@ async function uploadFile(file, sessionId) {
         throw new Error(error.detail || 'Upload failed');
     }
     return await res.json();
-}
-
-// ─────────────────────────────────────────────
-// OUTBOUND DATA POST ROUTINE
-// ─────────────────────────────────────────────
-
-async function sendMessage() {
-    const text = messageInput?.value.trim();
-    if (!text || !currentSessionId) return;
-
-    const hasFile = !!pendingFile;
-    const uploadedFilename = hasFile ? pendingFile.name : null;
-
-    messageInput.value = '';
-    messageInput.style.height = 'auto';
-
-    await addMessageToChat('user', text, uploadedFilename);
-
-    const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
-    if (messageCount === 1) await autoTitle(currentSessionId, text);
-
-    if (hasFile) {
-        try {
-            showTyping();
-            await uploadFile(pendingFile, currentSessionId);
-            pendingFile = null;
-            if (fileBadge) fileBadge.classList.add('hidden');
-            hideTyping();
-        } catch (err) {
-            hideTyping();
-            await addMessageToChat('assistant', `❌ Upload failed: ${err.message}. Please try again.`);
-            return;
-        }
-    }
-
-    showTyping();
-    if (sendBtn) sendBtn.disabled = true;
-
-    try {
-        const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                question: text,
-                search_type: currentMode,
-                include_sources: true,
-                uploaded_document: uploadedFilename
-            })
-        });
-
-        if (res.status === 401) { doLogout(); return; }
-        const data = await res.json();
-        hideTyping();
-
-        if (res.ok) {
-            const finalAnswer = data.answer || data.response || data.content || '';
-            const searchSource = data.search_type_used || (currentMode === 'hybrid' ? 'Web Search' : currentMode);
-            await addMessageToChat('assistant', finalAnswer, null, searchSource);
-        } else {
-            await addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
-        }
-    } catch (err) {
-        hideTyping();
-        await addMessageToChat('assistant', 'Connection error. Please check your network.');
-    } finally {
-        if (sendBtn) sendBtn.disabled = false;
-        messageInput?.focus();
-    }
 }
 
 // ─────────────────────────────────────────────
