@@ -113,13 +113,18 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
 
     if successful > 0:
         try:
-            supabase.table("user_documents").insert(
-                {
-                    "user_id": user_id,
-                    "filename": filename,
-                    "chunk_count": successful,
-                }
-            ).execute()
+            # Check if document already exists
+            existing = supabase.table("user_documents").select("*").eq("user_id", user_id).eq("filename", filename).execute()
+            if existing.data:
+                supabase.table("user_documents").update({"chunk_count": successful}).eq("user_id", user_id).eq("filename", filename).execute()
+            else:
+                supabase.table("user_documents").insert(
+                    {
+                        "user_id": user_id,
+                        "filename": filename,
+                        "chunk_count": successful,
+                    }
+                ).execute()
             print(f"Successfully stored {successful}/{len(chunks)} chunks", flush=True)
         except Exception as e:
             print(f"Failed to record document: {e}", flush=True)
@@ -162,10 +167,12 @@ def search_semantic_chunks(
         results = []
         if response.data:
             for row in response.data:
+                similarity_score = row.get("similarity", 0.5)  # Default to 0.5 if missing
                 results.append(
                     {
                         "content": row["chunk_text"],
-                        "similarity": row.get("similarity", 0),
+                        "similarity": similarity_score,
+                        "score": similarity_score,  # Add unified score field
                         "filename": row["filename"],
                         "chunk_index": row.get("chunk_index"),
                         "retrieval_type": "semantic",
@@ -241,11 +248,17 @@ def search_keyword_chunks(
 
     scores.sort(key=lambda item: item[0], reverse=True)
     results = []
+    
+    # Normalize keyword scores to 0-1 range for consistency
+    max_score = max([s for s, _ in scores]) if scores else 1
     for score, row in scores[:top_k]:
+        normalized_score = min(score / max_score, 1.0) if max_score > 0 else 0.5
         results.append(
             {
                 "content": row.get("chunk_text", ""),
-                "keyword_score": score,
+                "keyword_score": normalized_score,
+                "similarity": normalized_score,  # Add unified field
+                "score": normalized_score,      # Add unified score field
                 "filename": row.get("filename", "Unknown"),
                 "chunk_index": row.get("chunk_index"),
                 "retrieval_type": "keyword",
@@ -264,12 +277,25 @@ def search_similar_chunks(
     filename: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Hybrid PDF retrieval: semantic search plus capped keyword matching."""
+    print(f"\n🔍 Hybrid search for: '{question[:50]}'", flush=True)
+    
     semantic_results = search_semantic_chunks(question, user_id, top_k=top_k, filename=filename)
     keyword_top_k = max(top_k, top_k * KEYWORD_TOP_K_MULTIPLIER)
     keyword_results = search_keyword_chunks(question, user_id, top_k=keyword_top_k, filename=filename)
 
     combined = _dedupe_results(semantic_results + keyword_results)
-    print(f"Combined PDF results: {len(combined[:top_k])}", flush=True)
+    
+    # Ensure all results have a unified score field
+    for result in combined:
+        if "score" not in result:
+            result["score"] = result.get("similarity", result.get("keyword_score", 0.3))
+        if "similarity" not in result:
+            result["similarity"] = result.get("score", 0.3)
+    
+    # Sort by score (higher is better)
+    combined.sort(key=lambda x: x.get("score", 0), reverse=True)
+    
+    print(f"📄 Combined PDF results: {len(combined[:top_k])}", flush=True)
     return combined[:top_k]
 
 
