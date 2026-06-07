@@ -6,7 +6,6 @@
     <title>DualMind | AI Assistant</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <!-- Markdown rendering libraries -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -64,7 +63,7 @@
 
         .loading-spinner p { color: #fff; font-size: 0.875rem; }
 
-        /* LOGIN - YOUR EXACT STYLES PRESERVED */
+        /* LOGIN */
         .login-page {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -305,7 +304,7 @@
             align-items: flex-end;
         }
 
-        /* MARKDOWN RENDERED CONTENT — ASSISTANT MESSAGES */
+        /* MARKDOWN RENDERED CONTENT */
         .md-body {
             color: #e5e5e5;
             font-size: 0.875rem;
@@ -565,7 +564,6 @@
         .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .input-hint { text-align: center; font-size: 0.6rem; color: #555; margin-top: 0.5rem; }
-
         .loading-text { text-align: center; padding: 1rem; color: #666; font-size: 0.8rem; }
 
         .typing-dots { display: flex; gap: 4px; padding: 0.3rem; }
@@ -679,19 +677,22 @@
     // RENDER MARKDOWN (ASYNC)
     async function renderMarkdown(text) {
         if (!text) return '<div class="md-body"></div>';
+        
+        let cleanText = String(text);
+        
         try {
             let html;
             if (typeof marked.parse === 'function') {
-                html = await marked.parse(text);
+                html = await marked.parse(cleanText);
             } else if (typeof marked === 'function') {
-                html = marked(text);
+                html = marked(cleanText);
             } else {
-                html = text;
+                html = cleanText;
             }
             return `<div class="md-body">${html}</div>`;
         } catch (e) {
             console.error('Markdown render error:', e);
-            return `<div class="md-body"><p>${escapeHtml(text).replace(/\n/g, '<br>')}</p></div>`;
+            return `<div class="md-body">${cleanText.replace(/\n/g, '<br>')}</div>`;
         }
     }
 
@@ -790,7 +791,11 @@
             if (res.status === 401) { doLogout(); return; }
             const data = await res.json();
             hideTyping();
-            if (res.ok) await addMessageToChat('assistant', data.answer, null, data.search_type_used || currentMode);
+            if (res.ok) {
+                // Safely fetch string variables across varying properties depending on endpoint rules
+                const finalResponseText = data.answer || data.response || data.content || '';
+                await addMessageToChat('assistant', finalResponseText, null, data.search_type_used || currentMode);
+            }
             else await addMessageToChat('assistant', 'Sorry, something went wrong.');
         } catch (err) { hideTyping(); await addMessageToChat('assistant', 'Connection error.'); }
         finally { if (sendBtn) sendBtn.disabled = false; messageInput.focus(); }
@@ -833,7 +838,12 @@
             const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
             chatTitleSpan.innerText = sessionInfo?.title || 'Conversation';
             messagesDiv.innerHTML = (!data.messages || data.messages.length === 0) ? WELCOME_HTML : '';
-            if (data.messages) for (const msg of data.messages) await addMessageToChat(msg.role, msg.content, msg.metadata?.filename, msg.metadata?.search_type_used);
+            if (data.messages) {
+                for (const msg of data.messages) {
+                    const parsedHistoricalText = msg.content || msg.answer || msg.response || '';
+                    await addMessageToChat(msg.role, parsedHistoricalText, msg.metadata?.filename, msg.metadata?.search_type_used);
+                }
+            }
             loadSessions();
         } catch(err) { console.error(err); }
     }
@@ -851,7 +861,6 @@
     
     function doLogout() { token = null; user = null; currentSessionId = null; localStorage.clear(); showLoginUI(); }
     function checkAuth() { const t = localStorage.getItem('dm_token'), u = localStorage.getItem('dm_user'); if(t && u) { token = t; user = JSON.parse(u); showChatUI(); loadSessions(); } else showLoginUI(); }
-    function showLoginUI() { loginPage.classList.remove('hidden'); chatPage.classList.add('hidden'); }
     function showChatUI() { loginPage.classList.add('hidden'); chatPage.classList.remove('hidden'); document.getElementById('userEmailSidebar').innerText = user?.email?.split('@')[0] || 'User'; }
     function toggleForms(reg) { document.getElementById('loginForm').classList.toggle('active', !reg); document.getElementById('registerForm').classList.toggle('active', reg); }
     function showLoading() { loadingOverlay?.classList.remove('hidden'); } function hideLoading() { loadingOverlay?.classList.add('hidden'); }
