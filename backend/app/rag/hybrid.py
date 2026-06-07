@@ -137,7 +137,6 @@ Return this exact JSON format:
 
         # Keep rewritten query short if it got too long
         if len(rewritten_query.split()) > 15 and intent != "CASUAL_CHAT":
-            # Take first 15 words as fallback
             rewritten_query = " ".join(rewritten_query.split()[:15])
             print(f"📏 Shortened rewritten query to: {rewritten_query}")
 
@@ -236,11 +235,11 @@ def fetch_full_document(user_id: str, filename: str) -> str:
 
 
 # ─────────────────────────────────────────────
-# ANSWER GENERATORS
+# FORMATTED ANSWER GENERATORS (ALL WITH MARKDOWN)
 # ─────────────────────────────────────────────
 
 def generate_conversational_answer(question: str, conversation_context: Optional[str] = None) -> str:
-    """Handle casual chat and conversation recall without retrieval."""
+    """Handle casual chat and conversation recall with markdown formatting."""
     context_section = ""
     if conversation_context:
         context_section = f"Recent conversation:\n{conversation_context[-2500:]}\n\n"
@@ -250,9 +249,14 @@ def generate_conversational_answer(question: str, conversation_context: Optional
 
 INSTRUCTIONS:
 - Respond as a warm, capable AI assistant.
+- Use proper markdown formatting:
+  - Start with a friendly greeting or acknowledgment
+  - Use **bold** for emphasis
+  - Use - bullet points for lists
+  - Keep paragraphs short and readable
 - If the user is asking about something discussed earlier, use the conversation context.
 - Do not mention documents, web search, or internal routing.
-- End your response with a helpful, friendly note offering further assistance.
+- End with a helpful, friendly note.
 
 Answer:"""
 
@@ -262,7 +266,7 @@ Answer:"""
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a warm, intelligent AI assistant. Reply naturally and helpfully. Always end with a courteous offer for further help.",
+                    "content": "You are a warm, intelligent AI assistant. Format your responses with proper markdown: use ## for section headers when appropriate, **bold** for emphasis, - for bullet points. Always end with a helpful offer.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -271,8 +275,8 @@ Answer:"""
         )
         answer = completion.choices[0].message.content.strip()
         # Ensure ending is friendly
-        if not any(phrase in answer.lower() for phrase in ["let me know", "feel free", "further", "else", "anything else"]):
-            answer += "\n\nIs there anything else I can help you with?"
+        if not any(phrase in answer.lower() for phrase in ["let me know", "feel free", "further", "anything else"]):
+            answer += "\n\n---\n*Is there anything else I can help you with?*"
         return answer
     except Exception as e:
         print(f"Conversational answer error: {e}")
@@ -286,42 +290,49 @@ def generate_full_document_answer(
     intent: str,
     conversation_context: Optional[str] = None,
 ) -> str:
-    """LLM-based answer using full document text for SUMMARIZE/GENERATE_NOTES."""
+    """LLM-based answer using full document text with beautiful markdown."""
     context_section = ""
     if conversation_context:
         context_section = f"Previous conversation:\n{conversation_context[-1500:]}\n\n"
 
     if intent == "GENERATE_NOTES":
         task_instruction = """
-TASK: Generate clean, structured notes from this document.
+TASK: Generate clean, well-structured notes from this document.
 
-FORMATTING RULES:
+FORMATTING RULES (MUST FOLLOW):
+- Start with a brief introductory sentence
 - Use ## headers for each major topic or section
 - Use - bullet points for key points under each header
-- Each bullet must be a complete sentence
+- Each bullet should be a complete sentence
 - Preserve numbering if present (PO1, PO2, etc.)
 - End with ## Key Takeaways section
+- Use **bold** for important terms
+- Add --- horizontal rule between major sections if helpful
 """
     elif intent == "COMPARE":
         task_instruction = """
 TASK: Compare and contrast the sections or topics the user asked about.
 
-FORMATTING RULES:
+FORMATTING RULES (MUST FOLLOW):
+- Start with a brief overview
 - Use ## header for each item being compared
-- Use - bullets for attributes
+- Use - bullets for attributes under each
+- Use **bold** for key differences
 - End with ## Summary of Differences
+- Add a helpful closing note
 """
-    else:
+    else:  # SUMMARIZE or default
         task_instruction = """
-TASK: Summarize and explain this document clearly.
+TASK: Create a comprehensive, well-structured summary of this document.
 
-FORMATTING RULES:
-- Begin with a 1-2 sentence intro
-- Use ## headers for major sections
-- Use - bullet points for key details
-- Preserve numbering if present
-- End with a short ## Summary
-- End with a helpful note offering further assistance
+FORMATTING RULES (MUST FOLLOW):
+- Start with a 1-2 sentence overview
+- Use ## headers for each major section
+- Use - bullet points for key details under each header
+- Use **bold** for important terms and key concepts
+- Preserve any numbering or structure from the original
+- End with ## Summary section that captures the main points
+- End with a helpful note: "Is there anything specific you'd like to know more about?"
 """
 
     prompt = f"""{context_section}Document "{filename}":
@@ -332,10 +343,12 @@ User asked: "{question}"
 
 {task_instruction}
 
-IMPORTANT:
-- Use ONLY information from the document above
-- Do not fabricate anything
-- End your response with a helpful note offering further assistance
+IMPORTANT FORMATTING REQUIREMENTS:
+- ALWAYS use ## for section headers (not just plain text)
+- ALWAYS use - for bullet points (not * or •)
+- ALWAYS use **bold** for emphasis on key terms
+- Add blank lines between sections for readability
+- DO NOT write walls of text - break into sections and bullets
 
 Answer:"""
 
@@ -345,7 +358,7 @@ Answer:"""
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an AI assistant that presents information in clean markdown with ## headers and - bullets. Never write walls of text. End with a helpful offer.",
+                    "content": "You are an AI assistant that ALWAYS formats responses with proper markdown: ## headers, - bullet points, **bold** for emphasis. Never write plain text paragraphs without structure. Always break content into organized sections.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -353,8 +366,14 @@ Answer:"""
             max_tokens=1400,
         )
         answer = completion.choices[0].message.content.strip()
-        if not any(phrase in answer.lower() for phrase in ["let me know", "feel free", "further", "anything else"]):
-            answer += "\n\nIs there anything else I can help you with?"
+        
+        # Ensure markdown headers are present
+        if not any(header in answer for header in ['##', '# ']):
+            answer = "## Response\n\n" + answer
+        
+        if not any(phrase in answer.lower() for phrase in ["let me know", "feel free", "anything else"]):
+            answer += "\n\n---\n*Is there anything else I can help you with?*"
+        
         return answer
     except Exception as e:
         print(f"Full document answer error: {e}")
@@ -362,11 +381,7 @@ Answer:"""
 
 
 def get_score(result: Dict[str, Any]) -> float:
-    """
-    Safely extract score from result regardless of field name.
-    Handles similarity, score, keyword_score, rerank_score, etc.
-    """
-    # Try common score field names in priority order
+    """Safely extract score from result regardless of field name."""
     score_fields = ["similarity", "rerank_score", "score", "relevance_score", "keyword_score"]
     for field in score_fields:
         if field in result and result[field] is not None:
@@ -377,27 +392,19 @@ def get_score(result: Dict[str, Any]) -> float:
 def filter_results_by_relevance(
     results: List[Dict[str, Any]], min_score: float = MIN_RELEVANCE_SCORE
 ) -> List[Dict[str, Any]]:
-    """
-    Filter by relevance score using get_score() for flexible field handling.
-    NEVER returns results with zero scores if better results exist elsewhere.
-    Returns empty list if no results meet threshold.
-    """
+    """Filter by relevance score using get_score() for flexible field handling."""
     if not results:
         return []
     
-    # Add score to each result using get_score
     for r in results:
         if "extracted_score" not in r:
             r["extracted_score"] = get_score(r)
     
     filtered = [r for r in results if r.get("extracted_score", 0) >= min_score]
     
-    # If we have any results that met threshold, return them
     if filtered:
         return filtered
     
-    # If NO results met threshold, return empty (let web fallback happen)
-    # BUT log what we had for debugging
     if results:
         max_score = max(r.get("extracted_score", 0) for r in results)
         print(f"📊 No results met threshold {min_score}. Max score found: {max_score:.3f}")
@@ -475,100 +482,115 @@ def rerank_with_cohere(query: str, sources: List[Dict[str, Any]], top_n: int = 5
         return sources[:top_n]
 
 
-def sanitize_verbose_response(answer: str) -> str:
-    """Clean up verbose no-match responses."""
-    import re
-
-    patterns = [
-        r"The provided PDFs contain.*?(?:but|and) none of them",
-        r"The documents appear to contain.*?but none of them",
-        r"I couldn't find any relevant information related to .* in your uploaded PDF documents\.",
-        r"Please make sure your PDF contains the relevant information or try uploading a different document\.",
-    ]
-    result = answer
-    for pattern in patterns:
-        result = re.sub(pattern, "", result, flags=re.IGNORECASE)
-    result = re.sub(r'\s+', ' ', result).strip()
-    return result if result else "I don't have that information available."
-
+# ─────────────────────────────────────────────
+# IMPROVED GENERATE ANSWER - ALWAYS MARKDOWN FORMATTED
+# ─────────────────────────────────────────────
 
 def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
-    """Generate a well-structured answer from PDF or web sources."""
+    """Generate a beautifully formatted markdown answer from PDF or web sources."""
     context_section = ""
     if conversation_context:
         context_section = f"Previous conversation:\n{conversation_context}\n\n"
 
+    # Determine source types
+    pdf_sources = [s for s in sources if s.get("source_type") == "PDF Document"]
+    web_sources = [s for s in sources if s.get("source_type") == "Web Search"]
+    
+    has_pdf = len(pdf_sources) > 0
+    has_web = len(web_sources) > 0
+
     if not sources:
-        prompt = f"""{context_section}The user asked: "{question}"
+        prompt = f"""Answer the user's question even without external sources.
 
-You have no relevant information to answer this question.
+User asked: "{question}"
 
-Respond helpfully, explaining what's missing. End with a helpful note offering further assistance."""
+Use your general knowledge to respond.
+FORMATTING REQUIREMENTS:
+- Use ## headers for main sections
+- Use - bullet points for lists
+- Use **bold** for key terms
+- Keep paragraphs short (2-3 sentences max)
+- End with a helpful offer
+
+Answer:"""
     else:
-        pdf_sources = [s for s in sources if s.get("source_type") == "PDF Document"]
-        web_sources = [s for s in sources if s.get("source_type") == "Web Search"]
-
         context_parts = []
 
         if pdf_sources:
-            context_parts.append("From the uploaded document(s):")
+            context_parts.append("## 📄 From Your Documents\n")
             for source in pdf_sources[:5]:
                 content = source.get("content", "")
                 filename = source.get("filename", "Document")
                 if len(content) > 1500:
                     content = content[:1500] + "..."
-                context_parts.append(f"[{filename}]\n{content}")
+                context_parts.append(f"**Source: {filename}**\n{content}\n")
 
         if web_sources:
-            source_label = "FROM WEB SEARCH (current information):" if pdf_sources else "From web search:"
-            context_parts.append(source_label)
+            if pdf_sources:
+                context_parts.append("\n## 🌐 From Web Search\n")
+            else:
+                context_parts.append("## 🌐 Web Search Results\n")
             for idx, source in enumerate(web_sources[:3], 1):
                 content = source.get("content", "")
                 title = source.get("title", f"Source {idx}")
                 if len(content) > 800:
                     content = content[:800] + "..."
-                context_parts.append(f"[{title}]\n{content}")
+                context_parts.append(f"**{title}**\n{content}\n")
 
-        doc_context = "\n\n---\n\n".join(context_parts)
+        doc_context = "\n".join(context_parts)
 
-        if pdf_sources and not web_sources:
+        if has_pdf and not has_web:
             prompt = f"""{context_section}{doc_context}
 
-The user asked: "{question}"
+User question: "{question}"
 
 INSTRUCTIONS:
 1. Use ONLY the PDF content above as your source
-2. Answer clearly and completely in your own words
-3. Use ## headers for major sections
-4. Use - bullet points for lists or key points
-5. If the document doesn't contain the answer, say "I couldn't find this in the document"
-6. Do NOT mention "chunk", "PDF Document", or internal labels
-7. End with a helpful note offering further assistance
+2. Format your answer with proper markdown:
+   - Start with a brief answer summary
+   - Use ## headers to organize information
+   - Use - bullet points for key facts
+   - Use **bold** for important terms
+3. If the information isn't in the document, say "I couldn't find this in your document"
+4. End with: "Is there anything specific you'd like me to help with?"
 
-FORMATTING: Clean markdown with ## headers and - bullets. No walls of text.
+FORMATTING EXAMPLE:
+## Overview
+[Brief answer here]
+
+## Key Points
+- Point one
+- Point two
+
+## Additional Details
+[More context]
 
 Answer:"""
         else:
-            # Web search results (with or without PDFs)
             prompt = f"""{context_section}{doc_context}
 
-The user asked: "{question}"
+User question: "{question}"
 
-INSTRUCTIONS:
-1. Answer using the information above
-2. If both PDF and web sources are present, prioritize PDF but supplement with web
-3. Present information in a clean, well-organized way
-4. Use ## headers to separate major topics
-5. Use - bullet points for lists, steps, or key facts
+INSTRUCTIONS for beautiful markdown response:
+1. Start with a clear, bolded answer or summary
+2. Use ## headers to organize different sections
+3. Use - bullet points for lists and key information
+4. Use **bold** for emphasis on important terms
+5. Use numbered lists for steps or ordered information
 6. Keep paragraphs short (2-3 sentences)
-7. End with a helpful note offering further assistance
+7. Add a --- horizontal rule before your closing note
+8. End with a helpful offer: "Is there anything else I can help with?"
 
-FORMATTING RULES:
-- Begin with a clear 1-2 sentence answer
-- Use ## headers for each main section
-- Use - bullet points for details under each header
-- Add blank lines between sections
-- End with a courteous offer for more help
+Example structure:
+## Quick Answer
+[Direct answer in 1-2 sentences]
+
+## Details
+- Fact one
+- Fact two
+
+## Additional Context
+[More information if needed]
 
 Answer:"""
 
@@ -579,10 +601,14 @@ Answer:"""
                 {
                     "role": "system",
                     "content": (
-                        "You are an intelligent AI assistant. Present answers in clean markdown with "
-                        "## headers for sections and - bullet points for lists. Never write walls of text. "
-                        "Always end your response with a helpful note offering further assistance, like "
-                        "'Is there anything else I can help you with?'"
+                        "You are an AI assistant that ALWAYS formats responses with proper markdown. "
+                        "NEVER write plain paragraphs. ALWAYS use:\n"
+                        "- ## for section headers\n"
+                        "- - for bullet points (not * or •)\n"
+                        "- **bold** for emphasis\n"
+                        "- --- for horizontal rules\n"
+                        "- Numbered lists for steps (1., 2., etc.)\n"
+                        "Break content into organized sections. End with a helpful offer."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -592,10 +618,14 @@ Answer:"""
         )
         answer = completion.choices[0].message.content.strip()
         
-        # Ensure friendly ending if not present
-        friendly_endings = ["let me know", "feel free", "further", "anything else", "can i help"]
+        # Ensure markdown headers are present if answer is long
+        if len(answer) > 200 and '##' not in answer and '# ' not in answer:
+            answer = "## Answer\n\n" + answer
+        
+        # Ensure friendly ending
+        friendly_endings = ["let me know", "feel free", "anything else", "can i help", "further assistance"]
         if not any(phrase in answer.lower() for phrase in friendly_endings):
-            answer += "\n\nIs there anything else I can help you with?"
+            answer += "\n\n---\n*Is there anything else I can help you with?*"
         
         return answer
     except Exception as e:
@@ -615,12 +645,7 @@ async def hybrid_search(
     filename: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Agentic Hybrid RAG pipeline.
-
-    Flow:
-      1. route_query()  → intent + retrieval_mode + rewritten_query
-      2. Execute retrieval based on retrieval_mode
-      3. generate_answer() or generate_full_document_answer()
+    Agentic Hybrid RAG pipeline with beautiful markdown for ALL responses.
     """
     search_type = (search_type or "hybrid").lower()
     if search_type not in {"closed", "open", "hybrid"}:
@@ -692,11 +717,9 @@ async def hybrid_search(
             closed_results = search_closed_domain(rewritten_query, user_id, top_k=8, filename=filename)
             print(f"PDF results (raw): {len(closed_results)}")
             
-            # Add extracted scores to each result
             for r in closed_results:
                 r["extracted_score"] = get_score(r)
             
-            # Log sample scores
             if closed_results:
                 scores = [r.get("extracted_score", 0) for r in closed_results[:5]]
                 print(f"   Sample scores: {scores}")
@@ -748,9 +771,8 @@ async def hybrid_search(
         all_sources = _dedupe_sources(all_sources)
         all_sources = rerank_with_cohere(rewritten_query, all_sources, top_n=5)
 
-    # ── Step 7: Generate answer ──
+    # ── Step 7: Generate answer with markdown ──
     answer = generate_answer(question, all_sources, conversation_context)
-    answer = sanitize_verbose_response(answer)
 
     # ── Step 8: Build response sources ──
     response_sources = []
