@@ -77,27 +77,41 @@ function setupMarked() {
 // RENDER MARKDOWN - FIXED (ASYNC)
 // ─────────────────────────────────────────────
 
+// REPLACE the renderMarkdown function with this FIXED version
 async function renderMarkdown(text) {
     if (!text) return '<div class="md-body"></div>';
-    
     try {
         let html;
-        // marked.parse is ASYNC in version 9+
-        if (typeof marked.parse === 'function') {
-            html = await marked.parse(text);
-        } else if (typeof marked === 'function') {
+        // Try different marked.js API patterns
+        if (typeof marked === 'function') {
+            // Old version (synchronous)
             html = marked(text);
+        } else if (marked.parse && typeof marked.parse === 'function') {
+            // New version - could be sync or async
+            const result = marked.parse(text);
+            if (result && typeof result.then === 'function') {
+                html = await result; // It's a Promise
+            } else {
+                html = result; // It's a string
+            }
+        } else if (marked.default && typeof marked.default.parse === 'function') {
+            const result = marked.default.parse(text);
+            if (result && typeof result.then === 'function') {
+                html = await result;
+            } else {
+                html = result;
+            }
         } else {
             html = text;
         }
+        
+        console.log('Markdown rendered successfully, length:', html.length);
         return `<div class="md-body">${html}</div>`;
     } catch (e) {
         console.error('Markdown render error:', e);
-        // Fallback: plain text with line breaks
         return `<div class="md-body"><p>${escapeHtml(text).replace(/\n/g, '<br>')}</p></div>`;
     }
 }
-
 // ─────────────────────────────────────────────
 // SOURCE BADGE
 // ─────────────────────────────────────────────
