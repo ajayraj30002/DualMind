@@ -286,6 +286,7 @@ async function loadSession(sessionId) {
             } else {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
+                    // Use the updated function that renders markdown for assistant messages
                     addMessageToChat(msg.role, msg.content, msg.metadata?.filename);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -342,7 +343,8 @@ function clearMessages() {
     messagesDiv.innerHTML = WELCOME_HTML;
 }
 
-// THIS IS THE KEY FUNCTION - Shows PDF badge above user message
+// ========== UPDATED FUNCTION - This is the main fix ==========
+// Renders markdown properly for ALL assistant messages (web, RAG, hybrid)
 function addMessageToChat(role, content, filename = null) {
     if (!messagesDiv) return;
     
@@ -355,34 +357,58 @@ function addMessageToChat(role, content, filename = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
     
-    // Create attachment HTML if filename exists
-    let attachmentHTML = '';
+    // Avatar setup
+    const avatarIcon = role === 'user' ? 'fa-user' : 'fa-brain';
+    messageDiv.innerHTML = `<div class="message-avatar"><i class="fas ${avatarIcon}"></i></div>`;
+    
+    // Create content container
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    // Add PDF attachment badge if filename exists
     if (filename) {
-        attachmentHTML = `<div class="message-doc-attachment">
-            <i class="fas fa-file-pdf"></i> 
-            ${escapeHtml(filename)}
-        </div>`;
+        const attachDiv = document.createElement('div');
+        attachDiv.className = 'message-doc-attachment';
+        attachDiv.innerHTML = `<i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}`;
+        contentDiv.appendChild(attachDiv);
     }
     
-    // Format the content with line breaks
-    const formattedContent = escapeHtml(content).replace(/\n/g, '<br>');
+    // CRITICAL FIX: For assistant messages, render markdown properly
+    if (role === 'assistant') {
+        const markdownWrapper = document.createElement('div');
+        markdownWrapper.className = 'markdown-body';
+        contentDiv.appendChild(markdownWrapper);
+        
+        try {
+            // Use marked to convert markdown to HTML
+            let htmlContent = marked.parse(content);
+            markdownWrapper.innerHTML = htmlContent;
+            
+            // Apply syntax highlighting to code blocks
+            if (typeof hljs !== 'undefined') {
+                markdownWrapper.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+            }
+        } catch (e) {
+            // Fallback to plain text if markdown fails
+            markdownWrapper.innerText = content;
+            console.error('Markdown parsing error:', e);
+        }
+    } else {
+        // User messages remain as plain text (no markdown needed)
+        const textDiv = document.createElement('div');
+        textDiv.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
+        contentDiv.appendChild(textDiv);
+    }
     
-    messageDiv.innerHTML = `
-        <div class="message-avatar">
-            <i class="fas ${role === 'user' ? 'fa-user' : 'fa-brain'}"></i>
-        </div>
-        <div class="message-content">
-            ${attachmentHTML}
-            ${formattedContent}
-        </div>
-    `;
-    
+    messageDiv.appendChild(contentDiv);
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
     
-    // Log for debugging
-    if (filename) {
-        console.log(`✅ Added ${role} message with PDF attachment: ${filename}`);
+    // Debug log
+    if (role === 'assistant') {
+        console.log('✅ Assistant message rendered with markdown');
     }
 }
 
@@ -449,7 +475,7 @@ async function uploadFile(file, sessionId) {
     return result;
 }
 
-// MAIN SEND FUNCTION - FIXED
+// MAIN SEND FUNCTION
 async function sendMessage() {
     const text = messageInput?.value.trim();
     if (!text || !currentSessionId) return;
@@ -462,7 +488,7 @@ async function sendMessage() {
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
-    // CRITICAL: Add user message with PDF attachment IMMEDIATELY
+    // Add user message with PDF attachment IMMEDIATELY
     if (hasFile && uploadedFilename) {
         addMessageToChat('user', text, uploadedFilename);
         console.log('📄 Added user message with PDF:', uploadedFilename);
@@ -521,8 +547,8 @@ async function sendMessage() {
         hideTyping();
         
         if (res.ok) {
-            console.log('📚 Response sources:', data.sources);
-            
+            console.log('📚 Response received, rendering with markdown');
+            // The answer will now be properly formatted with markdown
             addMessageToChat('assistant', data.answer);
         } else {
             addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
