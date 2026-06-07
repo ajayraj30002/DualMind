@@ -41,8 +41,25 @@
         /* Shell Architecture */
         .chat-page { display: flex; height: 100vh; width: 100%; }
         .chat-page.hidden { display: none; }
-        .sidebar { width: 260px; background: #111; border-right: 1px solid #222; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid #222; }
+        
+        /* Sidebar with collapse */
+        .sidebar { width: 260px; background: #111; border-right: 1px solid #222; display: flex; flex-direction: column; transition: width 0.3s ease, margin 0.3s ease; position: relative; }
+        .sidebar.collapsed { width: 60px; }
+        .sidebar.collapsed .sidebar-header span, 
+        .sidebar.collapsed .session-title,
+        .sidebar.collapsed .user-row span,
+        .sidebar.collapsed .sidebar-footer .user-row i:not(.fa-bars),
+        .sidebar.collapsed .new-chat-btn span { display: none; }
+        .sidebar.collapsed .new-chat-btn { justify-content: center; padding: 0.75rem; }
+        .sidebar.collapsed .session-item { justify-content: center; padding: 0.6rem; }
+        .sidebar.collapsed .delete-session { display: none; }
+        .sidebar.collapsed .sidebar-footer { justify-content: center; }
+        
+        .sidebar-toggle { position: absolute; right: -12px; top: 20px; background: #f97316; border: none; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; color: #fff; font-size: 12px; transition: transform 0.3s; }
+        .sidebar-toggle:hover { background: #fb923c; transform: scale(1.1); }
+        .sidebar.collapsed .sidebar-toggle { transform: rotate(180deg); }
+        
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid #222; display: flex; justify-content: center; }
         .new-chat-btn { width: 100%; padding: 0.75rem; background: #f97316; border: none; border-radius: 0.5rem; color: #fff; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-family: inherit; }
         .new-chat-btn:hover { background: #fb923c; }
         .session-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
@@ -58,8 +75,9 @@
         .logout-sidebar { background: none; border: none; color: #555; cursor: pointer; padding: 0.5rem; }
         .logout-sidebar:hover { color: #f97316; }
 
-        /* Chat Core Canvas */
+        /* Main Chat */
         .main-chat { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
         .chat-header { padding: 0.75rem 1.5rem; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
         .title-area { display: flex; align-items: center; gap: 0.5rem; }
         .title-area h3 { font-weight: 500; font-size: 1rem; }
@@ -75,7 +93,7 @@
         .welcome i { font-size: 3rem; color: #f97316; margin-bottom: 1rem; }
         .welcome h3 { color: #fff; margin-bottom: 0.3rem; }
 
-        /* Dynamic Bubbles */
+        /* Message Bubbles */
         .message { display: flex; gap: 0.8rem; margin-bottom: 1.5rem; max-width: 85%; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .message.user { flex-direction: row-reverse; margin-left: auto; }
@@ -86,35 +104,40 @@
         .message-content { background: #1a1a1a; padding: 0.75rem 1rem; border-radius: 1rem; font-size: 0.875rem; line-height: 1.6; word-wrap: break-word; max-width: 100%; border: 1px solid #2a2a2a; }
         .message.user .message-content { background: #f97316; border-color: #f97316; display: flex; flex-direction: column; align-items: flex-end; }
 
-        /* Markdown Document Core Compilation */
+        /* Markdown Styles */
         .md-body { color: #e5e5e5; font-size: 0.875rem; line-height: 1.7; }
         .md-body h1, .md-body h2, .md-body h3, .md-body h4 { color: #ffffff; font-weight: 600; margin-top: 1.2rem; margin-bottom: 0.5rem; line-height: 1.3; }
         .md-body h1 { font-size: 1.15rem; border-bottom: 1px solid #2a2a2a; padding-bottom: 0.4rem; }
         .md-body h2 { font-size: 1rem; color: #f97316; }
         .md-body h3 { font-size: 0.9rem; color: #fb923c; }
         .md-body h4 { font-size: 0.85rem; color: #fdba74; }
-        .md-body h1:first-child, .md-body h2:first-child, .md-body h3:first-child { margin-top: 0; }
         .md-body p { margin-bottom: 0.75rem; color: #d4d4d4; }
-        .md-body p:last-child { margin-bottom: 0; }
         .md-body ul { margin: 0.5rem 0 0.75rem 0; padding-left: 1.25rem; list-style: none; }
         .md-body ul li { position: relative; padding-left: 0.5rem; margin-bottom: 0.4rem; color: #d4d4d4; line-height: 1.6; }
         .md-body ul li::before { content: '▸'; position: absolute; left: -1rem; color: #f97316; font-size: 0.7rem; top: 0.15rem; }
         .md-body ol { margin: 0.5rem 0 0.75rem 0; padding-left: 1.5rem; }
-        .md-body ol li { margin-bottom: 0.4rem; color: #d4d4d4; line-height: 1.6; padding-left: 0.25rem; }
+        .md-body ol li { margin-bottom: 0.4rem; color: #d4d4d4; line-height: 1.6; }
         .md-body ol li::marker { color: #f97316; font-weight: 600; }
         .md-body strong { color: #ffffff; font-weight: 600; }
         .md-body em { color: #fdba74; font-style: italic; }
-        .md-body code { font-family: 'JetBrains Mono', monospace; background: #0d0d0d; border: 1px solid #333; border-radius: 4px; padding: 0.15rem 0.4rem; font-size: 0.78rem; color: #fb923c; }
-        .md-body pre { background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 0.6rem; padding: 1rem; overflow-x: auto; margin: 0.75rem 0; }
-        .md-body pre code { background: none; border: none; padding: 0; color: #e5e5e5; font-size: 0.78rem; line-height: 1.6; }
+        
+        /* Code Block with Copy Button */
+        .code-wrapper { position: relative; margin: 0.75rem 0; }
+        .code-wrapper pre { background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 0.6rem; padding: 1rem; overflow-x: auto; margin: 0; }
+        .code-wrapper code { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; line-height: 1.6; color: #e5e5e5; }
+        .copy-btn { position: absolute; top: 8px; right: 8px; background: #2a2a2a; border: 1px solid #444; border-radius: 0.4rem; padding: 4px 8px; color: #aaa; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-family: inherit; }
+        .copy-btn:hover { background: #f97316; color: #fff; border-color: #f97316; }
+        .copy-btn.copied { background: #22c55e; color: #fff; border-color: #22c55e; }
+        
+        .md-body pre { background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 0.6rem; padding: 1rem; overflow-x: auto; margin: 0.75rem 0; position: relative; }
+        .md-body pre code { background: none; border: none; padding: 0; color: #e5e5e5; font-size: 0.78rem; line-height: 1.6; display: block; }
+        
         .md-body blockquote { border-left: 3px solid #f97316; margin: 0.75rem 0; padding: 0.5rem 0 0.5rem 1rem; background: rgba(249, 115, 22, 0.05); border-radius: 0 0.4rem 0.4rem 0; }
         .md-body blockquote p { color: #aaa; font-style: italic; margin-bottom: 0; }
         .md-body hr { border: none; border-top: 1px solid #2a2a2a; margin: 1rem 0; }
         .md-body table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.82rem; }
         .md-body th { background: #1f1f1f; color: #f97316; font-weight: 600; padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #2a2a2a; }
         .md-body td { padding: 0.45rem 0.75rem; border: 1px solid #222; color: #d4d4d4; }
-        .md-body tr:nth-child(even) td { background: #141414; }
-        .md-body tr:hover td { background: #1f1f1f; }
         .md-body a { color: #f97316; text-decoration: none; border-bottom: 1px solid rgba(249,115,22,0.3); }
         .md-body a:hover { border-color: #f97316; }
 
@@ -122,7 +145,7 @@
         .source-badge i { font-size: 0.6rem; }
         .message-doc-attachment { background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 16px; font-size: 0.7rem; margin-bottom: 6px; display: inline-flex; align-items: center; gap: 5px; color: #fff; font-weight: 500; }
 
-        /* Input Controls */
+        /* Input Section */
         .input-section { padding: 1rem 1.5rem 1.5rem; border-top: 1px solid #222; }
         .attach-row { margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
         .attach-btn { padding: 0.3rem 0.8rem; background: #1a1a1a; border: 1px solid #333; border-radius: 0.5rem; color: #aaa; cursor: pointer; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.2s; font-family: inherit; }
@@ -151,8 +174,8 @@
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
-        @media (max-width: 768px) { .sidebar { width: 200px; } .message { max-width: 92%; } .chat-header { padding: 0.5rem 1rem; } .messages-container { padding: 1rem; } .input-section { padding: 0.75rem 1rem 1rem; } }
-        @media (max-width: 640px) { .sidebar { position: fixed; left: -260px; z-index: 100; transition: left 0.3s; } .sidebar.open { left: 0; } }
+        
+        @media (max-width: 768px) { .sidebar { width: 200px; } .sidebar.collapsed { width: 50px; } .message { max-width: 92%; } }
     </style>
 </head>
 <body>
@@ -183,8 +206,9 @@
 </div>
 
 <div id="chatPage" class="chat-page hidden">
-    <div class="sidebar">
-        <div class="sidebar-header"><button id="newChatBtn" class="new-chat-btn"><i class="fas fa-plus"></i> New chat</button></div>
+    <div class="sidebar" id="sidebar">
+        <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-chevron-left"></i></button>
+        <div class="sidebar-header"><button id="newChatBtn" class="new-chat-btn"><i class="fas fa-plus"></i> <span>New chat</span></button></div>
         <div id="sessionList" class="session-list"></div>
         <div class="sidebar-footer"><div class="user-row"><i class="fas fa-user-circle"></i> <span id="userEmailSidebar"></span></div><button id="logoutSidebarBtn" class="logout-sidebar"><i class="fas fa-sign-out-alt"></i></button></div>
     </div>
