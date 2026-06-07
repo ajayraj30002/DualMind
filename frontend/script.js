@@ -20,7 +20,149 @@ const WELCOME_HTML = `
     </div>
 `;
 
+// ─────────────────────────────────────────────
+// MARKDOWN RENDERER SETUP
+// Configure marked.js once at startup
+// ─────────────────────────────────────────────
+
+function setupMarked() {
+    // Custom renderer for extra control
+    const renderer = new marked.Renderer();
+
+    // Open links in new tab
+    renderer.link = (href, title, text) => {
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" ${title ? `title="${title}"` : ''}>${text}</a>`;
+    };
+
+    // Code blocks with syntax highlighting
+    renderer.code = (code, language) => {
+        let highlighted = code;
+        if (language && hljs.getLanguage(language)) {
+            try {
+                highlighted = hljs.highlight(code, { language }).value;
+            } catch (_) {}
+        } else {
+            try {
+                highlighted = hljs.highlightAuto(code).value;
+            } catch (_) {}
+        }
+        return `<pre><code class="hljs ${language || ''}">${highlighted}</code></pre>`;
+    };
+
+    marked.setOptions({
+        renderer,
+        gfm: true,         // GitHub Flavored Markdown (tables, strikethrough)
+        breaks: true,      // Convert \n to <br> inside paragraphs
+        pedantic: false,
+    });
+}
+
+// ─────────────────────────────────────────────
+// RENDER MARKDOWN SAFELY
+// For assistant messages only — user messages stay plain text
+// ─────────────────────────────────────────────
+
+function renderMarkdown(text) {
+    if (!text) return '';
+    try {
+        // marked.parse returns HTML string
+        const html = marked.parse(text);
+        return `<div class="md-body">${html}</div>`;
+    } catch (e) {
+        console.error('Markdown render error:', e);
+        // Fallback: plain text with line breaks
+        return `<div class="md-body"><p>${escapeHtml(text).replace(/\n/g, '<br>')}</p></div>`;
+    }
+}
+
+// ─────────────────────────────────────────────
+// SOURCE BADGE
+// Shows a small pill under assistant message indicating source
+// ─────────────────────────────────────────────
+
+function buildSourceBadge(searchTypeUsed) {
+    if (!searchTypeUsed || searchTypeUsed === 'Conversation') return '';
+
+    let icon, label, color;
+
+    if (searchTypeUsed === 'PDF Document' || searchTypeUsed === 'document_full') {
+        icon = 'fa-file-pdf';
+        label = 'PDF Document';
+    } else if (searchTypeUsed === 'Web Search') {
+        icon = 'fa-globe';
+        label = 'Web Search';
+    } else if (searchTypeUsed === 'No results') {
+        return '';
+    } else {
+        icon = 'fa-database';
+        label = searchTypeUsed;
+    }
+
+    return `<div class="source-badge"><i class="fas ${icon}"></i> ${label}</div>`;
+}
+
+// ─────────────────────────────────────────────
+// ADD MESSAGE TO CHAT
+// ─────────────────────────────────────────────
+
+function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
+    if (!messagesDiv) return;
+
+    // Remove welcome screen on first user message
+    const welcome = messagesDiv.querySelector('.welcome');
+    if (welcome && role === 'user') welcome.remove();
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}`;
+
+    // PDF attachment badge (shown above message content)
+    let attachmentHTML = '';
+    if (filename) {
+        attachmentHTML = `<div class="message-doc-attachment">
+            <i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}
+        </div>`;
+    }
+
+    if (role === 'user') {
+        // User messages: plain text, escaped (no markdown)
+        const plainText = escapeHtml(content).replace(/\n/g, '<br>');
+        messageDiv.innerHTML = `
+            <div class="message-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="message-content">
+                ${attachmentHTML}
+                <span>${plainText}</span>
+            </div>
+        `;
+    } else {
+        // Assistant messages: full markdown rendering
+        const renderedContent = renderMarkdown(content);
+        const sourceBadge = buildSourceBadge(searchTypeUsed);
+
+        messageDiv.innerHTML = `
+            <div class="message-avatar">
+                <i class="fas fa-brain"></i>
+            </div>
+            <div class="message-content">
+                ${renderedContent}
+                ${sourceBadge}
+            </div>
+        `;
+    }
+
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Setup marked.js before anything renders
+    setupMarked();
+
     loginPage = document.getElementById('loginPage');
     chatPage = document.getElementById('chatPage');
     sessionListDiv = document.getElementById('sessionList');
@@ -36,50 +178,45 @@ document.addEventListener('DOMContentLoaded', () => {
     fileBadge = document.getElementById('fileBadge');
     modeBtns = document.querySelectorAll('.mode-btn');
     loadingOverlay = document.getElementById('loadingOverlay');
-    
+
     setupEventListeners();
     checkAuth();
 });
 
-function showLoading() {
-    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
-}
+function showLoading() { if (loadingOverlay) loadingOverlay.classList.remove('hidden'); }
+function hideLoading() { if (loadingOverlay) loadingOverlay.classList.add('hidden'); }
 
-function hideLoading() {
-    if (loadingOverlay) loadingOverlay.classList.add('hidden');
-}
+// ─────────────────────────────────────────────
+// EVENT LISTENERS
+// ─────────────────────────────────────────────
 
 function setupEventListeners() {
     document.getElementById('loginBtn')?.addEventListener('click', async () => {
-        showLoading();
-        await doLogin();
-        hideLoading();
+        showLoading(); await doLogin(); hideLoading();
     });
     document.getElementById('registerBtn')?.addEventListener('click', async () => {
-        showLoading();
-        await doRegister();
-        hideLoading();
+        showLoading(); await doRegister(); hideLoading();
     });
     document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
     document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
-    
+
     sendBtn?.addEventListener('click', sendMessage);
-    messageInput?.addEventListener('keydown', (e) => { 
-        if (e.key === 'Enter' && !e.shiftKey) { 
-            e.preventDefault(); 
-            sendMessage(); 
-        } 
+    messageInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
+
+    // Auto-resize textarea
+    messageInput?.addEventListener('input', () => {
+        messageInput.style.height = 'auto';
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+    });
+
     newChatBtn?.addEventListener('click', createNewSession);
     renameBtn?.addEventListener('click', renameSession);
-    logoutBtn?.addEventListener('click', async () => {
-        showLoading();
-        doLogout();
-        hideLoading();
-    });
+    logoutBtn?.addEventListener('click', async () => { showLoading(); doLogout(); hideLoading(); });
     attachBtn?.addEventListener('click', () => fileInput?.click());
     fileInput?.addEventListener('change', onFileSelect);
-    
+
     modeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             modeBtns.forEach(b => b.classList.remove('active'));
@@ -89,11 +226,15 @@ function setupEventListeners() {
     });
 }
 
+// ─────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────
+
 async function doLogin() {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
     if (!email || !password) { alert('Enter email and password'); hideLoading(); return; }
-    
+
     try {
         const res = await fetch(`${API_URL}/auth/signin`, {
             method: 'POST',
@@ -120,7 +261,7 @@ async function doRegister() {
     const password = document.getElementById('registerPassword').value;
     if (!email || !password) { alert('Fill all fields'); return; }
     if (password.length < 6) { alert('Password min 6 chars'); return; }
-    
+
     try {
         const res = await fetch(`${API_URL}/auth/signup`, {
             method: 'POST',
@@ -139,10 +280,7 @@ async function doRegister() {
 }
 
 function doLogout() {
-    token = null;
-    user = null;
-    currentSessionId = null;
-    currentSessionDocuments = [];
+    token = null; user = null; currentSessionId = null; currentSessionDocuments = [];
     localStorage.clear();
     showLoginUI();
 }
@@ -172,28 +310,25 @@ function showChatUI() {
 }
 
 function toggleForms(showRegister) {
-    const loginForm = document.getElementById('loginForm');
-    const registerForm = document.getElementById('registerForm');
-    if (showRegister) {
-        loginForm.classList.remove('active');
-        registerForm.classList.add('active');
-    } else {
-        registerForm.classList.remove('active');
-        loginForm.classList.add('active');
-    }
+    document.getElementById('loginForm').classList.toggle('active', !showRegister);
+    document.getElementById('registerForm').classList.toggle('active', showRegister);
 }
+
+// ─────────────────────────────────────────────
+// SESSIONS
+// ─────────────────────────────────────────────
 
 async function loadSessions() {
     if (!sessionListDiv) return;
     sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
-    
+
     try {
         const res = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
-        
+
         if (res.ok && data.sessions && data.sessions.length > 0) {
             renderSessionList(data.sessions);
             if (!currentSessionId && data.sessions[0]) {
@@ -201,9 +336,7 @@ async function loadSessions() {
             }
         } else {
             sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
-            if (!currentSessionId) {
-                await createNewSession();
-            }
+            if (!currentSessionId) await createNewSession();
         }
     } catch (err) {
         console.error(err);
@@ -217,7 +350,7 @@ function renderSessionList(sessions) {
         sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
         return;
     }
-    
+
     sessionListDiv.innerHTML = '';
     for (const s of sessions) {
         const div = document.createElement('div');
@@ -228,9 +361,7 @@ function renderSessionList(sessions) {
             <button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>
         `;
         div.addEventListener('click', (e) => {
-            if (!e.target.closest('.delete-session')) {
-                loadSession(s.id);
-            }
+            if (!e.target.closest('.delete-session')) loadSession(s.id);
         });
         div.querySelector('.delete-session')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -261,38 +392,37 @@ async function createNewSession() {
 async function loadSession(sessionId) {
     if (sessionId === currentSessionId) return;
     currentSessionId = sessionId;
-    
+
     try {
         await loadSessionDocuments(sessionId);
-        
+
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
-        
+
         const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const sessionsData = await sessionsRes.json();
         const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
-        if (sessionInfo) {
-            chatTitleSpan.innerText = sessionInfo.title;
-        }
-        
+        if (sessionInfo) chatTitleSpan.innerText = sessionInfo.title;
+
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
                 messagesDiv.innerHTML = WELCOME_HTML;
             } else {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
-                    // Use the updated function that renders markdown for assistant messages
-                    addMessageToChat(msg.role, msg.content, msg.metadata?.filename);
+                    // Pass search type from stored metadata if available
+                    const searchType = msg.metadata?.search_type_used || null;
+                    addMessageToChat(msg.role, msg.content, msg.metadata?.filename, searchType);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
         }
-        
+
         await loadSessions();
     } catch (err) { console.error(err); }
 }
@@ -314,13 +444,13 @@ async function loadSessionDocuments(sessionId) {
 
 async function deleteSession(sessionId) {
     if (!confirm('Delete this conversation?')) return;
-    
+
     try {
         await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (currentSessionId === sessionId) {
             currentSessionId = null;
             currentSessionDocuments = [];
@@ -343,74 +473,9 @@ function clearMessages() {
     messagesDiv.innerHTML = WELCOME_HTML;
 }
 
-// ========== UPDATED FUNCTION - This is the main fix ==========
-// Renders markdown properly for ALL assistant messages (web, RAG, hybrid)
-function addMessageToChat(role, content, filename = null) {
-    if (!messagesDiv) return;
-    
-    // Remove welcome message if it's the first user message
-    const welcome = messagesDiv.querySelector('.welcome');
-    if (welcome && role === 'user') {
-        welcome.remove();
-    }
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}`;
-    
-    // Avatar setup
-    const avatarIcon = role === 'user' ? 'fa-user' : 'fa-brain';
-    messageDiv.innerHTML = `<div class="message-avatar"><i class="fas ${avatarIcon}"></i></div>`;
-    
-    // Create content container
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-    
-    // Add PDF attachment badge if filename exists
-    if (filename) {
-        const attachDiv = document.createElement('div');
-        attachDiv.className = 'message-doc-attachment';
-        attachDiv.innerHTML = `<i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}`;
-        contentDiv.appendChild(attachDiv);
-    }
-    
-    // CRITICAL FIX: For assistant messages, render markdown properly
-    if (role === 'assistant') {
-        const markdownWrapper = document.createElement('div');
-        markdownWrapper.className = 'markdown-body';
-        contentDiv.appendChild(markdownWrapper);
-        
-        try {
-            // Use marked to convert markdown to HTML
-            let htmlContent = marked.parse(content);
-            markdownWrapper.innerHTML = htmlContent;
-            
-            // Apply syntax highlighting to code blocks
-            if (typeof hljs !== 'undefined') {
-                markdownWrapper.querySelectorAll('pre code').forEach((block) => {
-                    hljs.highlightElement(block);
-                });
-            }
-        } catch (e) {
-            // Fallback to plain text if markdown fails
-            markdownWrapper.innerText = content;
-            console.error('Markdown parsing error:', e);
-        }
-    } else {
-        // User messages remain as plain text (no markdown needed)
-        const textDiv = document.createElement('div');
-        textDiv.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
-        contentDiv.appendChild(textDiv);
-    }
-    
-    messageDiv.appendChild(contentDiv);
-    messagesDiv.appendChild(messageDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    
-    // Debug log
-    if (role === 'assistant') {
-        console.log('✅ Assistant message rendered with markdown');
-    }
-}
+// ─────────────────────────────────────────────
+// TYPING INDICATOR
+// ─────────────────────────────────────────────
 
 function showTyping() {
     if (!messagesDiv) return;
@@ -419,15 +484,9 @@ function showTyping() {
     typing.className = 'message assistant';
     typing.id = 'typingIndicator';
     typing.innerHTML = `
-        <div class="message-avatar">
-            <i class="fas fa-brain"></i>
-        </div>
+        <div class="message-avatar"><i class="fas fa-brain"></i></div>
         <div class="message-content">
-            <div class="typing-dots">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
+            <div class="typing-dots"><span></span><span></span><span></span></div>
         </div>
     `;
     messagesDiv.appendChild(typing);
@@ -439,12 +498,13 @@ function hideTyping() {
     if (el) el.remove();
 }
 
+// ─────────────────────────────────────────────
+// FILE HANDLING
+// ─────────────────────────────────────────────
+
 function onFileSelect(e) {
     const file = e.target.files[0];
-    if (!file || !file.name.endsWith('.pdf')) {
-        alert('Please select a PDF file');
-        return;
-    }
+    if (!file || !file.name.endsWith('.pdf')) { alert('Please select a PDF file'); return; }
     pendingFile = file;
     if (fileBadge) {
         fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${escapeHtml(file.name)} <i class="fas fa-check-circle"></i>`;
@@ -456,15 +516,15 @@ function onFileSelect(e) {
 async function uploadFile(file, sessionId) {
     const fd = new FormData();
     fd.append('file', file);
-    
+
     console.log('📤 Uploading file:', file.name);
-    
+
     const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: fd
     });
-    
+
     if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
     if (!res.ok) {
         const error = await res.json();
@@ -475,42 +535,33 @@ async function uploadFile(file, sessionId) {
     return result;
 }
 
-// MAIN SEND FUNCTION
+// ─────────────────────────────────────────────
+// SEND MESSAGE — MAIN FLOW
+// ─────────────────────────────────────────────
+
 async function sendMessage() {
     const text = messageInput?.value.trim();
     if (!text || !currentSessionId) return;
-    
-    // Save file info before clearing
+
     const hasFile = !!pendingFile;
     const uploadedFilename = hasFile ? pendingFile.name : null;
-    
+
     // Clear input immediately
     messageInput.value = '';
     messageInput.style.height = 'auto';
-    
-    // Add user message with PDF attachment IMMEDIATELY
-    if (hasFile && uploadedFilename) {
-        addMessageToChat('user', text, uploadedFilename);
-        console.log('📄 Added user message with PDF:', uploadedFilename);
-    } else {
-        addMessageToChat('user', text);
-        console.log('💬 Added user message without PDF');
-    }
-    
-    // Auto-title for first message
+
+    // Show user message right away
+    addMessageToChat('user', text, uploadedFilename);
+
+    // Auto-title on first message
     const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
-    const isFirst = messageCount === 1;
-    if (isFirst) {
-        await autoTitle(currentSessionId, text);
-    }
-    
-    // Upload file if exists
-    let fileUploaded = false;
+    if (messageCount === 1) await autoTitle(currentSessionId, text);
+
+    // Upload file if attached
     if (hasFile) {
         try {
             showTyping();
             await uploadFile(pendingFile, currentSessionId);
-            fileUploaded = true;
             pendingFile = null;
             if (fileBadge) fileBadge.classList.add('hidden');
             hideTyping();
@@ -520,13 +571,10 @@ async function sendMessage() {
             return;
         }
     }
-    
-    const searchMode = currentMode;
-    console.log('🔍 Search mode:', searchMode, 'File uploaded:', fileUploaded);
-    
+
     showTyping();
     if (sendBtn) sendBtn.disabled = true;
-    
+
     try {
         const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
@@ -536,20 +584,19 @@ async function sendMessage() {
             },
             body: JSON.stringify({
                 question: text,
-                search_type: searchMode,
+                search_type: currentMode,
                 include_sources: true,
                 uploaded_document: uploadedFilename
             })
         });
-        
+
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
         hideTyping();
-        
+
         if (res.ok) {
-            console.log('📚 Response received, rendering with markdown');
-            // The answer will now be properly formatted with markdown
-            addMessageToChat('assistant', data.answer);
+            // Pass search_type_used so the source badge renders correctly
+            addMessageToChat('assistant', data.answer, null, data.search_type_used);
         } else {
             addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
         }
@@ -562,6 +609,10 @@ async function sendMessage() {
         messageInput?.focus();
     }
 }
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
 
 async function autoTitle(sessionId, firstMsg) {
     const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
@@ -578,7 +629,7 @@ async function autoTitle(sessionId, firstMsg) {
 async function renameSession() {
     const newName = prompt('Rename conversation:', chatTitleSpan?.innerText);
     if (!newName || newName === chatTitleSpan?.innerText || !currentSessionId) return;
-    
+
     try {
         await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, {
             method: 'PUT',
