@@ -235,11 +235,11 @@ def fetch_full_document(user_id: str, filename: str) -> str:
 
 
 # ─────────────────────────────────────────────
-# FORMATTED ANSWER GENERATORS (ALL WITH MARKDOWN)
+# CASUAL CONVERSATION (SIMPLE, NO MARKDOWN)
 # ─────────────────────────────────────────────
 
 def generate_conversational_answer(question: str, conversation_context: Optional[str] = None) -> str:
-    """Handle casual chat and conversation recall with markdown formatting."""
+    """Handle casual chat and conversation recall - SIMPLE plain text response."""
     context_section = ""
     if conversation_context:
         context_section = f"Recent conversation:\n{conversation_context[-2500:]}\n\n"
@@ -249,14 +249,17 @@ def generate_conversational_answer(question: str, conversation_context: Optional
 
 INSTRUCTIONS:
 - Respond as a warm, capable AI assistant.
-- Use proper markdown formatting:
-  - Start with a friendly greeting or acknowledgment
-  - Use **bold** for emphasis
-  - Use - bullet points for lists
-  - Keep paragraphs short and readable
+- Keep response NATURAL and CONVERSATIONAL (NO markdown, NO headers, NO bullet points)
+- Just use plain sentences and line breaks
 - If the user is asking about something discussed earlier, use the conversation context.
 - Do not mention documents, web search, or internal routing.
 - End with a helpful, friendly note.
+
+Example of GOOD response:
+"Hi there! I'm doing great, thanks for asking. How can I help you today?"
+
+Example of BAD response (DO NOT USE):
+"## Greeting\n- I'm doing well\n**Thank you**"
 
 Answer:"""
 
@@ -266,22 +269,23 @@ Answer:"""
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a warm, intelligent AI assistant. Format your responses with proper markdown: use ## for section headers when appropriate, **bold** for emphasis, - for bullet points. Always end with a helpful offer.",
+                    "content": "You are a warm, friendly AI assistant. Respond in plain, natural language. NO markdown, NO headers, NO bullet points. Just simple sentences like a human conversation.",
                 },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.5,
-            max_tokens=900,
+            max_tokens=300,
         )
         answer = completion.choices[0].message.content.strip()
-        # Ensure ending is friendly
-        if not any(phrase in answer.lower() for phrase in ["let me know", "feel free", "further", "anything else"]):
-            answer += "\n\n---\n*Is there anything else I can help you with?*"
         return answer
     except Exception as e:
         print(f"Conversational answer error: {e}")
         return "I had trouble processing that. Please try again."
 
+
+# ─────────────────────────────────────────────
+# FULL DOCUMENT ANSWER (WITH MARKDOWN)
+# ─────────────────────────────────────────────
 
 def generate_full_document_answer(
     question: str,
@@ -290,7 +294,7 @@ def generate_full_document_answer(
     intent: str,
     conversation_context: Optional[str] = None,
 ) -> str:
-    """LLM-based answer using full document text with beautiful markdown."""
+    """LLM-based answer using full document text with markdown formatting."""
     context_section = ""
     if conversation_context:
         context_section = f"Previous conversation:\n{conversation_context[-1500:]}\n\n"
@@ -299,40 +303,36 @@ def generate_full_document_answer(
         task_instruction = """
 TASK: Generate clean, well-structured notes from this document.
 
-FORMATTING RULES (MUST FOLLOW):
+FORMATTING RULES:
 - Start with a brief introductory sentence
 - Use ## headers for each major topic or section
 - Use - bullet points for key points under each header
-- Each bullet should be a complete sentence
-- Preserve numbering if present (PO1, PO2, etc.)
-- End with ## Key Takeaways section
 - Use **bold** for important terms
-- Add --- horizontal rule between major sections if helpful
+- Use ```python (or appropriate language) for code blocks
+- End with ## Key Takeaways section
 """
     elif intent == "COMPARE":
         task_instruction = """
 TASK: Compare and contrast the sections or topics the user asked about.
 
-FORMATTING RULES (MUST FOLLOW):
+FORMATTING RULES:
 - Start with a brief overview
 - Use ## header for each item being compared
 - Use - bullets for attributes under each
 - Use **bold** for key differences
 - End with ## Summary of Differences
-- Add a helpful closing note
 """
-    else:  # SUMMARIZE or default
+    else:  # SUMMARIZE
         task_instruction = """
 TASK: Create a comprehensive, well-structured summary of this document.
 
-FORMATTING RULES (MUST FOLLOW):
+FORMATTING RULES:
 - Start with a 1-2 sentence overview
 - Use ## headers for each major section
-- Use - bullet points for key details under each header
-- Use **bold** for important terms and key concepts
-- Preserve any numbering or structure from the original
-- End with ## Summary section that captures the main points
-- End with a helpful note: "Is there anything specific you'd like to know more about?"
+- Use - bullet points for key details
+- Use **bold** for important terms
+- Use ```python (or appropriate language) for code examples if present
+- End with ## Summary
 """
 
     prompt = f"""{context_section}Document "{filename}":
@@ -343,12 +343,11 @@ User asked: "{question}"
 
 {task_instruction}
 
-IMPORTANT FORMATTING REQUIREMENTS:
-- ALWAYS use ## for section headers (not just plain text)
-- ALWAYS use - for bullet points (not * or •)
-- ALWAYS use **bold** for emphasis on key terms
-- Add blank lines between sections for readability
-- DO NOT write walls of text - break into sections and bullets
+IMPORTANT:
+- Use ONLY information from the document above
+- For code blocks, ALWAYS specify the language like: ```python or ```javascript
+- ALWAYS close code blocks with ```
+- Do NOT leave code blocks open or malformed
 
 Answer:"""
 
@@ -358,7 +357,7 @@ Answer:"""
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an AI assistant that ALWAYS formats responses with proper markdown: ## headers, - bullet points, **bold** for emphasis. Never write plain text paragraphs without structure. Always break content into organized sections.",
+                    "content": "You are an AI assistant that formats responses with proper markdown. ALWAYS use ```language and ``` to close code blocks. Never leave code blocks open.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -366,14 +365,6 @@ Answer:"""
             max_tokens=1400,
         )
         answer = completion.choices[0].message.content.strip()
-        
-        # Ensure markdown headers are present
-        if not any(header in answer for header in ['##', '# ']):
-            answer = "## Response\n\n" + answer
-        
-        if not any(phrase in answer.lower() for phrase in ["let me know", "feel free", "anything else"]):
-            answer += "\n\n---\n*Is there anything else I can help you with?*"
-        
         return answer
     except Exception as e:
         print(f"Full document answer error: {e}")
@@ -483,7 +474,7 @@ def rerank_with_cohere(query: str, sources: List[Dict[str, Any]], top_n: int = 5
 
 
 # ─────────────────────────────────────────────
-# IMPROVED GENERATE ANSWER - ALWAYS MARKDOWN FORMATTED
+# GENERATE ANSWER FOR RAG/WEB (WITH MARKDOWN)
 # ─────────────────────────────────────────────
 
 def generate_answer(question: str, sources: List[Dict], conversation_context: Optional[str] = None) -> str:
@@ -500,17 +491,16 @@ def generate_answer(question: str, sources: List[Dict], conversation_context: Op
     has_web = len(web_sources) > 0
 
     if not sources:
-        prompt = f"""Answer the user's question even without external sources.
+        prompt = f"""Answer the user's question from your general knowledge.
 
 User asked: "{question}"
 
-Use your general knowledge to respond.
-FORMATTING REQUIREMENTS:
+FORMATTING RULES:
 - Use ## headers for main sections
 - Use - bullet points for lists
 - Use **bold** for key terms
-- Keep paragraphs short (2-3 sentences max)
-- End with a helpful offer
+- Use ```language for code blocks (always close with ```)
+- Keep paragraphs short (2-3 sentences)
 
 Answer:"""
     else:
@@ -539,58 +529,20 @@ Answer:"""
 
         doc_context = "\n".join(context_parts)
 
-        if has_pdf and not has_web:
-            prompt = f"""{context_section}{doc_context}
+        prompt = f"""{context_section}{doc_context}
 
 User question: "{question}"
 
 INSTRUCTIONS:
-1. Use ONLY the PDF content above as your source
-2. Format your answer with proper markdown:
-   - Start with a brief answer summary
-   - Use ## headers to organize information
-   - Use - bullet points for key facts
-   - Use **bold** for important terms
-3. If the information isn't in the document, say "I couldn't find this in your document"
-4. End with: "Is there anything specific you'd like me to help with?"
-
-FORMATTING EXAMPLE:
-## Overview
-[Brief answer here]
-
-## Key Points
-- Point one
-- Point two
-
-## Additional Details
-[More context]
-
-Answer:"""
-        else:
-            prompt = f"""{context_section}{doc_context}
-
-User question: "{question}"
-
-INSTRUCTIONS for beautiful markdown response:
-1. Start with a clear, bolded answer or summary
-2. Use ## headers to organize different sections
-3. Use - bullet points for lists and key information
-4. Use **bold** for emphasis on important terms
-5. Use numbered lists for steps or ordered information
-6. Keep paragraphs short (2-3 sentences)
-7. Add a --- horizontal rule before your closing note
-8. End with a helpful offer: "Is there anything else I can help with?"
-
-Example structure:
-## Quick Answer
-[Direct answer in 1-2 sentences]
-
-## Details
-- Fact one
-- Fact two
-
-## Additional Context
-[More information if needed]
+1. Answer clearly using the information above
+2. Format with proper markdown:
+   - ## headers for organization
+   - - bullet points for lists
+   - **bold** for emphasis
+   - ```language and ``` for code blocks (MUST close properly)
+3. If code is present, always specify the language (python, javascript, etc.)
+4. NEVER output [object Object] - that is an error
+5. End with a helpful closing note
 
 Answer:"""
 
@@ -601,14 +553,14 @@ Answer:"""
                 {
                     "role": "system",
                     "content": (
-                        "You are an AI assistant that ALWAYS formats responses with proper markdown. "
-                        "NEVER write plain paragraphs. ALWAYS use:\n"
-                        "- ## for section headers\n"
-                        "- - for bullet points (not * or •)\n"
-                        "- **bold** for emphasis\n"
-                        "- --- for horizontal rules\n"
-                        "- Numbered lists for steps (1., 2., etc.)\n"
-                        "Break content into organized sections. End with a helpful offer."
+                        "You are an AI assistant that formats responses with markdown. "
+                        "CRITICAL RULES:\n"
+                        "1. ALWAYS close code blocks with ``` on a new line\n"
+                        "2. ALWAYS specify language after opening ``` (e.g., ```python)\n"
+                        "3. NEVER output [object Object] - that is a bug\n"
+                        "4. Use ## for headers\n"
+                        "5. Use - for bullet points\n"
+                        "6. Use **bold** for emphasis"
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -618,14 +570,25 @@ Answer:"""
         )
         answer = completion.choices[0].message.content.strip()
         
-        # Ensure markdown headers are present if answer is long
-        if len(answer) > 200 and '##' not in answer and '# ' not in answer:
-            answer = "## Answer\n\n" + answer
+        # Fix any malformed code blocks
+        lines = answer.split('\n')
+        fixed_lines = []
+        in_code_block = False
+        for line in lines:
+            if line.strip().startswith('```') and not in_code_block:
+                in_code_block = True
+                # Ensure language is specified
+                if line.strip() == '```':
+                    line = '```python'
+            elif line.strip() == '```' and in_code_block:
+                in_code_block = False
+            fixed_lines.append(line)
         
-        # Ensure friendly ending
-        friendly_endings = ["let me know", "feel free", "anything else", "can i help", "further assistance"]
-        if not any(phrase in answer.lower() for phrase in friendly_endings):
-            answer += "\n\n---\n*Is there anything else I can help you with?*"
+        # If code block never closed, close it
+        if in_code_block:
+            fixed_lines.append('```')
+        
+        answer = '\n'.join(fixed_lines)
         
         return answer
     except Exception as e:
@@ -645,7 +608,7 @@ async def hybrid_search(
     filename: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Agentic Hybrid RAG pipeline with beautiful markdown for ALL responses.
+    Agentic Hybrid RAG pipeline with proper formatting.
     """
     search_type = (search_type or "hybrid").lower()
     if search_type not in {"closed", "open", "hybrid"}:
@@ -668,7 +631,7 @@ async def hybrid_search(
     elif search_type == "open":
         retrieval_mode = "web"
 
-    # ── Step 2: No retrieval needed ──
+    # ── Step 2: No retrieval needed (CASUAL CHAT) ──
     if retrieval_mode == "none" or intent in ("CASUAL_CHAT", "CONVERSATION_RECALL"):
         return {
             "answer": generate_conversational_answer(question, conversation_context),
