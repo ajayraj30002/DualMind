@@ -292,10 +292,7 @@ body {
     align-items: flex-end;
 }
 
-/* ═══════════════════════════════════════════════
-   MARKDOWN RENDERED CONTENT — ASSISTANT MESSAGES
-   ═══════════════════════════════════════════════ */
-
+/* MARKDOWN RENDERED CONTENT — ASSISTANT MESSAGES */
 .md-body {
     color: #e5e5e5;
     font-size: 0.875rem;
@@ -332,7 +329,7 @@ body {
 
 .md-body p:last-child { margin-bottom: 0; }
 
-/* Unordered lists */
+/* Lists */
 .md-body ul {
     margin: 0.5rem 0 0.75rem 0;
     padding-left: 1.25rem;
@@ -356,7 +353,6 @@ body {
     top: 0.15rem;
 }
 
-/* Ordered lists */
 .md-body ol {
     margin: 0.5rem 0 0.75rem 0;
     padding-left: 1.5rem;
@@ -404,7 +400,6 @@ body {
     padding: 1rem;
     overflow-x: auto;
     margin: 0.75rem 0;
-    position: relative;
 }
 
 .md-body pre code {
@@ -414,18 +409,6 @@ body {
     color: #e5e5e5;
     font-size: 0.78rem;
     line-height: 1.6;
-}
-
-/* Code block header label */
-.md-body pre::before {
-    content: 'code';
-    display: block;
-    color: #555;
-    font-size: 0.65rem;
-    font-family: 'JetBrains Mono', monospace;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 0.5rem;
 }
 
 /* Blockquotes */
@@ -482,7 +465,7 @@ body {
 
 .md-body a:hover { border-color: #f97316; }
 
-/* Source badge shown below assistant messages */
+/* Source badge */
 .source-badge {
     display: inline-flex;
     align-items: center;
