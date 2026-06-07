@@ -109,7 +109,7 @@ function addMessageToChat(role, content, filename = null, searchTypeUsed = null)
     if (!messagesDiv) return;
 
     // Remove welcome screen on first user message
-    const welcome = messagesDiv.querySelector('.welcome');
+    const welcome = messagesDiv.querySelector('.welcome'); 
     if (welcome && role === 'user') welcome.remove();
 
     const messageDiv = document.createElement('div');
