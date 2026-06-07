@@ -493,22 +493,31 @@
 
     const WELCOME_HTML = `<div class="welcome"><i class="fas fa-brain"></i><h3>Ready when you are</h3><p>Ask from your PDFs, the web, or both. Use Hybrid for the best experience.</p></div>`;
 
-    // Function to render markdown content
-    function renderMarkdown(content, element) {
+    // ========== MARKDOWN RENDERING FUNCTION - FIXED ==========
+    async function renderMarkdown(content, element) {
         if (!element) return;
         try {
-            // Configure marked for safe rendering
-            if (typeof marked !== 'undefined') {
-                let html = marked.parse(content);
-                element.innerHTML = html;
-                // Apply syntax highlighting
-                if (typeof hljs !== 'undefined') {
-                    element.querySelectorAll('pre code').forEach((block) => {
-                        hljs.highlightElement(block);
-                    });
+            let htmlContent;
+            // Handle different marked.js versions (sync/async)
+            if (typeof marked.parse === 'function') {
+                const result = marked.parse(content);
+                if (result && typeof result.then === 'function') {
+                    htmlContent = await result; // Async version
+                } else {
+                    htmlContent = result; // Sync version
                 }
+            } else if (typeof marked === 'function') {
+                htmlContent = marked(content);
             } else {
-                element.innerText = content;
+                htmlContent = content;
+            }
+            element.innerHTML = htmlContent;
+            
+            // Apply syntax highlighting to code blocks
+            if (typeof hljs !== 'undefined') {
+                element.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
             }
         } catch(e) {
             console.error('Markdown error:', e);
@@ -516,19 +525,28 @@
         }
     }
 
-    function addMessageToChat(role, content, filename = null) {
+    // ========== ADD MESSAGE TO CHAT - WITH MARKDOWN SUPPORT ==========
+    async function addMessageToChat(role, content, filename = null) {
         if (!messagesDiv) return;
+        
+        // Remove welcome message if it's the first user message
         const welcome = messagesDiv.querySelector('.welcome');
-        if (welcome && role === 'user') welcome.remove();
-
+        if (welcome && role === 'user') {
+            welcome.remove();
+        }
+        
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${role}`;
+        
+        // Avatar setup
         const avatarIcon = role === 'user' ? 'fa-user' : 'fa-brain';
         messageDiv.innerHTML = `<div class="message-avatar"><i class="fas ${avatarIcon}"></i></div>`;
         
+        // Create content container
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         
+        // Add PDF attachment badge if filename exists
         if (filename) {
             const attachDiv = document.createElement('div');
             attachDiv.className = 'message-doc-attachment';
@@ -536,13 +554,15 @@
             contentDiv.appendChild(attachDiv);
         }
         
+        // For assistant messages, render markdown
         if (role === 'assistant') {
             const markdownWrapper = document.createElement('div');
             markdownWrapper.className = 'markdown-body';
             contentDiv.appendChild(markdownWrapper);
-            renderMarkdown(content, markdownWrapper);
-            console.log('🎨 Rendered assistant response with markdown');
+            await renderMarkdown(content, markdownWrapper);
+            console.log('✅ Assistant message rendered with markdown');
         } else {
+            // User messages remain as plain text
             const textDiv = document.createElement('div');
             textDiv.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
             contentDiv.appendChild(textDiv);
@@ -562,14 +582,16 @@
         messagesDiv.appendChild(typing); 
         messagesDiv.scrollTop = messagesDiv.scrollHeight; 
     }
+    
     function hideTyping() { document.getElementById('typingIndicator')?.remove(); }
 
-    // Rest of the functions (doLogin, doRegister, etc.) remain the same
+    // ========== AUTHENTICATION FUNCTIONS ==========
     async function doLogin() {
         const email = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
         if (!email || !password) { alert('Enter email and password'); return; }
         try {
+            showLoading();
             const res = await fetch(`${API_URL}/auth/signin`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
@@ -582,8 +604,9 @@
                 localStorage.setItem('dm_user', JSON.stringify(user));
                 showChatUI();
                 await loadSessions();
-            } else { alert('Login failed'); }
+            } else { alert('Login failed: ' + (data.detail || 'Error')); }
         } catch(err) { alert('Connection error'); }
+        finally { hideLoading(); }
     }
 
     async function doRegister() {
@@ -592,6 +615,7 @@
         const password = document.getElementById('registerPassword').value;
         if (password.length < 6) { alert('Password min 6 chars'); return; }
         try {
+            showLoading();
             const res = await fetch(`${API_URL}/auth/signup`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, full_name: name })
@@ -600,8 +624,12 @@
                 alert('Signup successful! Please login.');
                 toggleForms(false);
                 document.getElementById('loginEmail').value = email;
-            } else { alert('Signup failed'); }
+            } else { 
+                const data = await res.json();
+                alert('Signup failed: ' + (data.detail || 'Error')); 
+            }
         } catch(err) { alert('Connection error'); }
+        finally { hideLoading(); }
     }
 
     function doLogout() { token = null; user = null; currentSessionId = null; localStorage.clear(); showLoginUI(); }
@@ -609,7 +637,10 @@
     function showLoginUI() { loginPage.classList.remove('hidden'); chatPage.classList.add('hidden'); }
     function showChatUI() { loginPage.classList.add('hidden'); chatPage.classList.remove('hidden'); document.getElementById('userEmailSidebar').innerText = user?.email?.split('@')[0] || 'User'; }
     function toggleForms(reg) { document.getElementById('loginForm').classList.toggle('active', !reg); document.getElementById('registerForm').classList.toggle('active', reg); }
+    function showLoading() { if (loadingOverlay) loadingOverlay.classList.remove('hidden'); }
+    function hideLoading() { if (loadingOverlay) loadingOverlay.classList.add('hidden'); }
 
+    // ========== SESSION MANAGEMENT ==========
     async function loadSessions() {
         if(!sessionListDiv) return;
         sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
@@ -621,13 +652,14 @@
                 renderSessionList(data.sessions);
                 if (!currentSessionId && data.sessions[0]) loadSession(data.sessions[0].id);
             } else { sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>'; if (!currentSessionId) createNewSession(); }
-        } catch(err) { sessionListDiv.innerHTML = '<div class="loading-text">Error</div>'; }
+        } catch(err) { sessionListDiv.innerHTML = '<div class="loading-text">Error loading</div>'; }
     }
 
     function renderSessionList(sessions) {
         sessionListDiv.innerHTML = '';
         for (const s of sessions) {
-            const div = document.createElement('div'); div.className = `session-item ${currentSessionId === s.id ? 'active' : ''}`;
+            const div = document.createElement('div'); 
+            div.className = `session-item ${currentSessionId === s.id ? 'active' : ''}`;
             div.innerHTML = `<span class="session-title">${escapeHtml(s.title)}</span><button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>`;
             div.addEventListener('click', (e) => { if (!e.target.closest('.delete-session')) loadSession(s.id); });
             div.querySelector('.delete-session')?.addEventListener('click', (e) => { e.stopPropagation(); deleteSession(s.id); });
@@ -646,29 +678,76 @@
             const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
             chatTitleSpan.innerText = sessionInfo?.title || 'Conversation';
             messagesDiv.innerHTML = (!data.messages || data.messages.length === 0) ? WELCOME_HTML : '';
-            if (data.messages) for (const msg of data.messages) addMessageToChat(msg.role, msg.content, msg.metadata?.filename);
+            if (data.messages) {
+                for (const msg of data.messages) {
+                    await addMessageToChat(msg.role, msg.content, msg.metadata?.filename);
+                }
+            }
             loadSessions();
         } catch(err) { console.error(err); }
     }
 
-    async function deleteSession(sessionId) { if(!confirm('Delete conversation?')) return; await fetch(`${API_URL}/chat/sessions/${sessionId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); if(currentSessionId === sessionId) { currentSessionId = null; await loadSessions(); if(!currentSessionId) await createNewSession(); } else await loadSessions(); }
+    async function deleteSession(sessionId) { 
+        if(!confirm('Delete conversation?')) return; 
+        await fetch(`${API_URL}/chat/sessions/${sessionId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); 
+        if(currentSessionId === sessionId) { 
+            currentSessionId = null; 
+            await loadSessions(); 
+            if(!currentSessionId) await createNewSession(); 
+        } else await loadSessions(); 
+    }
     
-    async function createNewSession() { const res = await fetch(`${API_URL}/chat/sessions`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }); const data = await res.json(); if(res.ok && data.session) { currentSessionId = data.session.id; chatTitleSpan.innerText = 'New conversation'; messagesDiv.innerHTML = WELCOME_HTML; await loadSessions(); } }
+    async function createNewSession() { 
+        const res = await fetch(`${API_URL}/chat/sessions`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }); 
+        const data = await res.json(); 
+        if(res.ok && data.session) { 
+            currentSessionId = data.session.id; 
+            chatTitleSpan.innerText = 'New conversation'; 
+            messagesDiv.innerHTML = WELCOME_HTML; 
+            await loadSessions(); 
+        } 
+    }
 
-    function onFileSelect(e) { const file = e.target.files[0]; if (!file || !file.name.endsWith('.pdf')) { alert('Please select a PDF'); return; } pendingFile = file; fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${escapeHtml(file.name)} <i class="fas fa-check-circle"></i>`; fileBadge.classList.remove('hidden'); }
+    // ========== FILE HANDLING ==========
+    function onFileSelect(e) { 
+        const file = e.target.files[0]; 
+        if (!file || !file.name.endsWith('.pdf')) { 
+            alert('Please select a PDF'); 
+            return; 
+        } 
+        pendingFile = file; 
+        fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${escapeHtml(file.name)} <i class="fas fa-check-circle"></i>`; 
+        fileBadge.classList.remove('hidden'); 
+    }
 
-    async function uploadFile(file, sessionId) { const fd = new FormData(); fd.append('file', file); const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd }); if (!res.ok) throw new Error('Upload failed'); return await res.json(); }
+    async function uploadFile(file, sessionId) { 
+        const fd = new FormData(); 
+        fd.append('file', file); 
+        const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, { 
+            method: 'POST', 
+            headers: { 'Authorization': `Bearer ${token}` }, 
+            body: fd 
+        }); 
+        if (!res.ok) throw new Error('Upload failed'); 
+        return await res.json(); 
+    }
 
+    // ========== MAIN SEND MESSAGE ==========
     async function sendMessage() {
         const text = messageInput.value.trim();
         if (!text || !currentSessionId) return;
+        
         const hasFile = !!pendingFile;
         const uploadedFilename = hasFile ? pendingFile.name : null;
         messageInput.value = '';
-        addMessageToChat('user', text, uploadedFilename);
+        
+        // Add user message immediately
+        await addMessageToChat('user', text, uploadedFilename);
+        
         const isFirst = (messagesDiv.querySelectorAll('.message').length === 1);
         if (isFirst) autoTitle(currentSessionId, text);
         
+        // Upload file if exists
         if (hasFile) {
             try {
                 showTyping();
@@ -676,31 +755,98 @@
                 pendingFile = null;
                 if (fileBadge) fileBadge.classList.add('hidden');
                 hideTyping();
-            } catch (err) { hideTyping(); addMessageToChat('assistant', `❌ Upload failed: ${err.message}`); return; }
+            } catch (err) { 
+                hideTyping(); 
+                await addMessageToChat('assistant', `❌ Upload failed: ${err.message}`); 
+                return; 
+            }
         }
         
         showTyping();
         if (sendBtn) sendBtn.disabled = true;
+        
         try {
             const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ question: text, search_type: currentMode, include_sources: true, uploaded_document: uploadedFilename })
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ 
+                    question: text, 
+                    search_type: currentMode, 
+                    include_sources: true, 
+                    uploaded_document: uploadedFilename 
+                })
             });
+            
             if (res.status === 401) { doLogout(); return; }
             const data = await res.json();
             hideTyping();
-            if (res.ok) addMessageToChat('assistant', data.answer);
-            else addMessageToChat('assistant', 'Sorry, something went wrong.');
-        } catch (err) { hideTyping(); addMessageToChat('assistant', 'Connection error.'); }
-        finally { if (sendBtn) sendBtn.disabled = false; messageInput.focus(); }
+            
+            if (res.ok) {
+                await addMessageToChat('assistant', data.answer);
+            } else {
+                await addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
+            }
+        } catch (err) { 
+            hideTyping(); 
+            await addMessageToChat('assistant', 'Connection error. Please check your network.');
+            console.error('Send message error:', err);
+        } finally { 
+            if (sendBtn) sendBtn.disabled = false; 
+            messageInput.focus(); 
+        }
     }
 
-    async function autoTitle(sessionId, firstMsg) { try { const short = firstMsg.length > 40 ? firstMsg.slice(0,40)+'...' : firstMsg; await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }); chatTitleSpan.innerText = short; loadSessions(); } catch(e) {} }
-    async function renameSession() { const newName = prompt('New conversation title:', chatTitleSpan.innerText); if(newName && newName !== chatTitleSpan.innerText && currentSessionId) { await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }); chatTitleSpan.innerText = newName; loadSessions(); } }
-    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m) { if(m === '&') return '&amp;'; if(m === '<') return '&lt;'; if(m === '>') return '&gt;'; return m; }); }
+    async function autoTitle(sessionId, firstMsg) { 
+        try { 
+            const short = firstMsg.length > 40 ? firstMsg.slice(0,40)+'...' : firstMsg; 
+            await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, { 
+                method: 'PUT', 
+                headers: { 'Authorization': `Bearer ${token}` } 
+            }); 
+            chatTitleSpan.innerText = short; 
+            loadSessions(); 
+        } catch(e) {} 
+    }
+    
+    async function renameSession() { 
+        const newName = prompt('New conversation title:', chatTitleSpan.innerText); 
+        if(newName && newName !== chatTitleSpan.innerText && currentSessionId) { 
+            await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, { 
+                method: 'PUT', 
+                headers: { 'Authorization': `Bearer ${token}` } 
+            }); 
+            chatTitleSpan.innerText = newName; 
+            loadSessions(); 
+        } 
+    }
+    
+    function escapeHtml(str) { 
+        if(!str) return ''; 
+        return str.replace(/[&<>]/g, function(m) { 
+            if(m === '&') return '&amp;'; 
+            if(m === '<') return '&lt;'; 
+            if(m === '>') return '&gt;'; 
+            return m; 
+        }); 
+    }
 
+    // ========== EVENT LISTENERS ==========
     document.addEventListener('DOMContentLoaded', () => {
-        loginPage = document.getElementById('loginPage'); chatPage = document.getElementById('chatPage'); sessionListDiv = document.getElementById('sessionList'); messagesDiv = document.getElementById('messagesContainer'); messageInput = document.getElementById('messageInput'); sendBtn = document.getElementById('sendMsgBtn'); newChatBtn = document.getElementById('newChatBtn'); renameBtn = document.getElementById('renameChatBtn'); logoutBtn = document.getElementById('logoutSidebarBtn'); chatTitleSpan = document.getElementById('chatTitle'); attachBtn = document.getElementById('attachPdfBtn'); fileInput = document.getElementById('pdfFileInput'); fileBadge = document.getElementById('fileBadge'); modeBtns = document.querySelectorAll('.mode-btn'); loadingOverlay = document.getElementById('loadingOverlay');
+        loginPage = document.getElementById('loginPage'); 
+        chatPage = document.getElementById('chatPage'); 
+        sessionListDiv = document.getElementById('sessionList'); 
+        messagesDiv = document.getElementById('messagesContainer'); 
+        messageInput = document.getElementById('messageInput'); 
+        sendBtn = document.getElementById('sendMsgBtn'); 
+        newChatBtn = document.getElementById('newChatBtn'); 
+        renameBtn = document.getElementById('renameChatBtn'); 
+        logoutBtn = document.getElementById('logoutSidebarBtn'); 
+        chatTitleSpan = document.getElementById('chatTitle'); 
+        attachBtn = document.getElementById('attachPdfBtn'); 
+        fileInput = document.getElementById('pdfFileInput'); 
+        fileBadge = document.getElementById('fileBadge'); 
+        modeBtns = document.querySelectorAll('.mode-btn'); 
+        loadingOverlay = document.getElementById('loadingOverlay');
         
         document.getElementById('loginBtn')?.addEventListener('click', doLogin);
         document.getElementById('registerBtn')?.addEventListener('click', doRegister);
@@ -713,7 +859,13 @@
         logoutBtn?.addEventListener('click', doLogout);
         attachBtn?.addEventListener('click', () => fileInput?.click());
         fileInput?.addEventListener('change', onFileSelect);
-        modeBtns.forEach(btn => { btn.addEventListener('click', () => { modeBtns.forEach(b => b.classList.remove('active')); btn.classList.add('active'); currentMode = btn.dataset.mode; }); });
+        modeBtns.forEach(btn => { 
+            btn.addEventListener('click', () => { 
+                modeBtns.forEach(b => b.classList.remove('active')); 
+                btn.classList.add('active'); 
+                currentMode = btn.dataset.mode; 
+            }); 
+        });
         checkAuth();
     });
 </script>
