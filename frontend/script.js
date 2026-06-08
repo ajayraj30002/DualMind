@@ -84,39 +84,48 @@ function addCopyButtonsToCodeBlocks() {
 
 function cleanDualMindResponse(rawText) {
     if (!rawText || typeof rawText !== 'string') return '';
-    
     let cleaned = rawText;
-    
-    // Remove standalone numbers (chunk indices) on their own line
+
+    // 1. Unescape markdown that LLMs sometimes escape
+    cleaned = cleaned.replace(/\\#/g, '#');
+    cleaned = cleaned.replace(/\\\*/g, '*');
+    cleaned = cleaned.replace(/\\-/g, '-');
+    cleaned = cleaned.replace(/\\_/g, '_');
+
+    // 2. Remove standalone numbers (chunk indices)
     cleaned = cleaned.replace(/^\d+\s*$/gm, '');
     cleaned = cleaned.replace(/^(\d+)\.\s*$/gm, '');
     
-    // Remove internal source labels
+    // 3. Remove internal source labels
     cleaned = cleaned.replace(/\[(Web Search|PDF Document|RAG|Hybrid)\]/gi, '');
+
+    // 4. Fix bolded headers like **# Title** -> ### Title
+    cleaned = cleaned.replace(/\*\*\s*(#{1,6})\s*(.*?)\s*\*\*/g, '### $2');
+    cleaned = cleaned.replace(/\*\*(.*?)\*\*\s*:/g, '### $1');
+
+    // 5. Convert multiple hashes with spaces (e.g., "# # Title") to just "### Title"
+    cleaned = cleaned.replace(/^(#+\s*)+/gm, '### ');
+
+    // 6. Ensure all headers are at least ### so they look neat (orange, no underline)
+    cleaned = cleaned.replace(/^#\s+/gm, '### ');
+    cleaned = cleaned.replace(/^##\s+/gm, '### ');
+
+    // 7. Fix inline headers and bullets from RAG mode (add newlines)
+    cleaned = cleaned.replace(/^(###\s+.*?)\s*[:-]\s+/gm, '$1\n\n- ');
     
-    // Fix bolded headers like **# Title** -> ### Title (or just unwrap)
-    cleaned = cleaned.replace(/\*\*\s*(#+\s+.*?)\s*\*\*/g, '$1');
+    // Fix inline bullet points that are stuck to the previous sentence
+    cleaned = cleaned.replace(/([a-z0-9.:!?])\s+(-\s+[A-Z0-9])/gi, '$1\n\n$2');
+
+    // 8. Fix malformed bullet points
+    cleaned = cleaned.replace(/^[•*]\s+/gm, '- ');
+
+    // 9. Clean up excessive newlines
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
     
-    // Fix malformed headers
-    cleaned = cleaned.replace(/^##([^ ])/gm, '## $1');
-    cleaned = cleaned.replace(/^#([^ ])/gm, '# $1');
-    
-    // Fix inline headers and bullets from RAG mode (add newlines)
-    cleaned = cleaned.replace(/^(#+\s+.*?)\s+-\s+/gm, '$1\n\n- ');
-    cleaned = cleaned.replace(/([.:!?])\s+(-\s+)/g, '$1\n\n$2');
-    
-    // Fix malformed bullet points
-    cleaned = cleaned.replace(/^[•\-*]\s*/gm, '- ');
-    
-    // Clean up excessive newlines
-    cleaned = cleaned.replace(/\n{4,}/g, '\n\n');
-    
-    // Fix [object Object] issue - replace with empty string
+    // 10. Fix [object Object] issue
     cleaned = cleaned.replace(/\[object Object\]/gi, '');
     
-    cleaned = cleaned.trim();
-    
-    return cleaned;
+    return cleaned.trim();
 }
 
 // ─────────────────────────────────────────────
