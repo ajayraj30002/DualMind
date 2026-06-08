@@ -108,5 +108,12 @@ flowchart TB
 
 ## 🚦 CI/CD Pipeline
 
-```yaml
 Push to main → Run Tests → Build Docker → Push to Registry → Deploy to Render → Deploy to Vercel
+
+GitHub Actions Jobs:
+
+1.Test - Runs pytest with coverage
+
+2.Build & Push - Docker image to Docker Hub
+
+3.Deploy Backend - Trigger Render deployment
