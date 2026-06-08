@@ -4,7 +4,7 @@ let token = null;
 let user = null;
 let currentSessionId = null;
 let currentMode = 'hybrid';
-let pendingFile = null; 
+let pendingFile = null;
 let currentSessionDocuments = [];
 
 // DOM elements
@@ -35,12 +35,10 @@ function isCasualConversation(content) {
         /^(hmm|um|ah|oh)$/i
     ];
     const lowerContent = content.toLowerCase().trim();
-    // If content is short (under 100 chars) and matches casual patterns
     if (content.length < 100) {
         return casualPatterns.some(pattern => pattern.test(lowerContent));
     }
-    // Also check if there are no markdown characters and it's short
-    const hasMarkdown = content.includes('##') || content.includes('# ') || content.includes('**') || content.includes('- ') || content.includes('```');
+    const hasMarkdown = content.includes('##') || content.includes('**') || content.includes('- ') || content.includes('```');
     return !hasMarkdown && content.length < 200;
 }
 
@@ -50,7 +48,6 @@ function isCasualConversation(content) {
 
 function addCopyButtonsToCodeBlocks() {
     document.querySelectorAll('.md-body pre').forEach(pre => {
-        // Skip if already has wrapper
         if (pre.parentElement.classList.contains('code-wrapper')) return;
         
         const code = pre.querySelector('code');
@@ -79,53 +76,173 @@ function addCopyButtonsToCodeBlocks() {
 }
 
 // ─────────────────────────────────────────────
-// CLEAN RESPONSE
+// DETECT AND FIX MALFORMED CODE BLOCKS
+// Converts plain code into proper markdown code blocks
+// ─────────────────────────────────────────────
+
+function fixMalformedCodeBlocks(content) {
+    if (!content || typeof content !== 'string') return content;
+    
+    // Check if content already has proper markdown code blocks
+    if (content.includes('```')) return content;
+    
+    // Detect code patterns:
+    // Pattern 1: Has headers like "# Python" or "## Python" followed by code indentation
+    // Pattern 2: Has variable assignments, loops, functions with proper indentation
+    
+    const lines = content.split('\n');
+    let inCode = false;
+    let codeLines = [];
+    let normalLines = [];
+    let result = [];
+    let detectedLang = null;
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmedLine = line.trim();
+        
+        // Detect language from header like "# Python" or "## JavaScript"
+        const langMatch = trimmedLine.match(/^#+\s*(python|javascript|js|java|cpp|c\+\+|go|rust|typescript|ts|html|css|sql|bash|shell)/i);
+        if (langMatch && !inCode) {
+            detectedLang = langMatch[1].toLowerCase();
+            if (detectedLang === 'js') detectedLang = 'javascript';
+            if (detectedLang === 'c++') detectedLang = 'cpp';
+            // Skip adding this header line - we'll replace with proper code block
+            continue;
+        }
+        
+        // Check if line looks like code
+        const isCodeLine = (
+            // Variable assignments
+            /^[a-zA-Z_][a-zA-Z0-9_]*\s*[=+\-*/]/.test(trimmedLine) ||
+            // Indented lines (4+ spaces or tab)
+            /^[ ]{4,}/.test(line) ||
+            /^\t+/.test(line) ||
+            // Keywords
+            /^(if|else|elif|for|while|def|function|class|import|from|return|break|continue|pass|try|except|finally|with|as|lambda|yield|raise|assert)/i.test(trimmedLine) ||
+            // Function definitions
+            /^def\s+\w+\s*\(/i.test(trimmedLine) ||
+            /^function\s+\w+\s*\(/i.test(trimmedLine) ||
+            // Print/console statements
+            /^(print|console\.log|echo|printf?|System\.out\.print)/i.test(trimmedLine) ||
+            // Type hints
+            /:\s*(int|str|float|bool|list|dict|tuple|set)/.test(trimmedLine) ||
+            // Code that starts with common patterns
+            /^[a-zA-Z_]\w*\s*=\s*int\(/.test(trimmedLine) ||
+            /^[a-zA-Z_]\w*\s*=\s*input\(/.test(trimmedLine) ||
+            // While loops
+            /^while\s+.+:\s*$/.test(trimmedLine)
+        );
+        
+        // Check if it's a comment
+        const isComment = trimmedLine.startsWith('#') || trimmedLine.startsWith('//') || trimmedLine.startsWith('<!--');
+        
+        if (isCodeLine || isComment) {
+            if (!inCode) {
+                inCode = true;
+                codeLines = [];
+                // Start new code block
+                codeLines.push(trimmedLine);
+            } else {
+                codeLines.push(trimmedLine);
+            }
+        } else {
+            if (inCode && codeLines.length > 0) {
+                // Close the code block
+                const lang = detectedLang || 'python';
+                result.push(`\`\`\`${lang}`);
+                result.push(codeLines.join('\n'));
+                result.push('```');
+                result.push(''); // Add empty line after code block
+                codeLines = [];
+                inCode = false;
+                detectedLang = null;
+            }
+            // Add normal line if not empty
+            if (trimmedLine !== '') {
+                result.push(line);
+            } else if (result.length > 0 && result[result.length - 1] !== '') {
+                result.push('');
+            }
+        }
+    }
+    
+    // Handle any remaining code at the end
+    if (inCode && codeLines.length > 0) {
+        const lang = detectedLang || 'python';
+        result.push(`\`\`\`${lang}`);
+        result.push(codeLines.join('\n'));
+        result.push('```');
+    }
+    
+    // If we detected and wrapped code, return the fixed content
+    const fixed = result.join('\n');
+    if (fixed !== content && fixed.includes('```')) {
+        console.log('✅ Fixed malformed code block');
+        return fixed;
+    }
+    
+    return content;
+}
+
+// ─────────────────────────────────────────────
+// CLEAN RESPONSE - PRESERVES CODE BLOCKS
 // ─────────────────────────────────────────────
 
 function cleanDualMindResponse(rawText) {
     if (!rawText || typeof rawText !== 'string') return '';
+    
+    // First, extract and preserve code blocks
+    const codeBlocks = [];
     let cleaned = rawText;
-
-    // 1. Unescape markdown that LLMs sometimes escape
-    cleaned = cleaned.replace(/\\#/g, '#');
-    cleaned = cleaned.replace(/\\\*/g, '*');
-    cleaned = cleaned.replace(/\\-/g, '-');
-    cleaned = cleaned.replace(/\\_/g, '_');
-
-    // 2. Remove standalone numbers (chunk indices)
+    
+    // Extract ```code blocks```
+    cleaned = cleaned.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+        codeBlocks.push({ lang, code: code.trim(), placeholder });
+        return placeholder;
+    });
+    
+    // Extract inline `code` (but not triple backticks)
+    cleaned = cleaned.replace(/`([^`\n]+)`/g, (match, code) => {
+        const placeholder = `__INLINE_CODE_${codeBlocks.length}__`;
+        codeBlocks.push({ lang: null, code: code.trim(), placeholder, isInline: true });
+        return placeholder;
+    });
+    
+    // Now clean the rest of the text
+    // Remove standalone numbers (chunk indices)
     cleaned = cleaned.replace(/^\d+\s*$/gm, '');
     cleaned = cleaned.replace(/^(\d+)\.\s*$/gm, '');
     
-    // 3. Remove internal source labels
+    // Remove internal source labels
     cleaned = cleaned.replace(/\[(Web Search|PDF Document|RAG|Hybrid)\]/gi, '');
-
-    // 4. Fix bolded headers like **# Title** -> ### Title
-    cleaned = cleaned.replace(/\*\*\s*(#{1,6})\s*(.*?)\s*\*\*/g, '### $2');
-    cleaned = cleaned.replace(/\*\*(.*?)\*\*\s*:/g, '### $1');
-
-    // 5. Convert multiple hashes with spaces (e.g., "# # Title") to just "### Title"
-    cleaned = cleaned.replace(/^(#+\s*)+/gm, '### ');
-
-    // 6. Ensure all headers are at least ### so they look neat (orange, no underline)
-    cleaned = cleaned.replace(/^#\s+/gm, '### ');
-    cleaned = cleaned.replace(/^##\s+/gm, '### ');
-
-    // 7. Fix inline headers and bullets from RAG mode (add newlines)
-    cleaned = cleaned.replace(/^(###\s+.*?)\s*[:-]\s+/gm, '$1\n\n- ');
     
-    // Fix inline bullet points that are stuck to the previous sentence
-    cleaned = cleaned.replace(/([a-z0-9.:!?])\s+(-\s+[A-Z0-9])/gi, '$1\n\n$2');
-
-    // 8. Fix malformed bullet points
-    cleaned = cleaned.replace(/^[•*]\s+/gm, '- ');
-
-    // 9. Clean up excessive newlines
-    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    // Fix malformed headers (only if not inside a code block)
+    cleaned = cleaned.replace(/^###\s*/gm, '## ');
+    cleaned = cleaned.replace(/^##([^ ])/gm, '## $1');
+    cleaned = cleaned.replace(/^#([^ ])/gm, '# $1');
     
-    // 10. Fix [object Object] issue
+    // Fix malformed bullet points
+    cleaned = cleaned.replace(/^[•\-*]\s*/gm, '- ');
+    
+    // Clean up excessive newlines
+    cleaned = cleaned.replace(/\n{4,}/g, '\n\n');
+    
+    // Fix [object Object] issue
     cleaned = cleaned.replace(/\[object Object\]/gi, '');
     
-    return cleaned.trim();
+    // Restore code blocks
+    codeBlocks.forEach(block => {
+        if (block.isInline) {
+            cleaned = cleaned.replace(block.placeholder, `<code>${escapeHtml(block.code)}</code>`);
+        } else {
+            cleaned = cleaned.replace(block.placeholder, `\`\`\`${block.lang}\n${block.code}\n\`\`\``);
+        }
+    });
+    
+    cleaned = cleaned.trim();
+    return cleaned;
 }
 
 // ─────────────────────────────────────────────
@@ -214,7 +331,7 @@ function buildSourceBadge(searchTypeUsed) {
 }
 
 // ─────────────────────────────────────────────
-// ADD MESSAGE TO CHAT - SMART FORMATTING
+// ADD MESSAGE TO CHAT - WITH CODE FIXING
 // ─────────────────────────────────────────────
 
 async function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
@@ -227,7 +344,10 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
     
     let finalContent = content;
     if (role === 'assistant') {
-        finalContent = cleanDualMindResponse(content);
+        // First, fix any malformed code blocks
+        finalContent = fixMalformedCodeBlocks(content);
+        // Then clean the response
+        finalContent = cleanDualMindResponse(finalContent);
     }
     
     messageDiv.className = `message ${role}`;
@@ -247,17 +367,15 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
             </div>
         `;
     } else {
-        // Check if this is casual conversation - if yes, render without markdown
+        // Check if this is casual conversation
         const isCasual = isCasualConversation(finalContent);
         let renderedContent;
         
         if (isCasual) {
-            // Simple formatting for casual chat (just line breaks)
             renderedContent = `<div class="md-body">${escapeHtml(finalContent).replace(/\n/g, '<br>')}</div>`;
         } else {
-            // Full markdown for RAG, Web, Summary responses
+            // Render markdown (this will handle code blocks with syntax highlighting)
             renderedContent = await renderMarkdown(finalContent);
-            // Add copy buttons after a small delay to ensure DOM is ready
             setTimeout(() => addCopyButtonsToCodeBlocks(), 50);
         }
         
@@ -382,6 +500,7 @@ async function loadSession(sessionId) {
                     const searchType = msg.metadata?.search_type_used || null;
                     let cleanMessageContent = msg.content || msg.answer || msg.response || '';
                     if (msg.role === 'assistant') {
+                        cleanMessageContent = fixMalformedCodeBlocks(cleanMessageContent);
                         cleanMessageContent = cleanDualMindResponse(cleanMessageContent);
                     }
                     await addMessageToChat(msg.role, cleanMessageContent, msg.metadata?.filename, searchType);
@@ -401,7 +520,6 @@ async function loadSession(sessionId) {
 function toggleSidebar() {
     if (sidebar) {
         sidebar.classList.toggle('collapsed');
-        // Store preference
         localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
     }
 }
@@ -431,7 +549,6 @@ document.addEventListener('DOMContentLoaded', () => {
     sidebar = document.getElementById('sidebar');
     sidebarToggle = document.getElementById('sidebarToggle');
 
-    // Restore sidebar state
     const savedSidebarState = localStorage.getItem('sidebar_collapsed');
     if (savedSidebarState === 'true' && sidebar) {
         sidebar.classList.add('collapsed');
