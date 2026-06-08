@@ -70,3 +70,43 @@ flowchart TB
     
     PDF -.->|Query| VECTOR
     API -.->|CRUD| SUPABASE
+
+```
+
+## 🧩 Tech Stack
+
+### Backend
+| Technology | Purpose |
+|------------|---------|
+| **FastAPI** | Async web framework |
+| **Groq API** | LLM inference (Llama 3.3 70B) |
+| **Tavily API** | Web search |
+| **Cohere API** | Result reranking |
+| **Supabase** | PostgreSQL + Auth |
+| **SentenceTransformers** | Local embeddings (paraphrase-MiniLM-L3-v2) |
+| **PyPDF** | PDF text extraction |
+| **JWT** | Authentication |
+
+### Frontend
+| Technology | Purpose |
+|------------|---------|
+| **HTML5/CSS3** | UI structure & styling |
+| **Vanilla JS** | Core logic |
+| **Marked.js** | Markdown rendering |
+| **Highlight.js** | Code syntax highlighting |
+| **Font Awesome** | Icons |
+
+### DevOps
+| Tool | Purpose |
+|------|---------|
+| **Docker** | Containerization |
+| **GitHub Actions** | CI/CD Pipeline |
+| **Render** | Backend hosting |
+| **Vercel** | Frontend hosting |
+
+---
+
+## 🚦 CI/CD Pipeline
+
+```yaml
+Push to main → Run Tests → Build Docker → Push to Registry → Deploy to Render → Deploy to Vercel
