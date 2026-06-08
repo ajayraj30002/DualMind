@@ -19,7 +19,7 @@
 [![JWT](https://img.shields.io/badge/JWT-Auth-000000?logo=jsonwebtokens&logoColor=white)](https://jwt.io)
 [![SentenceTransformers](https://img.shields.io/badge/Embeddings-MiniLM-FFD43B?logo=huggingface&logoColor=black)](https://huggingface.co/sentence-transformers)
 [![Markdown](https://img.shields.io/badge/Format-Markdown-000000?logo=markdown&logoColor=white)](https://markdown.com)
-[![License](https://img.shields.io/badge/License-MIT-3DA639?logo=opensourceinitiative&logoColor=white)](LICENSE)
+
 
 </div>
 
