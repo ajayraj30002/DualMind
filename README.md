@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![DualMind Banner](https://img.shields.io/badge/DualMind-Agentic%20Hybrid%20RAG-6366f1?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDJhMTAgMTAgMCAwIDEgMTAgMTBjMCA1LTMgOS04IDktNSAwLTgtNC04LTlzMy05IDgtOSAwIDgtNCA4LTkiLz48cGF0aCBkPSJtOCAxMiA0IDQgNC00Ii8+PHBhdGggZD0iTTEyIDE2VjgiLz48L3N2Zz4=)
+![DualMind Banner](https://img.shields.io/badge/DualMind-Agentic%20Hybrid%20RAG-6366f1?style=for-the-badge)
 
 **Agentic Hybrid RAG System | PDF & Web Search | Multi-Intent Routing**
 
@@ -16,10 +16,7 @@
 [![GitHub Actions](https://img.shields.io/badge/CI%2FCD-Automated-2088FF?logo=githubactions&logoColor=white)](https://github.com/features/actions)
 [![Render](https://img.shields.io/badge/Deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com)
 [![Vercel](https://img.shields.io/badge/Frontend-Vercel-000000?logo=vercel&logoColor=white)](https://vercel.com)
-[![JWT](https://img.shields.io/badge/JWT-Auth-000000?logo=jsonwebtokens&logoColor=white)](https://jwt.io)
-[![SentenceTransformers](https://img.shields.io/badge/Embeddings-MiniLM-FFD43B?logo=huggingface&logoColor=black)](https://huggingface.co/sentence-transformers)
-[![Markdown](https://img.shields.io/badge/Format-Markdown-000000?logo=markdown&logoColor=white)](https://markdown.com)
-
+[![License](https://img.shields.io/badge/License-MIT-3DA639?logo=opensourceinitiative&logoColor=white)](LICENSE)
 
 </div>
 
@@ -27,19 +24,7 @@
 
 ## 📌 Overview
 
-**DualMind** is an intelligent conversational AI system that combines document-based RAG (Retrieval-Augmented Generation) with web search capabilities. It features an **agentic router** that intelligently determines query intent and selects the optimal retrieval strategy.
-
-### 🎯 Key Capabilities
-
-| Capability | Description |
-|------------|-------------|
-| 📄 **PDF Intelligence** | Upload, embed, and query documents with hybrid search (semantic + keyword) |
-| 🌐 **Web Integration** | Real-time web search via Tavily API |
-| 🧠 **Agentic Router** | Single LLM call for intent classification + retrieval mode + query rewriting |
-| 🔄 **Conversational Memory** | Full chat history with session management |
-| 📝 **Smart Formatting** | Markdown responses with code highlighting, copy buttons, and source badges |
-| 🔐 **Auth System** | JWT-based authentication with Supabase |
-| 🚀 **Production Ready** | Dockerized, CI/CD pipeline, deployable to Render/Vercel |
+**DualMind** is an intelligent conversational AI system that combines document-based RAG with web search capabilities. Features an **agentic router** that intelligently determines query intent and selects optimal retrieval strategy.
 
 ---
 
@@ -47,79 +32,41 @@
 
 ```mermaid
 flowchart TB
-    subgraph FRONTEND["🎨 Frontend (Vercel)"]
-        UI[HTML/CSS/JS + Marked + hljs]
+    subgraph CLIENT["🖥️ Client Layer"]
+        FRONTEND["Frontend (Vercel)<br/>HTML/CSS/JS + Marked + hljs"]
     end
 
-    subgraph BACKEND["⚙️ Backend (Render/Docker)"]
-        API[FastAPI Endpoints<br/>Auth/Chat/Upload]
+    subgraph BACKEND["⚙️ Backend Layer (Render/Docker)"]
+        API["FastAPI Server<br/>Auth | Chat | Upload | Documents"]
         
         subgraph INTELLIGENCE["🧠 Intelligence Layer"]
-            ROUTER[Agentic Router<br/>Groq]
-            RETRIEVE[Retriever]
-            GENERATE[Answer Generator<br/>Groq]
+            ROUTER["Agentic Router (Groq)<br/>Intent + Mode + Rewrite"]
+            GENERATE["Answer Generator (Groq)<br/>RAG | Summary | Code"]
         end
         
         subgraph RETRIEVAL["🔍 Retrieval Layer"]
-            PDF[PDF Search<br/>Semantic + Keyword]
-            WEB[Web Search<br/>Tavily API]
-            RERANK[Cohere Rerank]
+            PDF["PDF Search<br/>Semantic + Keyword"]
+            WEB["Web Search<br/>Tavily API"]
+            RERANK["Cohere Rerank"]
         end
     end
 
     subgraph DATA["💾 Data Layer"]
-        SUPABASE[(Supabase<br/>Postgres)]
-        VECTOR[(Vector Store<br/>MiniLM Embeddings)]
+        SUPABASE[(Supabase<br/>Postgres<br/>Users/Sessions/Messages)]
+        VECTOR[(Vector Store<br/>MiniLM-L3-v2<br/>Embeddings)]
     end
 
-    UI --> API
+    FRONTEND -->|HTTP Request| API
     API --> ROUTER
-    ROUTER --> RETRIEVE
-    RETRIEVE --> PDF
-    RETRIEVE --> WEB
+    ROUTER -->|Retrieval Mode| RETRIEVAL
+    ROUTER -->|Intent| GENERATE
+    
     PDF --> RERANK
     WEB --> RERANK
-    RERANK --> GENERATE
-    GENERATE --> API
-    API --> UI
+    RERANK -->|Top K Sources| GENERATE
     
-    PDF --> VECTOR
-    API --> SUPABASE
-
-## 🧩 Tech Stack
-
-### Backend
-| Technology | Purpose |
-|------------|---------|
-| **FastAPI** | Async web framework |
-| **Groq API** | LLM inference (Llama 3.3 70B) |
-| **Tavily API** | Web search |
-| **Cohere API** | Result reranking |
-| **Supabase** | PostgreSQL + Auth |
-| **SentenceTransformers** | Local embeddings (paraphrase-MiniLM-L3-v2) |
-| **PyPDF** | PDF text extraction |
-| **JWT** | Authentication |
-
-### Frontend
-| Technology | Purpose |
-|------------|---------|
-| **HTML5/CSS3** | UI structure & styling |
-| **Vanilla JS** | Core logic |
-| **Marked.js** | Markdown rendering |
-| **Highlight.js** | Code syntax highlighting |
-| **Font Awesome** | Icons |
-
-### DevOps
-| Tool | Purpose |
-|------|---------|
-| **Docker** | Containerization |
-| **GitHub Actions** | CI/CD Pipeline |
-| **Render** | Backend hosting |
-| **Vercel** | Frontend hosting |
-
----
-
-## 🚦 CI/CD Pipeline
-
-```yaml
-Push to main → Run Tests → Build Docker → Push to Registry → Deploy to Render → Deploy to Vercel
+    GENERATE -->|Final Answer| API
+    API -->|JSON Response| FRONTEND
+    
+    PDF -.->|Query| VECTOR
+    API -.->|CRUD| SUPABASE
