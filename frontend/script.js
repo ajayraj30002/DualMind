@@ -10,7 +10,7 @@ let currentSessionDocuments = [];
 // DOM elements
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
 let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
-let modeBtns, loadingOverlay;
+let modeBtns, loadingOverlay, sidebar, sidebarToggle;
 
 const WELCOME_HTML = `
     <div class="welcome">
@@ -21,7 +21,65 @@ const WELCOME_HTML = `
 `;
 
 // ─────────────────────────────────────────────
-// CLEAN DUALMIND RESPONSE - REMOVE RAW SYMBOLS
+// CHECK IF RESPONSE NEEDS MARKDOWN FORMATTING
+// ─────────────────────────────────────────────
+
+function isCasualConversation(content) {
+    if (!content) return false;
+    const casualPatterns = [
+        /^(hey|hi|hello|yo|sup|hiya|good morning|good afternoon|good evening)/i,
+        /^(thanks|thank you|great|cool|awesome|nice|bye|goodbye)/i,
+        /^how are you/i,
+        /^(what's up|how's it going)/i,
+        /^(ok|okay|got it|understood)$/i,
+        /^(hmm|um|ah|oh)$/i
+    ];
+    const lowerContent = content.toLowerCase().trim();
+    // If content is short (under 100 chars) and matches casual patterns
+    if (content.length < 100) {
+        return casualPatterns.some(pattern => pattern.test(lowerContent));
+    }
+    // Also check if there are no markdown characters and it's short
+    const hasMarkdown = content.includes('##') || content.includes('**') || content.includes('- ') || content.includes('```');
+    return !hasMarkdown && content.length < 200;
+}
+
+// ─────────────────────────────────────────────
+// ADD COPY BUTTONS TO CODE BLOCKS
+// ─────────────────────────────────────────────
+
+function addCopyButtonsToCodeBlocks() {
+    document.querySelectorAll('.md-body pre').forEach(pre => {
+        // Skip if already has wrapper
+        if (pre.parentElement.classList.contains('code-wrapper')) return;
+        
+        const code = pre.querySelector('code');
+        if (!code) return;
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-wrapper';
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+        
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+        copyBtn.onclick = async () => {
+            const codeText = code.textContent || '';
+            await navigator.clipboard.writeText(codeText);
+            copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            copyBtn.classList.add('copied');
+            setTimeout(() => {
+                copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                copyBtn.classList.remove('copied');
+            }, 2000);
+        };
+        wrapper.appendChild(copyBtn);
+    });
+}
+
+// ─────────────────────────────────────────────
+// CLEAN RESPONSE
 // ─────────────────────────────────────────────
 
 function cleanDualMindResponse(rawText) {
@@ -29,32 +87,33 @@ function cleanDualMindResponse(rawText) {
     
     let cleaned = rawText;
     
-    // Remove standalone numbers like "33" on their own line
+    // Remove standalone numbers (chunk indices) on their own line
     cleaned = cleaned.replace(/^\d+\s*$/gm, '');
+    cleaned = cleaned.replace(/^(\d+)\.\s*$/gm, '');
     
-    // Remove "33." patterns at start of lines (numbered lists that break)
-    cleaned = cleaned.replace(/^\d+\.\s+/gm, '');
+    // Remove internal source labels
+    cleaned = cleaned.replace(/\[(Web Search|PDF Document|RAG|Hybrid)\]/gi, '');
     
-    // Ensure proper spacing after headings (## Heading -> no extra spaces)
-    cleaned = cleaned.replace(/^##\s+/gm, '## ');
+    // Fix malformed headers
+    cleaned = cleaned.replace(/^##([^ ])/gm, '## $1');
+    cleaned = cleaned.replace(/^#([^ ])/gm, '# $1');
     
-    // Fix bullet points - ensure dash followed by space
-    cleaned = cleaned.replace(/^-\s*/gm, '- ');
+    // Fix malformed bullet points
+    cleaned = cleaned.replace(/^[•\-*]\s*/gm, '- ');
     
-    // Remove multiple consecutive newlines (more than 2)
-    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    // Clean up excessive newlines
+    cleaned = cleaned.replace(/\n{4,}/g, '\n\n');
     
-    // Remove "Web Search" raw text label (will be added as badge separately)
-    cleaned = cleaned.replace(/Web Search/gi, '');
+    // Fix [object Object] issue - replace with empty string
+    cleaned = cleaned.replace(/\[object Object\]/gi, '');
     
-    // Trim extra whitespace
     cleaned = cleaned.trim();
     
     return cleaned;
 }
 
 // ─────────────────────────────────────────────
-// MARKDOWN RENDERER SETUP
+// MARKDOWN RENDERER WITH HIGHLIGHT.JS
 // ─────────────────────────────────────────────
 
 function setupMarked() {
@@ -70,41 +129,25 @@ function setupMarked() {
                 breaks: true,
                 pedantic: false,
                 mangle: false,
-                headerIds: false
-            });
-        }
-        
-        const renderer = {
-            link(href, title, text) {
-                return `<a href="${href}" target="_blank" rel="noopener noreferrer" ${title ? `title="${title}"` : ''}>${text}</a>`;
-            },
-            code(code, language) {
-                let highlighted = code;
-                if (language && hljs.getLanguage(language)) {
+                headerIds: false,
+                highlight: function(code, lang) {
+                    if (lang && hljs.getLanguage(lang)) {
+                        try {
+                            return hljs.highlight(code, { language: lang }).value;
+                        } catch (e) {}
+                    }
                     try {
-                        highlighted = hljs.highlight(code, { language }).value;
-                    } catch (_) {}
-                } else {
-                    try {
-                        highlighted = hljs.highlightAuto(code).value;
-                    } catch (_) {}
+                        return hljs.highlightAuto(code).value;
+                    } catch (e) {}
+                    return code;
                 }
-                return `<pre><code class="hljs ${language || ''}">${highlighted}</code></pre>`;
-            }
-        };
-        
-        if (marked.use) {
-            marked.use({ renderer });
+            });
         }
         console.log('✅ Markdown renderer configured');
     } catch (e) {
         console.error('Markdown setup error:', e);
     }
 }
-
-// ─────────────────────────────────────────────
-// RENDER MARKDOWN (ASYNC)
-// ─────────────────────────────────────────────
 
 async function renderMarkdown(text) {
     if (!text) return '<div class="md-body"></div>';
@@ -117,9 +160,6 @@ async function renderMarkdown(text) {
             html = (result && typeof result.then === 'function') ? await result : result;
         } else if (typeof marked === 'function') {
             html = marked(cleanText);
-        } else if (marked.default && typeof marked.default.parse === 'function') {
-            const result = marked.default.parse(cleanText);
-            html = (result && typeof result.then === 'function') ? await result : result;
         } else {
             html = cleanText;
         }
@@ -158,7 +198,7 @@ function buildSourceBadge(searchTypeUsed) {
 }
 
 // ─────────────────────────────────────────────
-// ADD MESSAGE TO CHAT
+// ADD MESSAGE TO CHAT - SMART FORMATTING
 // ─────────────────────────────────────────────
 
 async function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
@@ -169,23 +209,19 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
 
     const messageDiv = document.createElement('div');
     
-    // Clean the content if it's an assistant message
     let finalContent = content;
     if (role === 'assistant') {
         finalContent = cleanDualMindResponse(content);
     }
     
-    const hasMarkdownSymbols = String(finalContent).includes('##') || String(finalContent).includes('**') || String(finalContent).includes('- ');
-    const normalizedRole = (role === 'user' && !hasMarkdownSymbols) ? 'user' : 'assistant';
-    
-    messageDiv.className = `message ${normalizedRole}`;
+    messageDiv.className = `message ${role}`;
 
     let attachmentHTML = '';
     if (filename) {
         attachmentHTML = `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>`;
     }
 
-    if (normalizedRole === 'user') {
+    if (role === 'user') {
         const plainText = escapeHtml(finalContent).replace(/\n/g, '<br>');
         messageDiv.innerHTML = `
             <div class="message-avatar"><i class="fas fa-user"></i></div>
@@ -195,9 +231,21 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
             </div>
         `;
     } else {
-        // Render markdown to HTML
-        const renderedContent = await renderMarkdown(finalContent);
-        const effectiveSource = searchTypeUsed || (String(finalContent).toLowerCase().includes('web') ? 'Web Search' : currentMode);
+        // Check if this is casual conversation - if yes, render without markdown
+        const isCasual = isCasualConversation(finalContent);
+        let renderedContent;
+        
+        if (isCasual) {
+            // Simple formatting for casual chat (just line breaks)
+            renderedContent = `<div class="md-body">${escapeHtml(finalContent).replace(/\n/g, '<br>')}</div>`;
+        } else {
+            // Full markdown for RAG, Web, Summary responses
+            renderedContent = await renderMarkdown(finalContent);
+            // Add copy buttons after a small delay to ensure DOM is ready
+            setTimeout(() => addCopyButtonsToCodeBlocks(), 50);
+        }
+        
+        const effectiveSource = searchTypeUsed || (currentMode === 'hybrid' ? 'Hybrid Search' : currentMode);
         const sourceBadge = buildSourceBadge(effectiveSource);
 
         messageDiv.innerHTML = `
@@ -214,7 +262,7 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
 }
 
 // ─────────────────────────────────────────────
-// SEND MESSAGE - FIXED VERSION
+// SEND MESSAGE
 // ─────────────────────────────────────────────
 
 async function sendMessage() {
@@ -270,11 +318,8 @@ async function sendMessage() {
 
         if (res.ok) {
             let finalAnswer = data.answer || data.response || data.content || '';
-            
-            // Clean the response before rendering
             finalAnswer = cleanDualMindResponse(finalAnswer);
-            
-            const searchSource = data.search_type_used || (currentMode === 'hybrid' ? 'Web Search' : currentMode);
+            const searchSource = data.search_type_used || (currentMode === 'hybrid' ? 'Hybrid Search' : currentMode);
             await addMessageToChat('assistant', finalAnswer, null, searchSource);
         } else {
             await addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
@@ -289,7 +334,7 @@ async function sendMessage() {
 }
 
 // ─────────────────────────────────────────────
-// LOAD SESSION MESSAGES (FIXED)
+// LOAD SESSION MESSAGES
 // ─────────────────────────────────────────────
 
 async function loadSession(sessionId) {
@@ -320,12 +365,9 @@ async function loadSession(sessionId) {
                 for (const msg of data.messages) {
                     const searchType = msg.metadata?.search_type_used || null;
                     let cleanMessageContent = msg.content || msg.answer || msg.response || '';
-                    
-                    // Clean assistant messages
                     if (msg.role === 'assistant') {
                         cleanMessageContent = cleanDualMindResponse(cleanMessageContent);
                     }
-                    
                     await addMessageToChat(msg.role, cleanMessageContent, msg.metadata?.filename, searchType);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -334,6 +376,18 @@ async function loadSession(sessionId) {
 
         await loadSessions();
     } catch (err) { console.error(err); }
+}
+
+// ─────────────────────────────────────────────
+// SIDEBAR TOGGLE
+// ─────────────────────────────────────────────
+
+function toggleSidebar() {
+    if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+        // Store preference
+        localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -358,6 +412,14 @@ document.addEventListener('DOMContentLoaded', () => {
     fileBadge = document.getElementById('fileBadge');
     modeBtns = document.querySelectorAll('.mode-btn');
     loadingOverlay = document.getElementById('loadingOverlay');
+    sidebar = document.getElementById('sidebar');
+    sidebarToggle = document.getElementById('sidebarToggle');
+
+    // Restore sidebar state
+    const savedSidebarState = localStorage.getItem('sidebar_collapsed');
+    if (savedSidebarState === 'true' && sidebar) {
+        sidebar.classList.add('collapsed');
+    }
 
     setupEventListeners();
     checkAuth();
@@ -387,6 +449,7 @@ function setupEventListeners() {
     logoutBtn?.addEventListener('click', async () => { showLoading(); doLogout(); hideLoading(); });
     attachBtn?.addEventListener('click', () => fileInput?.click());
     fileInput?.addEventListener('change', onFileSelect);
+    sidebarToggle?.addEventListener('click', toggleSidebar);
 
     modeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -486,7 +549,7 @@ function toggleForms(showRegister) {
 }
 
 // ─────────────────────────────────────────────
-// CHAT SESSION DATABASE INTERACTION
+// CHAT SESSION MANAGEMENT
 // ─────────────────────────────────────────────
 
 async function loadSessions() {
@@ -607,7 +670,7 @@ function clearMessages() {
 }
 
 // ─────────────────────────────────────────────
-// STREAM VISUAL ANIMATION
+// TYPING ANIMATION
 // ─────────────────────────────────────────────
 
 function showTyping() {
@@ -632,7 +695,7 @@ function hideTyping() {
 }
 
 // ─────────────────────────────────────────────
-// FILE REPOSITORY CONTROL
+// FILE HANDLING
 // ─────────────────────────────────────────────
 
 function onFileSelect(e) {
@@ -664,7 +727,7 @@ async function uploadFile(file, sessionId) {
 }
 
 // ─────────────────────────────────────────────
-// COMPLEMENTARY RESTRUCTURING UTILITIES
+// UTILITIES
 // ─────────────────────────────────────────────
 
 async function autoTitle(sessionId, firstMsg) {
