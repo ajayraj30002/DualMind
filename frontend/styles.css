@@ -410,9 +410,164 @@ body {
     line-height: 1.6;
 }
 
+/* ========== DEEPSEEK-STYLE SYNTAX HIGHLIGHTING ========== */
 .hljs-comment {
-    color: #4ade80 !important;
+    color: #6a9955 !important;
     font-style: italic;
+}
+
+.hljs-keyword {
+    color: #ff7b72 !important;
+    font-weight: 500;
+}
+
+.hljs-built_in {
+    color: #ff7b72 !important;
+}
+
+.hljs-literal {
+    color: #79c0ff !important;
+}
+
+.hljs-number {
+    color: #79c0ff !important;
+}
+
+.hljs-string {
+    color: #a5d6ff !important;
+}
+
+.hljs-function {
+    color: #d2a8ff !important;
+}
+
+.hljs-title {
+    color: #d2a8ff !important;
+}
+
+.hljs-title.function_ {
+    color: #d2a8ff !important;
+}
+
+.hljs-params {
+    color: #e6edf3 !important;
+}
+
+.hljs-variable {
+    color: #ffa657 !important;
+}
+
+.hljs-property {
+    color: #79c0ff !important;
+}
+
+.hljs-attr {
+    color: #79c0ff !important;
+}
+
+.hljs-tag {
+    color: #ff7b72 !important;
+}
+
+.hljs-name {
+    color: #ff7b72 !important;
+}
+
+.hljs-attribute {
+    color: #79c0ff !important;
+}
+
+.hljs-selector-tag {
+    color: #ff7b72 !important;
+}
+
+.hljs-selector-id {
+    color: #79c0ff !important;
+}
+
+.hljs-selector-class {
+    color: #79c0ff !important;
+}
+
+.hljs-selector-attr {
+    color: #79c0ff !important;
+}
+
+.hljs-selector-pseudo {
+    color: #79c0ff !important;
+}
+
+.hljs-template-tag {
+    color: #ff7b72 !important;
+}
+
+.hljs-template-variable {
+    color: #ffa657 !important;
+}
+
+.hljs-regexp {
+    color: #a5d6ff !important;
+}
+
+.hljs-symbol {
+    color: #ff7b72 !important;
+}
+
+.hljs-bullet {
+    color: #79c0ff !important;
+}
+
+.hljs-link {
+    color: #79c0ff !important;
+}
+
+.hljs-section {
+    color: #d2a8ff !important;
+}
+
+.hljs-addition {
+    color: #2ea043 !important;
+    background: rgba(46, 160, 67, 0.1);
+    display: inline-block;
+    width: 100%;
+}
+
+.hljs-deletion {
+    color: #f85149 !important;
+    background: rgba(248, 81, 73, 0.1);
+    display: inline-block;
+    width: 100%;
+}
+
+.hljs-meta {
+    color: #ff7b72 !important;
+}
+
+.hljs-meta-string {
+    color: #a5d6ff !important;
+}
+
+/* ========== CODE EXPLANATION STYLING (Subtle gray) ========== */
+/* Paragraphs that come immediately after code blocks */
+.code-wrapper + p,
+pre + p,
+.md-body pre + p {
+    color: #9ca3af !important;
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    padding-left: 0.75rem;
+    border-left: 2px solid #f97316;
+    font-style: normal;
+    line-height: 1.5;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 0 0.5rem 0.5rem 0;
+}
+
+/* Selection color within code blocks */
+.code-wrapper pre code::selection,
+.md-body pre code::selection {
+    background: rgba(249, 115, 22, 0.3);
 }
 
 /* Blockquotes */
@@ -631,215 +786,4 @@ body {
 @media (max-width: 640px) {
     .sidebar { position: fixed; left: -260px; z-index: 100; transition: left 0.3s; }
     .sidebar.open { left: 0; }
-}
-
-/* ============================================
-   ENHANCED CODE BLOCK SYNTAX HIGHLIGHTING
-   DeepSeek-style vibrant token colors
-   ============================================ */
-
-/* Code block wrapper */
-.code-wrapper {
-    position: relative;
-    margin: 1rem 0;
-    border-radius: 0.75rem;
-    overflow: hidden;
-    background: #0d1117;
-}
-
-.code-wrapper pre {
-    margin: 0;
-    padding: 1rem;
-    overflow-x: auto;
-    background: #0d1117;
-}
-
-/* Base code styles */
-.md-body code {
-    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
-    font-size: 0.8rem;
-    line-height: 1.5;
-}
-
-/* Inline code */
-.md-body p code,
-.md-body li code,
-.md-body td code {
-    background: #1a1a2e;
-    color: #f97316;
-    padding: 0.2rem 0.4rem;
-    border-radius: 0.3rem;
-    font-size: 0.75rem;
-    border: 1px solid #2a2a4a;
-}
-
-/* ========== SYNTAX COLORS ========== */
-
-/* Keywords (if, else, return, function, class, const, let, var, etc.) */
-.hljs-keyword,
-.hljs-built_in {
-    color: #ff79c6;
-    font-weight: 500;
-}
-
-/* Functions/method names */
-.hljs-title,
-.hljs-function .hljs-title,
-.hljs-name {
-    color: #50fa7b;
-}
-
-/* Strings */
-.hljs-string {
-    color: #f1fa8c;
-}
-
-/* Numbers */
-.hljs-number {
-    color: #bd93f9;
-}
-
-/* Comments */
-.hljs-comment {
-    color: #6272a4;
-    font-style: italic;
-}
-
-/* Variables */
-.hljs-variable,
-.hljs-params {
-    color: #8be9fd;
-}
-
-/* Constants */
-.hljs-literal {
-    color: #ffb86c;
-}
-
-/* Operators */
-.hljs-operator {
-    color: #ff79c6;
-}
-
-/* Tags (HTML/JSX) */
-.hljs-tag {
-    color: #ff79c6;
-}
-
-.hljs-attr {
-    color: #50fa7b;
-}
-
-/* Classes */
-.hljs-class .hljs-title {
-    color: #50fa7b;
-}
-
-/* Attributes/Properties */
-.hljs-attribute,
-.hljs-property {
-    color: #8be9fd;
-}
-
-/* Regex */
-.hljs-regexp {
-    color: #f1fa8c;
-}
-
-/* Template literals */
-.hljs-template-variable {
-    color: #8be9fd;
-}
-
-/* Punctuation */
-.hljs-punctuation {
-    color: #f8f8f2;
-}
-
-/* ========== CODE EXPLANATION STYLING ========== */
-/* Subtle gray styling for explanations that accompany code */
-
-/* Paragraphs that appear right after code blocks (code explanations) */
-.code-wrapper + p,
-pre + p,
-.md-body pre + p {
-    color: #a0a0a0;
-    font-size: 0.8rem;
-    margin-top: 0.5rem;
-    margin-bottom: 1rem;
-    padding-left: 0.5rem;
-    border-left: 2px solid #f97316;
-    font-style: normal;
-    line-height: 1.5;
-}
-
-/* Explanation text within list items after code */
-li .md-body pre + br + code,
-li code + br + span {
-    color: #a0a0a0;
-}
-
-/* General subtle text for explanations */
-.code-explanation,
-.explanation {
-    color: #888;
-    font-size: 0.8rem;
-    background: rgba(255, 255, 255, 0.03);
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.5rem;
-    margin-top: 0.5rem;
-    border-left: 2px solid #f97316;
-}
-
-/* Copy button styling (keep as is, just ensuring consistency) */
-.copy-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: #2a2a2a;
-    border: 1px solid #444;
-    border-radius: 0.4rem;
-    padding: 4px 10px;
-    color: #aaa;
-    cursor: pointer;
-    font-size: 0.7rem;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    transition: all 0.2s;
-    font-family: inherit;
-    z-index: 10;
-}
-
-.copy-btn:hover {
-    background: #f97316;
-    color: #fff;
-    border-color: #f97316;
-}
-
-.copy-btn.copied {
-    background: #22c55e;
-    color: #fff;
-    border-color: #22c55e;
-}
-
-/* Diff colors for added/removed lines (if showing diffs) */
-.hljs-addition {
-    background-color: rgba(80, 250, 123, 0.15);
-    color: #50fa7b;
-    display: inline-block;
-    width: 100%;
-}
-
-.hljs-deletion {
-    background-color: rgba(255, 85, 85, 0.15);
-    color: #ff5555;
-    display: inline-block;
-    width: 100%;
-}
-
-/* Selection color within code blocks */
-.code-wrapper pre code::selection,
-.md-body pre code::selection {
-    background: rgba(249, 115, 22, 0.3);
 }
