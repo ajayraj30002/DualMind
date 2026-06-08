@@ -4,7 +4,7 @@ let token = null;
 let user = null;
 let currentSessionId = null;
 let currentMode = 'hybrid';
-let pendingFile = null;
+let pendingFile = null; 
 let currentSessionDocuments = [];
 
 // DOM elements
