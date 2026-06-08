@@ -45,63 +45,46 @@
 
 ## 🏗️ Architecture
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ FRONTEND │
-│ HTML/CSS/JS + Marked + hljs │
-└─────────────────────────────────────────────────────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ API LAYER (FastAPI) │
-│ Auth │ Chat │ Upload │ Documents │
-└─────────────────────────────────────────────────────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ INTELLIGENCE LAYER │
-│ │
-│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ │
-│ │ Router │───▶│ Retrieve │───▶│ Generate │ │
-│ │ (Groq) │ │ │ │ (Groq) │ │
-│ └──────────────┘ └──────────────┘ └──────────────┘ │
-│ │ │ │ │
-│ ▼ ▼ ▼ │
-│ Intent + Mode PDF/Web Search Final Answer │
-│ │
-└─────────────────────────────────────────────────────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ RETRIEVAL LAYER │
-│ │
-│ ┌──────────────────┐ ┌──────────────────┐ │
-│ │ PDF SEARCH │ │ WEB SEARCH │ │
-│ │ │ │ │ │
-│ │ • Semantic │ │ • Tavily API │ │
-│ │ • Keyword │ │ │ │
-│ │ • Cohere Rerank │ │ │ │
-│ └──────────────────┘ └──────────────────┘ │
-│ │
-└─────────────────────────────────────────────────────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ DATA LAYER │
-│ │
-│ ┌──────────────────┐ ┌──────────────────┐ │
-│ │ Supabase │ │ Chroma/ │ │
-│ │ (Postgres) │ │ Local Store │ │
-│ │ │ │ │ │
-│ │ • Users │ │ • PDF Chunks │ │
-│ │ • Sessions │ │ • Embeddings │ │
-│ │ • Messages │ │ (MiniLM) │ │
-│ └──────────────────┘ └──────────────────┘ │
-│ │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph FRONTEND["🎨 Frontend (Vercel)"]
+        UI[HTML/CSS/JS + Marked + hljs]
+    end
 
-text
+    subgraph BACKEND["⚙️ Backend (Render/Docker)"]
+        API[FastAPI Endpoints<br/>Auth/Chat/Upload]
+        
+        subgraph INTELLIGENCE["🧠 Intelligence Layer"]
+            ROUTER[Agentic Router<br/>Groq]
+            RETRIEVE[Retriever]
+            GENERATE[Answer Generator<br/>Groq]
+        end
+        
+        subgraph RETRIEVAL["🔍 Retrieval Layer"]
+            PDF[PDF Search<br/>Semantic + Keyword]
+            WEB[Web Search<br/>Tavily API]
+            RERANK[Cohere Rerank]
+        end
+    end
 
----
+    subgraph DATA["💾 Data Layer"]
+        SUPABASE[(Supabase<br/>Postgres)]
+        VECTOR[(Vector Store<br/>MiniLM Embeddings)]
+    end
+
+    UI --> API
+    API --> ROUTER
+    ROUTER --> RETRIEVE
+    RETRIEVE --> PDF
+    RETRIEVE --> WEB
+    PDF --> RERANK
+    WEB --> RERANK
+    RERANK --> GENERATE
+    GENERATE --> API
+    API --> UI
+    
+    PDF --> VECTOR
+    API --> SUPABASE
 
 ## 🧩 Tech Stack
 
