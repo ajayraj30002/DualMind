@@ -3,7 +3,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 import httpx
-from groq import Groq
+from groq import Groq 
 
 try:
     from .closed_domain import search_closed_domain
