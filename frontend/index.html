@@ -8,13 +8,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'DM Sans', sans-serif; background: #000; color: #fff; height: 100vh; overflow: hidden; }
 
-        /* Loader */
         .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
         .loading-overlay.hidden { display: none; }
         .loading-spinner { text-align: center; background: #1a1a1a; padding: 2rem 3rem; border-radius: 1rem; border: 1px solid #333; }
@@ -22,7 +20,6 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .loading-spinner p { color: #fff; font-size: 0.875rem; }
 
-        /* Login Panels */
         .login-page { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; }
         .login-page.hidden { display: none; }
         .login-card { background: #111; padding: 2rem; border-radius: 1.5rem; width: 100%; max-width: 400px; text-align: center; border: 1px solid #222; }
@@ -38,24 +35,18 @@
         .login-switch { margin-top: 1rem; color: #666; font-size: 0.8rem; }
         .login-switch a { color: #f97316; text-decoration: none; }
 
-        /* Shell Architecture */
         .chat-page { display: flex; height: 100vh; width: 100%; }
         .chat-page.hidden { display: none; }
         
-        /* Sidebar with collapse */
-        .sidebar { width: 260px; background: #111; border-right: 1px solid #222; display: flex; flex-direction: column; transition: width 0.3s ease, margin 0.3s ease; position: relative; }
+        .sidebar { width: 260px; background: #111; border-right: 1px solid #222; display: flex; flex-direction: column; transition: width 0.3s ease; position: relative; }
         .sidebar.collapsed { width: 60px; }
-        .sidebar.collapsed .sidebar-header span, 
-        .sidebar.collapsed .session-title,
-        .sidebar.collapsed .user-row span,
-        .sidebar.collapsed .sidebar-footer .user-row i:not(.fa-bars),
-        .sidebar.collapsed .new-chat-btn span { display: none; }
+        .sidebar.collapsed .sidebar-header span, .sidebar.collapsed .session-title, .sidebar.collapsed .user-row span, .sidebar.collapsed .new-chat-btn span { display: none; }
         .sidebar.collapsed .new-chat-btn { justify-content: center; padding: 0.75rem; }
         .sidebar.collapsed .session-item { justify-content: center; padding: 0.6rem; }
         .sidebar.collapsed .delete-session { display: none; }
         .sidebar.collapsed .sidebar-footer { justify-content: center; }
         
-        .sidebar-toggle { position: absolute; right: -12px; top: 20px; background: #f97316; border: none; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; color: #fff; font-size: 12px; transition: transform 0.3s; }
+        .sidebar-toggle { position: absolute; right: -12px; top: 20px; background: #f97316; border: none; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; color: #fff; font-size: 12px; }
         .sidebar-toggle:hover { background: #fb923c; transform: scale(1.1); }
         .sidebar.collapsed .sidebar-toggle { transform: rotate(180deg); }
         
@@ -75,9 +66,7 @@
         .logout-sidebar { background: none; border: none; color: #555; cursor: pointer; padding: 0.5rem; }
         .logout-sidebar:hover { color: #f97316; }
 
-        /* Main Chat */
         .main-chat { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
         .chat-header { padding: 0.75rem 1.5rem; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
         .title-area { display: flex; align-items: center; gap: 0.5rem; }
         .title-area h3 { font-weight: 500; font-size: 1rem; }
@@ -93,7 +82,6 @@
         .welcome i { font-size: 3rem; color: #f97316; margin-bottom: 1rem; }
         .welcome h3 { color: #fff; margin-bottom: 0.3rem; }
 
-        /* Message Bubbles */
         .message { display: flex; gap: 0.8rem; margin-bottom: 1.5rem; max-width: 85%; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .message.user { flex-direction: row-reverse; margin-left: auto; }
@@ -104,13 +92,11 @@
         .message-content { background: #1a1a1a; padding: 0.75rem 1rem; border-radius: 1rem; font-size: 0.875rem; line-height: 1.6; word-wrap: break-word; max-width: 100%; border: 1px solid #2a2a2a; }
         .message.user .message-content { background: #f97316; border-color: #f97316; display: flex; flex-direction: column; align-items: flex-end; }
 
-        /* Markdown Styles */
         .md-body { color: #e5e5e5; font-size: 0.875rem; line-height: 1.7; }
         .md-body h1, .md-body h2, .md-body h3, .md-body h4 { color: #ffffff; font-weight: 600; margin-top: 1.2rem; margin-bottom: 0.5rem; line-height: 1.3; }
         .md-body h1 { font-size: 1.15rem; border-bottom: 1px solid #2a2a2a; padding-bottom: 0.4rem; }
         .md-body h2 { font-size: 1rem; color: #f97316; }
         .md-body h3 { font-size: 0.9rem; color: #fb923c; }
-        .md-body h4 { font-size: 0.85rem; color: #fdba74; }
         .md-body p { margin-bottom: 0.75rem; color: #d4d4d4; }
         .md-body ul { margin: 0.5rem 0 0.75rem 0; padding-left: 1.25rem; list-style: none; }
         .md-body ul li { position: relative; padding-left: 0.5rem; margin-bottom: 0.4rem; color: #d4d4d4; line-height: 1.6; }
@@ -121,176 +107,69 @@
         .md-body strong { color: #ffffff; font-weight: 600; }
         .md-body em { color: #fdba74; font-style: italic; }
         
-        /* Code Block with Copy Button */
-        .code-wrapper { position: relative; margin: 0.75rem 0; }
-        .code-wrapper pre { background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 0.6rem; padding: 1rem; overflow-x: auto; margin: 0; }
-        .code-wrapper code { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; line-height: 1.6; }
-        .copy-btn { position: absolute; top: 8px; right: 8px; background: #2a2a2a; border: 1px solid #444; border-radius: 0.4rem; padding: 4px 8px; color: #aaa; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-family: inherit; }
+        /* Code block styles */
+        .md-body pre {
+            background: #0d1117 !important;
+            border-radius: 0.75rem !important;
+            padding: 1rem !important;
+            overflow-x: auto !important;
+            margin: 1rem 0 !important;
+            border: 1px solid #2a2a2a !important;
+        }
+        
+        .md-body code {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+            font-size: 0.8rem !important;
+        }
+        
+        .md-body p code, .md-body li code {
+            background: #1a1a2e !important;
+            color: #f97316 !important;
+            padding: 0.2rem 0.4rem !important;
+            border-radius: 0.3rem !important;
+        }
+        
+        .code-wrapper { position: relative; margin: 1rem 0; }
+        .code-wrapper pre { background: #0d1117 !important; border-radius: 0.75rem !important; padding: 1rem !important; overflow-x: auto !important; margin: 0 !important; }
+        
+        .copy-btn {
+            position: absolute; top: 8px; right: 8px; background: #2a2a2a; border: 1px solid #444;
+            border-radius: 0.4rem; padding: 4px 10px; color: #aaa; cursor: pointer; font-size: 0.7rem;
+            display: flex; align-items: center; gap: 5px; transition: all 0.2s; font-family: inherit; z-index: 10;
+        }
         .copy-btn:hover { background: #f97316; color: #fff; border-color: #f97316; }
         .copy-btn.copied { background: #22c55e; color: #fff; border-color: #22c55e; }
         
-        .md-body pre { background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 0.6rem; padding: 1rem; overflow-x: auto; margin: 0.75rem 0; position: relative; }
-        .md-body pre code { background: none; border: none; padding: 0; font-size: 0.78rem; line-height: 1.6; display: block; }
-        
-        /* ============================================
-           COMPLETE OVERRIDE OF HIGHLIGHT.JS COLORS
-           DeepSeek-style syntax highlighting - FORCED
-        ============================================ */
-        
-        /* Force all code block backgrounds */
-        .hljs, .md-body pre, .code-wrapper pre {
-            background: #0d1117 !important;
-        }
-        
-        /* Comments - green italic */
-        .hljs-comment,
-        .hljs-quote {
-            color: #6a9955 !important;
-            font-style: italic !important;
-        }
-        
-        /* Keywords - bright pink/red */
-        .hljs-keyword,
-        .hljs-selector-tag,
-        .hljs-built_in,
-        .hljs-literal,
-        .hljs-type,
-        .hljs-addition {
-            color: #ff7b72 !important;
-            font-weight: 500 !important;
-        }
-        
-        /* Functions/methods - purple */
-        .hljs-title,
-        .hljs-function,
-        .hljs-params,
-        .hljs-attr,
-        .hljs-attribute,
-        .hljs-section {
-            color: #d2a8ff !important;
-        }
-        
-        /* Strings - light blue */
-        .hljs-string,
-        .hljs-meta .hljs-string,
-        .hljs-regexp {
-            color: #a5d6ff !important;
-        }
-        
-        /* Numbers - cyan/blue */
-        .hljs-number,
-        .hljs-literal {
-            color: #79c0ff !important;
-        }
-        
-        /* Variables/parameters - orange */
-        .hljs-variable,
-        .hljs-template-variable,
-        .hljs-params {
-            color: #ffa657 !important;
-        }
-        
-        /* Tags/HTML elements - pink */
-        .hljs-tag,
-        .hljs-name {
-            color: #ff7b72 !important;
-        }
-        
-        /* Tag attributes - cyan */
-        .hljs-attr,
-        .hljs-attribute {
-            color: #79c0ff !important;
-        }
-        
-        /* Selectors - pink/cyan */
-        .hljs-selector-id,
-        .hljs-selector-class,
-        .hljs-selector-attr,
-        .hljs-selector-pseudo {
-            color: #79c0ff !important;
-        }
-        
-        /* Operators */
-        .hljs-operator {
-            color: #ff7b72 !important;
-        }
-        
-        /* Punctuation */
-        .hljs-punctuation {
-            color: #e6edf3 !important;
-        }
-        
-        /* Constants */
-        .hljs-constant {
-            color: #79c0ff !important;
-        }
-        
-        /* Deletion/Addition */
-        .hljs-deletion {
-            color: #f85149 !important;
-            background-color: rgba(248, 81, 73, 0.1) !important;
-        }
-        
-        .hljs-addition {
-            color: #2ea043 !important;
-            background-color: rgba(46, 160, 67, 0.1) !important;
-        }
-        
-        /* Meta/preprocessor */
-        .hljs-meta,
-        .hljs-meta .hljs-keyword {
-            color: #ff7b72 !important;
-        }
-        
-        /* ============================================
-           CODE EXPLANATION STYLING (Subtle gray)
-        ============================================ */
-        
-        /* Any paragraph immediately after a code block gets subtle styling */
-        .code-wrapper + p,
-        pre + p,
-        .md-body pre + p,
-        .hljs + p {
-            color: #9ca3af !important;
-            font-size: 0.8rem !important;
-            margin-top: 0.5rem !important;
-            margin-bottom: 1rem !important;
-            padding-left: 0.75rem !important;
-            border-left: 2px solid #f97316 !important;
-            font-style: normal !important;
-            line-height: 1.5 !important;
-            background: rgba(255, 255, 255, 0.02) !important;
-            border-radius: 0 0.5rem 0.5rem 0 !important;
-        }
-        
-        /* Selection color */
-        .code-wrapper pre code::selection,
-        .md-body pre code::selection,
-        .hljs::selection {
-            background: rgba(249, 115, 22, 0.3) !important;
-        }
-        
+        /* Syntax highlighting colors */
+        .hljs-keyword, .hljs-built_in { color: #ff7b72 !important; font-weight: 500 !important; }
+        .hljs-title, .hljs-function { color: #d2a8ff !important; }
+        .hljs-string { color: #a5d6ff !important; }
+        .hljs-number { color: #79c0ff !important; }
+        .hljs-comment { color: #6a9955 !important; font-style: italic !important; }
+        .hljs-variable, .hljs-params { color: #ffa657 !important; }
+        .hljs-operator { color: #ff7b72 !important; }
+        .hljs-tag, .hljs-name { color: #ff7b72 !important; }
+        .hljs-attr, .hljs-attribute { color: #79c0ff !important; }
+        .hljs-punctuation { color: #e6edf3 !important; }
+
         .source-badge { display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.2); border-radius: 1rem; font-size: 0.68rem; color: #f97316; }
-        .source-badge i { font-size: 0.6rem; }
         .message-doc-attachment { background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 16px; font-size: 0.7rem; margin-bottom: 6px; display: inline-flex; align-items: center; gap: 5px; color: #fff; font-weight: 500; }
 
-        /* Input Section */
         .input-section { padding: 1rem 1.5rem 1.5rem; border-top: 1px solid #222; }
         .attach-row { margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-        .attach-btn { padding: 0.3rem 0.8rem; background: #1a1a1a; border: 1px solid #333; border-radius: 0.5rem; color: #aaa; cursor: pointer; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.2s; font-family: inherit; }
+        .attach-btn { padding: 0.3rem 0.8rem; background: #1a1a1a; border: 1px solid #333; border-radius: 0.5rem; color: #aaa; cursor: pointer; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; font-family: inherit; }
         .attach-btn:hover { background: #2a2a2a; color: #fff; border-color: #f97316; }
         .file-badge { padding: 0.2rem 0.8rem; background: rgba(249,115,22,0.15); border-radius: 1rem; font-size: 0.7rem; color: #f97316; display: inline-flex; align-items: center; gap: 0.5rem; }
         .file-badge.hidden { display: none; }
-        .input-row { display: flex; gap: 0.75rem; background: #1a1a1a; border-radius: 1rem; padding: 0.5rem 1rem; border: 1px solid #333; transition: border-color 0.2s; }
+        .input-row { display: flex; gap: 0.75rem; background: #1a1a1a; border-radius: 1rem; padding: 0.5rem 1rem; border: 1px solid #333; }
         .input-row:focus-within { border-color: #f97316; }
         #messageInput { flex: 1; background: none; border: none; color: #fff; font-family: inherit; font-size: 0.875rem; resize: none; padding: 0.4rem 0; line-height: 1.4; }
         #messageInput:focus { outline: none; }
         #messageInput::placeholder { color: #555; }
-        .send-btn { background: #f97316; border: none; border-radius: 0.5rem; padding: 0.4rem; color: #fff; cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; flex-shrink: 0; }
+        .send-btn { background: #f97316; border: none; border-radius: 0.5rem; padding: 0.4rem; color: #fff; cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .send-btn:hover:not(:disabled) { background: #fb923c; }
         .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .input-hint { text-align: center; font-size: 0.6rem; color: #555; margin-top: 0.5rem; }
-        .loading-text { text-align: center; padding: 1rem; color: #666; font-size: 0.8rem; }
 
         .typing-dots { display: flex; gap: 4px; padding: 0.3rem; }
         .typing-dots span { width: 6px; height: 6px; background: #555; border-radius: 50%; animation: typing 1.4s infinite ease-in-out; }
@@ -355,6 +234,539 @@
     </div>
 </div>
 
-<script src="script.js?v=2"></script>
+<script>
+const API_URL = 'https://dualmind.onrender.com';
+
+let token = null;
+let user = null;
+let currentSessionId = null;
+let currentMode = 'hybrid';
+let pendingFile = null;
+let currentSessionDocuments = [];
+
+let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
+let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
+let modeBtns, loadingOverlay, sidebar, sidebarToggle;
+
+const WELCOME_HTML = `
+    <div class="welcome">
+        <i class="fas fa-brain"></i>
+        <h3>Ready when you are</h3>
+        <p>Ask from your PDFs, the web, or both. Use Hybrid for the best experience.</p>
+    </div>
+`;
+
+function isCasualConversation(content) {
+    if (!content) return false;
+    const casualPatterns = [
+        /^(hey|hi|hello|yo|sup|hiya|good morning|good afternoon|good evening)/i,
+        /^(thanks|thank you|great|cool|awesome|nice|bye|goodbye)/i,
+        /^how are you/i
+    ];
+    if (content.length < 100) {
+        return casualPatterns.some(pattern => pattern.test(content.toLowerCase()));
+    }
+    return !content.includes('##') && !content.includes('**') && content.includes('```') && content.length < 200;
+}
+
+function addCopyButtonsToCodeBlocks() {
+    document.querySelectorAll('.md-body pre').forEach(pre => {
+        if (pre.parentElement.classList.contains('code-wrapper')) return;
+        const code = pre.querySelector('code');
+        if (!code) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-wrapper';
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+        copyBtn.onclick = async () => {
+            await navigator.clipboard.writeText(code.textContent || '');
+            copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            copyBtn.classList.add('copied');
+            setTimeout(() => {
+                copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                copyBtn.classList.remove('copied');
+            }, 2000);
+        };
+        wrapper.appendChild(copyBtn);
+    });
+}
+
+function cleanDualMindResponse(rawText) {
+    if (!rawText || typeof rawText !== 'string') return '';
+    let cleaned = rawText;
+    cleaned = cleaned.replace(/^\d+\s*$/gm, '');
+    cleaned = cleaned.replace(/^(\d+)\.\s*$/gm, '');
+    cleaned = cleaned.replace(/\[(Web Search|PDF Document|RAG|Hybrid)\]/gi, '');
+    cleaned = cleaned.replace(/^##([^ ])/gm, '## $1');
+    cleaned = cleaned.replace(/^#([^ ])/gm, '# $1');
+    cleaned = cleaned.replace(/^[•\-*]\s*/gm, '- ');
+    cleaned = cleaned.replace(/\n{4,}/g, '\n\n');
+    cleaned = cleaned.replace(/\[object Object\]/gi, '');
+    return cleaned.trim();
+}
+
+function setupMarked() {
+    if (typeof marked === 'undefined') return;
+    marked.setOptions({
+        gfm: true,
+        breaks: true,
+        highlight: function(code, lang) {
+            if (lang && hljs.getLanguage(lang)) {
+                try {
+                    return hljs.highlight(code, { language: lang }).value;
+                } catch(e) {}
+            }
+            try {
+                return hljs.highlightAuto(code).value;
+            } catch(e) {}
+            return code;
+        }
+    });
+}
+
+async function renderMarkdown(text) {
+    if (!text) return '<div class="md-body"></div>';
+    try {
+        const html = marked.parse(text);
+        const result = await html;
+        return `<div class="md-body">${result}</div>`;
+    } catch(e) {
+        return `<div class="md-body">${text.replace(/\n/g, '<br>')}</div>`;
+    }
+}
+
+function buildSourceBadge(searchTypeUsed) {
+    if (!searchTypeUsed || searchTypeUsed === 'Conversation') return '';
+    let icon, label;
+    const type = String(searchTypeUsed).toLowerCase();
+    if (type.includes('pdf') || type.includes('document')) {
+        icon = 'fa-file-pdf';
+        label = '📄 PDF Document';
+    } else if (type.includes('web') || type.includes('open')) {
+        icon = 'fa-globe';
+        label = '🌐 Web Search';
+    } else {
+        icon = 'fa-link';
+        label = '🔗 Hybrid Search';
+    }
+    return `<div class="source-badge"><i class="fas ${icon}"></i> ${label}</div>`;
+}
+
+async function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
+    if (!messagesDiv) return;
+    const welcome = messagesDiv.querySelector('.welcome');
+    if (welcome && role === 'user') welcome.remove();
+    const messageDiv = document.createElement('div');
+    let finalContent = content;
+    if (role === 'assistant') finalContent = cleanDualMindResponse(content);
+    messageDiv.className = `message ${role}`;
+    let attachmentHTML = '';
+    if (filename) {
+        attachmentHTML = `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>`;
+    }
+    if (role === 'user') {
+        messageDiv.innerHTML = `
+            <div class="message-avatar"><i class="fas fa-user"></i></div>
+            <div class="message-content">
+                ${attachmentHTML}
+                <span>${escapeHtml(finalContent).replace(/\n/g, '<br>')}</span>
+            </div>
+        `;
+    } else {
+        const isCasual = isCasualConversation(finalContent);
+        let renderedContent;
+        if (isCasual) {
+            renderedContent = `<div class="md-body">${escapeHtml(finalContent).replace(/\n/g, '<br>')}</div>`;
+        } else {
+            renderedContent = await renderMarkdown(finalContent);
+            setTimeout(() => {
+                addCopyButtonsToCodeBlocks();
+                // Force highlight.js to run on all code blocks
+                document.querySelectorAll('.md-body pre code').forEach(block => {
+                    hljs.highlightElement(block);
+                });
+            }, 100);
+        }
+        const sourceBadge = buildSourceBadge(searchTypeUsed || currentMode);
+        messageDiv.innerHTML = `
+            <div class="message-avatar"><i class="fas fa-brain"></i></div>
+            <div class="message-content">
+                ${renderedContent}
+                ${sourceBadge}
+            </div>
+        `;
+    }
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+async function sendMessage() {
+    const text = messageInput?.value.trim();
+    if (!text || !currentSessionId) return;
+    const hasFile = !!pendingFile;
+    const uploadedFilename = hasFile ? pendingFile.name : null;
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+    await addMessageToChat('user', text, uploadedFilename);
+    const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
+    if (messageCount === 1) await autoTitle(currentSessionId, text);
+    if (hasFile) {
+        try {
+            showTyping();
+            await uploadFile(pendingFile, currentSessionId);
+            pendingFile = null;
+            if (fileBadge) fileBadge.classList.add('hidden');
+            hideTyping();
+        } catch (err) {
+            hideTyping();
+            await addMessageToChat('assistant', `❌ Upload failed: ${err.message}`);
+            return;
+        }
+    }
+    showTyping();
+    if (sendBtn) sendBtn.disabled = true;
+    try {
+        const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ question: text, search_type: currentMode, include_sources: true, uploaded_document: uploadedFilename })
+        });
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
+        hideTyping();
+        if (res.ok) {
+            let finalAnswer = data.answer || data.response || data.content || '';
+            finalAnswer = cleanDualMindResponse(finalAnswer);
+            const searchSource = data.search_type_used || currentMode;
+            await addMessageToChat('assistant', finalAnswer, null, searchSource);
+        } else {
+            await addMessageToChat('assistant', 'Sorry, something went wrong.');
+        }
+    } catch (err) {
+        hideTyping();
+        await addMessageToChat('assistant', 'Connection error.');
+    } finally {
+        if (sendBtn) sendBtn.disabled = false;
+        messageInput?.focus();
+    }
+}
+
+async function loadSession(sessionId) {
+    if (sessionId === currentSessionId) return;
+    currentSessionId = sessionId;
+    try {
+        await loadSessionDocuments(sessionId);
+        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
+        const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const sessionsData = await sessionsRes.json();
+        const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
+        if (sessionInfo) chatTitleSpan.innerText = sessionInfo.title;
+        if (messagesDiv) {
+            if (!data.messages || data.messages.length === 0) {
+                messagesDiv.innerHTML = WELCOME_HTML;
+            } else {
+                messagesDiv.innerHTML = '';
+                for (const msg of data.messages) {
+                    const searchType = msg.metadata?.search_type_used || null;
+                    let cleanMessageContent = msg.content || msg.answer || msg.response || '';
+                    if (msg.role === 'assistant') cleanMessageContent = cleanDualMindResponse(cleanMessageContent);
+                    await addMessageToChat(msg.role, cleanMessageContent, msg.metadata?.filename, searchType);
+                }
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        }
+        await loadSessions();
+    } catch (err) { console.error(err); }
+}
+
+function toggleSidebar() {
+    if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    setupMarked();
+    loginPage = document.getElementById('loginPage');
+    chatPage = document.getElementById('chatPage');
+    sessionListDiv = document.getElementById('sessionList');
+    messagesDiv = document.getElementById('messagesContainer');
+    messageInput = document.getElementById('messageInput');
+    sendBtn = document.getElementById('sendMsgBtn');
+    newChatBtn = document.getElementById('newChatBtn');
+    renameBtn = document.getElementById('renameChatBtn');
+    logoutBtn = document.getElementById('logoutSidebarBtn');
+    chatTitleSpan = document.getElementById('chatTitle');
+    attachBtn = document.getElementById('attachPdfBtn');
+    fileInput = document.getElementById('pdfFileInput');
+    fileBadge = document.getElementById('fileBadge');
+    modeBtns = document.querySelectorAll('.mode-btn');
+    loadingOverlay = document.getElementById('loadingOverlay');
+    sidebar = document.getElementById('sidebar');
+    sidebarToggle = document.getElementById('sidebarToggle');
+    const savedSidebarState = localStorage.getItem('sidebar_collapsed');
+    if (savedSidebarState === 'true' && sidebar) sidebar.classList.add('collapsed');
+    setupEventListeners();
+    checkAuth();
+});
+
+function showLoading() { if (loadingOverlay) loadingOverlay.classList.remove('hidden'); }
+function hideLoading() { if (loadingOverlay) loadingOverlay.classList.add('hidden'); }
+
+function setupEventListeners() {
+    document.getElementById('loginBtn')?.addEventListener('click', async () => { showLoading(); await doLogin(); hideLoading(); });
+    document.getElementById('registerBtn')?.addEventListener('click', async () => { showLoading(); await doRegister(); hideLoading(); });
+    document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
+    document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
+    sendBtn?.addEventListener('click', sendMessage);
+    messageInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    messageInput?.addEventListener('input', () => {
+        messageInput.style.height = 'auto';
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+    });
+    newChatBtn?.addEventListener('click', createNewSession);
+    renameBtn?.addEventListener('click', renameSession);
+    logoutBtn?.addEventListener('click', async () => { showLoading(); doLogout(); hideLoading(); });
+    attachBtn?.addEventListener('click', () => fileInput?.click());
+    fileInput?.addEventListener('change', onFileSelect);
+    sidebarToggle?.addEventListener('click', toggleSidebar);
+    modeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            modeBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentMode = btn.dataset.mode;
+        });
+    });
+}
+
+async function doLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!email || !password) { alert('Enter email and password'); hideLoading(); return; }
+    try {
+        const res = await fetch(`${API_URL}/auth/signin`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            token = data.access_token;
+            user = { id: data.user_id, email: data.email };
+            localStorage.setItem('dm_token', token);
+            localStorage.setItem('dm_user', JSON.stringify(user));
+            showChatUI();
+            await loadSessions();
+        } else { alert('Login failed: ' + (data.detail || 'Error')); }
+    } catch (err) { alert('Connection error'); }
+}
+
+async function doRegister() {
+    const name = document.getElementById('registerName').value;
+    const email = document.getElementById('registerEmail').value.trim();
+    const password = document.getElementById('registerPassword').value;
+    if (!email || !password) { alert('Fill all fields'); return; }
+    if (password.length < 6) { alert('Password min 6 chars'); return; }
+    try {
+        const res = await fetch(`${API_URL}/auth/signup`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, full_name: name })
+        });
+        if (res.ok) {
+            alert('Signup successful! Please login.');
+            toggleForms(false);
+            document.getElementById('loginEmail').value = email;
+        } else {
+            const data = await res.json();
+            alert('Signup failed: ' + (data.detail || 'Error'));
+        }
+    } catch (err) { alert('Connection error'); }
+}
+
+function doLogout() {
+    token = null; user = null; currentSessionId = null; currentSessionDocuments = [];
+    localStorage.clear();
+    showLoginUI();
+}
+
+function checkAuth() {
+    const savedToken = localStorage.getItem('dm_token');
+    const savedUser = localStorage.getItem('dm_user');
+    if (savedToken && savedUser) {
+        token = savedToken;
+        user = JSON.parse(savedUser);
+        showChatUI();
+        loadSessions();
+    } else { showLoginUI(); }
+}
+
+function showLoginUI() {
+    loginPage.classList.remove('hidden');
+    chatPage.classList.add('hidden');
+}
+
+function showChatUI() {
+    loginPage.classList.add('hidden');
+    chatPage.classList.remove('hidden');
+    document.getElementById('userEmailSidebar').innerText = user?.email?.split('@')[0] || 'User';
+}
+
+function toggleForms(showRegister) {
+    document.getElementById('loginForm').classList.toggle('active', !showRegister);
+    document.getElementById('registerForm').classList.toggle('active', showRegister);
+}
+
+async function loadSessions() {
+    if (!sessionListDiv) return;
+    sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
+    try {
+        const res = await fetch(`${API_URL}/chat/sessions`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
+        if (res.ok && data.sessions && data.sessions.length > 0) {
+            renderSessionList(data.sessions);
+            if (!currentSessionId && data.sessions[0]) await loadSession(data.sessions[0].id);
+        } else {
+            sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
+            if (!currentSessionId) await createNewSession();
+        }
+    } catch (err) {
+        sessionListDiv.innerHTML = '<div class="loading-text">Failed to load</div>';
+    }
+}
+
+function renderSessionList(sessions) {
+    if (!sessionListDiv) return;
+    sessionListDiv.innerHTML = '';
+    for (const s of sessions) {
+        const div = document.createElement('div');
+        div.className = `session-item ${currentSessionId === s.id ? 'active' : ''}`;
+        div.dataset.id = s.id;
+        div.innerHTML = `<span class="session-title">${escapeHtml(s.title)}</span><button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>`;
+        div.addEventListener('click', (e) => { if (!e.target.closest('.delete-session')) loadSession(s.id); });
+        div.querySelector('.delete-session')?.addEventListener('click', (e) => { e.stopPropagation(); deleteSession(s.id); });
+        sessionListDiv.appendChild(div);
+    }
+}
+
+async function createNewSession() {
+    try {
+        const res = await fetch(`${API_URL}/chat/sessions`, {
+            method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        });
+        if (res.status === 401) { doLogout(); return; }
+        const data = await res.json();
+        if (res.ok && data.session) {
+            currentSessionId = data.session.id;
+            currentSessionDocuments = [];
+            chatTitleSpan.innerText = 'New conversation';
+            clearMessages();
+            await loadSessions();
+        }
+    } catch (err) { console.error(err); }
+}
+
+async function loadSessionDocuments(sessionId) {
+    try {
+        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/documents`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) { const data = await res.json(); currentSessionDocuments = data.documents || []; }
+    } catch (err) { currentSessionDocuments = []; }
+}
+
+async function deleteSession(sessionId) {
+    if (!confirm('Delete this conversation?')) return;
+    try {
+        await fetch(`${API_URL}/chat/sessions/${sessionId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        if (currentSessionId === sessionId) {
+            currentSessionId = null;
+            currentSessionDocuments = [];
+            const sessionsRes = await fetch(`${API_URL}/chat/sessions`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const sessionsData = await sessionsRes.json();
+            if (sessionsData.sessions && sessionsData.sessions.length > 0) await loadSession(sessionsData.sessions[0].id);
+            else await createNewSession();
+        }
+        await loadSessions();
+    } catch (err) { console.error(err); }
+}
+
+function clearMessages() {
+    if (!messagesDiv) return;
+    messagesDiv.innerHTML = WELCOME_HTML;
+}
+
+function showTyping() {
+    if (!messagesDiv) return;
+    hideTyping();
+    const typing = document.createElement('div');
+    typing.className = 'message assistant';
+    typing.id = 'typingIndicator';
+    typing.innerHTML = `<div class="message-avatar"><i class="fas fa-brain"></i></div><div class="message-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+    messagesDiv.appendChild(typing);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function hideTyping() {
+    const el = document.getElementById('typingIndicator');
+    if (el) el.remove();
+}
+
+function onFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file || !file.name.endsWith('.pdf')) { alert('Please select a PDF file'); return; }
+    pendingFile = file;
+    if (fileBadge) {
+        fileBadge.innerHTML = `<i class="fas fa-file-pdf"></i> ${escapeHtml(file.name)} <i class="fas fa-check-circle"></i>`;
+        fileBadge.classList.remove('hidden');
+    }
+}
+
+async function uploadFile(file, sessionId) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd
+    });
+    if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
+    if (!res.ok) { const error = await res.json(); throw new Error(error.detail || 'Upload failed'); }
+    return await res.json();
+}
+
+async function autoTitle(sessionId, firstMsg) {
+    const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
+    try {
+        await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, {
+            method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
+        });
+        chatTitleSpan.innerText = short;
+        await loadSessions();
+    } catch (err) { console.error(err); }
+}
+
+async function renameSession() {
+    const newName = prompt('Rename conversation:', chatTitleSpan?.innerText);
+    if (!newName || newName === chatTitleSpan?.innerText || !currentSessionId) return;
+    try {
+        await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, {
+            method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
+        });
+        chatTitleSpan.innerText = newName;
+        await loadSessions();
+    } catch (err) { console.error(err); }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+</script>
 </body>
 </html>
