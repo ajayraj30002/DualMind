@@ -33,6 +33,180 @@ MIN_RELEVANCE_SCORE   = float(os.getenv("MIN_RELEVANCE_SCORE",  "0.2"))
 MIN_USEFUL_PDF_SCORE  = float(os.getenv("MIN_USEFUL_PDF_SCORE", "0.3"))
 
 # ─────────────────────────────────────────────
+# RATING FEATURE — Keywords and detection
+# ─────────────────────────────────────────────
+
+RATING_KEYWORDS = [
+    "rate my", "rate this", "rate the", "give me a rating", "give a rating",
+    "score my", "score this", "evaluate my", "evaluate this",
+    "how good is my", "how good is this", "analyse my", "analyze my",
+    "analyse this", "analyze this", "review my", "review this",
+    "ats score", "ats check", "resume score", "essay score",
+    "how strong is my", "critique my", "critique this",
+    "mark my", "grade my", "grade this",
+]
+
+
+def is_rating_request(question: str) -> bool:
+    """Detect if the user wants a document rated/scored/evaluated."""
+    lower = question.lower()
+    return any(kw in lower for kw in RATING_KEYWORDS)
+
+
+def generate_document_rating(
+    question: str,
+    full_text: str,
+    filename: str,
+    conversation_context: Optional[str] = None,
+) -> str:
+    """
+    Analyse the full document and give a structured rating/score.
+    Uses web knowledge about standards (ATS, writing quality, etc.)
+    to benchmark against best practices — no web search needed.
+    """
+    context_section = ""
+    if conversation_context:
+        context_section = f"Previous conversation:\n{conversation_context[-1000:]}\n\n"
+
+    # Detect document type from filename and question for tailored criteria
+    q_lower = question.lower()
+    fname_lower = filename.lower()
+
+    if any(w in q_lower or w in fname_lower for w in ["resume", "cv", "curriculum"]):
+        doc_type = "resume/CV"
+        criteria = """
+Evaluate this resume/CV on these criteria (score each /10):
+
+1. **ATS Compatibility** — keyword density, standard section headings, no tables/columns/graphics
+2. **Impact & Achievements** — quantified results, action verbs, specific accomplishments
+3. **Relevance & Tailoring** — skills match modern industry standards, relevant technologies
+4. **Structure & Readability** — clear sections, consistent formatting, appropriate length
+5. **Professional Summary** — strong opening, clear value proposition
+6. **Skills Section** — technical skills, tools, frameworks listed clearly
+7. **Education & Certifications** — relevant qualifications presented well
+8. **Overall Impression** — would a recruiter shortlist this?"""
+
+    elif any(w in q_lower or w in fname_lower for w in ["essay", "report", "article", "paper", "thesis"]):
+        doc_type = "essay/academic writing"
+        criteria = """
+Evaluate this written work on these criteria (score each /10):
+
+1. **Thesis & Argument** — clear central argument, well-defined purpose
+2. **Structure & Flow** — logical progression, clear introduction/body/conclusion
+3. **Evidence & Support** — use of sources, examples, data to support claims
+4. **Clarity & Language** — vocabulary, sentence variety, readability
+5. **Critical Analysis** — depth of analysis, original thinking, not just description
+6. **Grammar & Mechanics** — spelling, punctuation, sentence structure
+7. **Citations & References** — proper referencing if applicable
+8. **Overall Academic Quality** — would this pass peer review or get a good grade?"""
+
+    elif any(w in q_lower or w in fname_lower for w in ["cover letter", "motivation", "sop", "statement"]):
+        doc_type = "cover letter/statement"
+        criteria = """
+Evaluate this cover letter/statement on these criteria (score each /10):
+
+1. **Opening Hook** — grabs attention, specific to role/institution
+2. **Value Proposition** — clearly explains what the applicant offers
+3. **Relevance** — connects experience to the target role/program
+4. **Storytelling** — compelling narrative, not just listing the resume
+5. **Tone & Personality** — professional but human, shows genuine interest
+6. **Specificity** — mentions company/role specifics, not generic
+7. **Closing & CTA** — strong close, clear call to action
+8. **Grammar & Conciseness** — clean writing, appropriate length"""
+
+    else:
+        doc_type = "document"
+        criteria = """
+Evaluate this document on these criteria (score each /10):
+
+1. **Clarity & Purpose** — clear objective, well-defined scope
+2. **Structure & Organisation** — logical flow, clear sections
+3. **Content Quality** — accurate, complete, relevant information
+4. **Writing Quality** — clear language, appropriate tone
+5. **Completeness** — covers all necessary aspects
+6. **Presentation** — professional appearance, consistent formatting
+7. **Accuracy** — factual correctness, no errors
+8. **Overall Effectiveness** — achieves its intended purpose"""
+
+    prompt = f"""{context_section}You are an expert evaluator analysing a {doc_type}.
+
+Document filename: {filename}
+
+Document content:
+---
+{full_text[:12000]}
+---
+
+User request: "{question}"
+
+{criteria}
+
+YOUR RESPONSE FORMAT — follow this EXACTLY:
+
+## Document Rating: {filename}
+
+[1-2 sentence overview of what this document is and your general impression]
+
+## Detailed Scores
+
+| Criteria | Score | Comments |
+|----------|-------|----------|
+| [Criterion 1] | X/10 | [brief specific comment] |
+| [Criterion 2] | X/10 | [brief specific comment] |
+[... all criteria ...]
+
+## Overall Score
+
+**[Total]/80** → **[Percentage]%** — [Grade label: Excellent / Good / Average / Needs Work / Poor]
+
+## Key Strengths
+- [specific strength from the document]
+- [specific strength]
+- [specific strength]
+
+## Areas for Improvement
+- [specific actionable improvement]
+- [specific actionable improvement]
+- [specific actionable improvement]
+
+## Recommendations
+[3-5 specific, actionable recommendations to improve this document significantly]
+
+RULES:
+- Base scores on what is ACTUALLY in the document — do not assume or fabricate
+- Be honest and precise — do not inflate scores
+- Every comment must reference something specific from the document
+- Recommendations must be concrete and actionable
+- Do not hallucinate qualifications or content not present
+
+Answer:"""
+
+    try:
+        completion = groq_client.chat.completions.create(
+            model=Config.LLM_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a professional document evaluator with expertise in resume screening, "
+                        "academic writing, and professional communication. You give honest, precise, "
+                        "detailed ratings based strictly on what is in the document. "
+                        "You never inflate scores or fabricate content. "
+                        "Format output in clean markdown with tables and sections."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=1600,
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Rating error: {e}")
+        return "I had trouble analysing the document. Please try again."
+
+
+# ─────────────────────────────────────────────
 # AGENTIC ROUTER
 # Single Groq call: classify intent + retrieval mode + rewrite query
 # ─────────────────────────────────────────────
@@ -657,15 +831,38 @@ async def hybrid_search(
     Agentic Hybrid RAG pipeline.
 
     Steps:
-      1. route_query()               → intent + retrieval_mode + rewritten_query  [Groq call 1]
-      2. Route to correct handler
-      3. generate_*_answer()                                                       [Groq call 2]
+      1. Check for rating request (special handling)
+      2. route_query()               → intent + retrieval_mode + rewritten_query
+      3. Route to correct handler
+      4. generate_*_answer()
     """
     search_type = (search_type or "hybrid").lower()
     if search_type not in {"closed", "open", "hybrid"}:
         search_type = "hybrid"
 
     print(f"\n{'='*50}\n📝 Query: {question[:80]}\n📎 File: {filename or 'None'}\n{'='*50}")
+
+    # ── Step 0: RATING REQUEST (Special handling before routing) ──
+    if is_rating_request(question) and filename:
+        print(f"⭐ Rating request detected for: {filename}")
+        full_text = fetch_full_document(user_id, filename)
+        if full_text:
+            answer = generate_document_rating(
+                question=question,
+                full_text=full_text,
+                filename=filename,
+                conversation_context=conversation_context,
+            )
+            return {
+                "answer": answer,
+                "sources": [{"type": "PDF Document", "title": filename[:40], "content": full_text[:200], "url": ""}],
+                "search_type_used": "Document Rating",
+                "closed_source_count": 1,
+                "open_source_count": 0,
+                "rewritten_query": question,
+            }
+        else:
+            print("⚠️ Rating requested but full document fetch failed — falling through to normal flow")
 
     # ── Step 1: Route ──
     route = route_query(
