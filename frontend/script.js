@@ -40,7 +40,7 @@ function isCasualConversation(content) {
         return casualPatterns.some(pattern => pattern.test(lowerContent));
     }
     // Also check if there are no markdown characters and it's short
-    const hasMarkdown = content.includes('##') || content.includes('**') || content.includes('- ') || content.includes('```');
+    const hasMarkdown = content.includes('##') || content.includes('# ') || content.includes('**') || content.includes('- ') || content.includes('```');
     return !hasMarkdown && content.length < 200;
 }
 
@@ -94,9 +94,16 @@ function cleanDualMindResponse(rawText) {
     // Remove internal source labels
     cleaned = cleaned.replace(/\[(Web Search|PDF Document|RAG|Hybrid)\]/gi, '');
     
+    // Fix bolded headers like **# Title** -> ### Title (or just unwrap)
+    cleaned = cleaned.replace(/\*\*\s*(#+\s+.*?)\s*\*\*/g, '$1');
+    
     // Fix malformed headers
     cleaned = cleaned.replace(/^##([^ ])/gm, '## $1');
     cleaned = cleaned.replace(/^#([^ ])/gm, '# $1');
+    
+    // Fix inline headers and bullets from RAG mode (add newlines)
+    cleaned = cleaned.replace(/^(#+\s+.*?)\s+-\s+/gm, '$1\n\n- ');
+    cleaned = cleaned.replace(/([.:!?])\s+(-\s+)/g, '$1\n\n$2');
     
     // Fix malformed bullet points
     cleaned = cleaned.replace(/^[•\-*]\s*/gm, '- ');
