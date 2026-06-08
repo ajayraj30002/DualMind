@@ -8,8 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- CHANGED: Using dark theme instead of github-dark for better syntax colors -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -133,62 +132,142 @@
         .md-body pre { background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 0.6rem; padding: 1rem; overflow-x: auto; margin: 0.75rem 0; position: relative; }
         .md-body pre code { background: none; border: none; padding: 0; font-size: 0.78rem; line-height: 1.6; display: block; }
         
-        /* ========== NEW: ENHANCED SYNTAX HIGHLIGHTING COLORS ========== */
-        /* DeepSeek-style vibrant token colors */
-        .hljs-comment { color: #6a9955 !important; font-style: italic; }
-        .hljs-keyword { color: #ff7b72 !important; font-weight: 500; }
-        .hljs-built_in { color: #ff7b72 !important; }
-        .hljs-literal { color: #79c0ff !important; }
-        .hljs-number { color: #79c0ff !important; }
-        .hljs-string { color: #a5d6ff !important; }
-        .hljs-function { color: #d2a8ff !important; }
-        .hljs-title { color: #d2a8ff !important; }
-        .hljs-title.function_ { color: #d2a8ff !important; }
-        .hljs-params { color: #e6edf3 !important; }
-        .hljs-variable { color: #ffa657 !important; }
-        .hljs-property { color: #79c0ff !important; }
-        .hljs-attr { color: #79c0ff !important; }
-        .hljs-tag { color: #ff7b72 !important; }
-        .hljs-name { color: #ff7b72 !important; }
-        .hljs-attribute { color: #79c0ff !important; }
-        .hljs-selector-tag { color: #ff7b72 !important; }
-        .hljs-selector-id { color: #79c0ff !important; }
-        .hljs-selector-class { color: #79c0ff !important; }
-        .hljs-selector-attr { color: #79c0ff !important; }
-        .hljs-selector-pseudo { color: #79c0ff !important; }
-        .hljs-template-tag { color: #ff7b72 !important; }
-        .hljs-template-variable { color: #ffa657 !important; }
-        .hljs-regexp { color: #a5d6ff !important; }
-        .hljs-symbol { color: #ff7b72 !important; }
-        .hljs-bullet { color: #79c0ff !important; }
-        .hljs-link { color: #79c0ff !important; }
-        .hljs-section { color: #d2a8ff !important; }
-        .hljs-addition { color: #2ea043 !important; background: rgba(46, 160, 67, 0.1); display: inline-block; width: 100%; }
-        .hljs-deletion { color: #f85149 !important; background: rgba(248, 81, 73, 0.1); display: inline-block; width: 100%; }
-        .hljs-meta { color: #ff7b72 !important; }
-        .hljs-meta-string { color: #a5d6ff !important; }
+        /* ============================================
+           COMPLETE OVERRIDE OF HIGHLIGHT.JS COLORS
+           DeepSeek-style syntax highlighting - FORCED
+        ============================================ */
         
-        /* ========== NEW: CODE EXPLANATION STYLING ========== */
-        /* Subtle gray styling for explanations that follow code blocks */
-        .code-wrapper + p,
-        pre + p,
-        .md-body pre + p {
-            color: #9ca3af !important;
-            font-size: 0.8rem;
-            margin-top: 0.5rem;
-            margin-bottom: 1rem;
-            padding-left: 0.75rem;
-            border-left: 2px solid #f97316;
-            font-style: normal;
-            line-height: 1.5;
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 0 0.5rem 0.5rem 0;
+        /* Force all code block backgrounds */
+        .hljs, .md-body pre, .code-wrapper pre {
+            background: #0d1117 !important;
         }
         
-        /* Selection color within code blocks */
+        /* Comments - green italic */
+        .hljs-comment,
+        .hljs-quote {
+            color: #6a9955 !important;
+            font-style: italic !important;
+        }
+        
+        /* Keywords - bright pink/red */
+        .hljs-keyword,
+        .hljs-selector-tag,
+        .hljs-built_in,
+        .hljs-literal,
+        .hljs-type,
+        .hljs-addition {
+            color: #ff7b72 !important;
+            font-weight: 500 !important;
+        }
+        
+        /* Functions/methods - purple */
+        .hljs-title,
+        .hljs-function,
+        .hljs-params,
+        .hljs-attr,
+        .hljs-attribute,
+        .hljs-section {
+            color: #d2a8ff !important;
+        }
+        
+        /* Strings - light blue */
+        .hljs-string,
+        .hljs-meta .hljs-string,
+        .hljs-regexp {
+            color: #a5d6ff !important;
+        }
+        
+        /* Numbers - cyan/blue */
+        .hljs-number,
+        .hljs-literal {
+            color: #79c0ff !important;
+        }
+        
+        /* Variables/parameters - orange */
+        .hljs-variable,
+        .hljs-template-variable,
+        .hljs-params {
+            color: #ffa657 !important;
+        }
+        
+        /* Tags/HTML elements - pink */
+        .hljs-tag,
+        .hljs-name {
+            color: #ff7b72 !important;
+        }
+        
+        /* Tag attributes - cyan */
+        .hljs-attr,
+        .hljs-attribute {
+            color: #79c0ff !important;
+        }
+        
+        /* Selectors - pink/cyan */
+        .hljs-selector-id,
+        .hljs-selector-class,
+        .hljs-selector-attr,
+        .hljs-selector-pseudo {
+            color: #79c0ff !important;
+        }
+        
+        /* Operators */
+        .hljs-operator {
+            color: #ff7b72 !important;
+        }
+        
+        /* Punctuation */
+        .hljs-punctuation {
+            color: #e6edf3 !important;
+        }
+        
+        /* Constants */
+        .hljs-constant {
+            color: #79c0ff !important;
+        }
+        
+        /* Deletion/Addition */
+        .hljs-deletion {
+            color: #f85149 !important;
+            background-color: rgba(248, 81, 73, 0.1) !important;
+        }
+        
+        .hljs-addition {
+            color: #2ea043 !important;
+            background-color: rgba(46, 160, 67, 0.1) !important;
+        }
+        
+        /* Meta/preprocessor */
+        .hljs-meta,
+        .hljs-meta .hljs-keyword {
+            color: #ff7b72 !important;
+        }
+        
+        /* ============================================
+           CODE EXPLANATION STYLING (Subtle gray)
+        ============================================ */
+        
+        /* Any paragraph immediately after a code block gets subtle styling */
+        .code-wrapper + p,
+        pre + p,
+        .md-body pre + p,
+        .hljs + p {
+            color: #9ca3af !important;
+            font-size: 0.8rem !important;
+            margin-top: 0.5rem !important;
+            margin-bottom: 1rem !important;
+            padding-left: 0.75rem !important;
+            border-left: 2px solid #f97316 !important;
+            font-style: normal !important;
+            line-height: 1.5 !important;
+            background: rgba(255, 255, 255, 0.02) !important;
+            border-radius: 0 0.5rem 0.5rem 0 !important;
+        }
+        
+        /* Selection color */
         .code-wrapper pre code::selection,
-        .md-body pre code::selection {
-            background: rgba(249, 115, 22, 0.3);
+        .md-body pre code::selection,
+        .hljs::selection {
+            background: rgba(249, 115, 22, 0.3) !important;
         }
         
         .source-badge { display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.2); border-radius: 1rem; font-size: 0.68rem; color: #f97316; }
