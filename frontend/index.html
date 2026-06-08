@@ -8,7 +8,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <!-- CHANGED: Using dark theme instead of github-dark for better syntax colors -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -131,17 +132,65 @@
         
         .md-body pre { background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 0.6rem; padding: 1rem; overflow-x: auto; margin: 0.75rem 0; position: relative; }
         .md-body pre code { background: none; border: none; padding: 0; font-size: 0.78rem; line-height: 1.6; display: block; }
-        .hljs-comment { color: #4ade80 !important; font-style: italic; }
         
-        .md-body blockquote { border-left: 3px solid #f97316; margin: 0.75rem 0; padding: 0.5rem 0 0.5rem 1rem; background: rgba(249, 115, 22, 0.05); border-radius: 0 0.4rem 0.4rem 0; }
-        .md-body blockquote p { color: #aaa; font-style: italic; margin-bottom: 0; }
-        .md-body hr { border: none; border-top: 1px solid #2a2a2a; margin: 1rem 0; }
-        .md-body table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.82rem; }
-        .md-body th { background: #1f1f1f; color: #f97316; font-weight: 600; padding: 0.5rem 0.75rem; text-align: left; border: 1px solid #2a2a2a; }
-        .md-body td { padding: 0.45rem 0.75rem; border: 1px solid #222; color: #d4d4d4; }
-        .md-body a { color: #f97316; text-decoration: none; border-bottom: 1px solid rgba(249,115,22,0.3); }
-        .md-body a:hover { border-color: #f97316; }
-
+        /* ========== NEW: ENHANCED SYNTAX HIGHLIGHTING COLORS ========== */
+        /* DeepSeek-style vibrant token colors */
+        .hljs-comment { color: #6a9955 !important; font-style: italic; }
+        .hljs-keyword { color: #ff7b72 !important; font-weight: 500; }
+        .hljs-built_in { color: #ff7b72 !important; }
+        .hljs-literal { color: #79c0ff !important; }
+        .hljs-number { color: #79c0ff !important; }
+        .hljs-string { color: #a5d6ff !important; }
+        .hljs-function { color: #d2a8ff !important; }
+        .hljs-title { color: #d2a8ff !important; }
+        .hljs-title.function_ { color: #d2a8ff !important; }
+        .hljs-params { color: #e6edf3 !important; }
+        .hljs-variable { color: #ffa657 !important; }
+        .hljs-property { color: #79c0ff !important; }
+        .hljs-attr { color: #79c0ff !important; }
+        .hljs-tag { color: #ff7b72 !important; }
+        .hljs-name { color: #ff7b72 !important; }
+        .hljs-attribute { color: #79c0ff !important; }
+        .hljs-selector-tag { color: #ff7b72 !important; }
+        .hljs-selector-id { color: #79c0ff !important; }
+        .hljs-selector-class { color: #79c0ff !important; }
+        .hljs-selector-attr { color: #79c0ff !important; }
+        .hljs-selector-pseudo { color: #79c0ff !important; }
+        .hljs-template-tag { color: #ff7b72 !important; }
+        .hljs-template-variable { color: #ffa657 !important; }
+        .hljs-regexp { color: #a5d6ff !important; }
+        .hljs-symbol { color: #ff7b72 !important; }
+        .hljs-bullet { color: #79c0ff !important; }
+        .hljs-link { color: #79c0ff !important; }
+        .hljs-section { color: #d2a8ff !important; }
+        .hljs-addition { color: #2ea043 !important; background: rgba(46, 160, 67, 0.1); display: inline-block; width: 100%; }
+        .hljs-deletion { color: #f85149 !important; background: rgba(248, 81, 73, 0.1); display: inline-block; width: 100%; }
+        .hljs-meta { color: #ff7b72 !important; }
+        .hljs-meta-string { color: #a5d6ff !important; }
+        
+        /* ========== NEW: CODE EXPLANATION STYLING ========== */
+        /* Subtle gray styling for explanations that follow code blocks */
+        .code-wrapper + p,
+        pre + p,
+        .md-body pre + p {
+            color: #9ca3af !important;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            margin-bottom: 1rem;
+            padding-left: 0.75rem;
+            border-left: 2px solid #f97316;
+            font-style: normal;
+            line-height: 1.5;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+        
+        /* Selection color within code blocks */
+        .code-wrapper pre code::selection,
+        .md-body pre code::selection {
+            background: rgba(249, 115, 22, 0.3);
+        }
+        
         .source-badge { display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.2); border-radius: 1rem; font-size: 0.68rem; color: #f97316; }
         .source-badge i { font-size: 0.6rem; }
         .message-doc-attachment { background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 16px; font-size: 0.7rem; margin-bottom: 6px; display: inline-flex; align-items: center; gap: 5px; color: #fff; font-weight: 500; }
