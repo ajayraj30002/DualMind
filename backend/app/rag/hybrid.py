@@ -40,7 +40,7 @@ MIN_USEFUL_PDF_SCORE  = float(os.getenv("MIN_USEFUL_PDF_SCORE", "0.3"))
 VALID_INTENTS = {
     "FACTUAL_LOOKUP", "SUMMARIZE", "GENERATE_NOTES",
     "COMPARE", "WEB_SEARCH", "CASUAL_CHAT", "CONVERSATION_RECALL",
-    "CODE_REQUEST",
+    "CODE_REQUEST", "META_QUESTION",
 }
 VALID_RETRIEVAL_MODES = {"rag", "full_document", "web", "none"}
 
@@ -84,22 +84,26 @@ CLASSIFY into exactly one intent:
 - WEB_SEARCH        : needs live/current info — news, prices, weather, latest events, current affairs
 - CASUAL_CHAT       : greetings, thanks, opinions, general conversation, "how are you", follow-up chat
 - CONVERSATION_RECALL : "what did we discuss", "earlier you said", "remind me", "as you mentioned"
+- META_QUESTION     : questions about this AI system itself — "what can you do", "what documents are supported", 
+                      "how does this work", "what formats do you accept", "what are your features",
+                      "what type of files", "how do I use this", "what is this app"
 
 CHOOSE retrieval_mode:
 - "rag"           : FACTUAL_LOOKUP, COMPARE, CODE_REQUEST (when file attached)
 - "full_document" : SUMMARIZE, GENERATE_NOTES
 - "web"           : WEB_SEARCH
-- "none"          : CASUAL_CHAT, CONVERSATION_RECALL, CODE_REQUEST (no file)
+- "none"          : CASUAL_CHAT, CONVERSATION_RECALL, CODE_REQUEST (no file), META_QUESTION
 
 REWRITE the query for retrieval:
 - SHORT keyword-focused query, 5-12 words max
 - Resolve pronouns using conversation context (e.g. "he" → actual name)
 - Remove filler words ("tell me", "can you", "what is", "how do")
 - For SUMMARIZE/GENERATE_NOTES: use "document overview summary main topics"
-- For CASUAL_CHAT/CONVERSATION_RECALL/CODE_REQUEST with no file: return original question unchanged
+- For CASUAL_CHAT/CONVERSATION_RECALL/CODE_REQUEST with no file/META_QUESTION: return original question unchanged
 
 CRITICAL RULES:
-- CASUAL_CHAT and CONVERSATION_RECALL must NEVER use retrieval — always "none"
+- CASUAL_CHAT, CONVERSATION_RECALL, and META_QUESTION must NEVER use retrieval — always "none"
+- META_QUESTION = any question about the system/app capabilities, supported formats, features — NOT about uploaded document contents
 - Follow-up questions in a conversation (e.g. "explain more", "what about X", "and Y?") are CASUAL_CHAT or FACTUAL_LOOKUP — never WEB_SEARCH unless explicitly asking for live data
 - CODE_REQUEST without a file → retrieval_mode "none" (LLM answers from knowledge)
 - Return ONLY valid JSON, no markdown, no explanation
@@ -142,8 +146,8 @@ JSON format:
         if retrieval_mode not in VALID_RETRIEVAL_MODES:
             retrieval_mode = "rag"
 
-        # Safety: casual/recall must never retrieve
-        if intent in ("CASUAL_CHAT", "CONVERSATION_RECALL"):
+        # Safety: casual/recall/meta must never retrieve
+        if intent in ("CASUAL_CHAT", "CONVERSATION_RECALL", "META_QUESTION"):
             retrieval_mode = "none"
 
         # Safety: code without file → no retrieval
@@ -162,6 +166,21 @@ def _fallback_route(question: str, filename: Optional[str], search_type: str) ->
     """Regex-based fallback when router Groq call fails."""
     import re
     q = question.lower().strip().rstrip("?!")
+
+    # Detect meta/system questions first
+    meta_patterns = [
+        r'what.*(document|file|format).*(support|accept|upload|type)',
+        r'what.*(type|kind).*(document|file|format)',
+        r'what can (you|this|it) do',
+        r'how (does|do) (this|you|it) work',
+        r'what are (your|the) (feature|capabilit|function)',
+        r'how (to|do i) use',
+        r'what is (this|dualmind)',
+        r'what.*(format|type).*(accept|support)',
+        r'(supported|accepted).*(format|file|document|type)',
+    ]
+    if any(re.search(p, q) for p in meta_patterns):
+        return {"intent": "META_QUESTION", "retrieval_mode": "none", "rewritten_query": question}
 
     casual = [
         r'^(hey|hi|hello|yo|sup|hiya|good morning|good afternoon|good evening)',
@@ -267,6 +286,24 @@ FORMATTING:
 - Use ## Explanation section after for key points
 - Use ## Example if showing usage helps
 - Keep explanations concise — code should speak for itself
+- NEVER use single # for headings — always use ## or ### minimum
+
+Answer:"""
+    elif intent == "META_QUESTION":
+        task = f"""The user is asking about this AI system's capabilities or features.
+
+User: "{question}"
+
+INSTRUCTIONS:
+- You are DualMind, a hybrid AI assistant that combines document analysis with web search.
+- Answer from your knowledge about the system's capabilities:
+  - Supported file formats: PDF documents
+  - Search modes: Hybrid (PDF + Web), Web-only
+  - Features: Upload PDFs for analysis, ask questions about documents, web search for current info, code generation, general conversation
+  - Document features: summarize, extract key points, generate notes, compare sections, answer specific questions
+- Be helpful and informative about what you can do
+- Do NOT search uploaded documents — answer from system knowledge
+- NEVER use single # for headings — always use ## or ### minimum
 
 Answer:"""
     elif intent == "CONVERSATION_RECALL":
@@ -296,6 +333,7 @@ FORMATTING:
 - For simple conversational replies: plain prose is fine
 - For explanations with multiple points: use ## headers and - bullets
 - Never write a wall of text when structure helps
+- NEVER use single # for headings — always use ## or ### minimum
 
 Answer:"""
 
@@ -347,7 +385,8 @@ FORMATTING:
 - - bullet points for key points (complete sentences)
 - Preserve numbering if present (PO1, PO2, etc.) as **PO1:** description
 - Blank line between sections
-- End with ## Key Takeaways (3-5 most important points)"""
+- End with ## Key Takeaways (3-5 most important points)
+- NEVER use single # for headings — always use ## or ### minimum"""
 
     elif intent == "COMPARE":
         task = """TASK: Compare and contrast what the user asked about.
@@ -366,7 +405,8 @@ FORMATTING:
 - - bullet points for key details under each header
 - Preserve numbering if present (**PO1:** description, **PSO1:** description)
 - Blank line between sections
-- ## Summary section at the end (2-3 sentences)"""
+- ## Summary section at the end (2-3 sentences)
+- NEVER use single # for headings — always use ## or ### minimum"""
 
     prompt = f"""{context_section}Document "{filename}":
 
@@ -496,6 +536,7 @@ FORMATTING:
 - **bold** for important terms
 - Numbered lists for sequences or steps
 - Blank lines between sections
+- NEVER use single # for headings — always use ## or ### minimum
 
 Answer:"""
 
@@ -518,6 +559,7 @@ FORMATTING:
 - Keep paragraphs short (2-3 sentences)
 - **bold** for important terms or names
 - Blank lines between sections
+- NEVER use single # for headings — always use ## or ### minimum
 
 Answer:"""
 
@@ -685,8 +727,8 @@ async def hybrid_search(
     elif search_type == "open":
         retrieval_mode = "web"
 
-    # ── Step 2a: No retrieval — conversational / code from knowledge ──
-    if retrieval_mode == "none" or intent in ("CASUAL_CHAT", "CONVERSATION_RECALL"):
+    # ── Step 2a: No retrieval — conversational / code from knowledge / meta ──
+    if retrieval_mode == "none" or intent in ("CASUAL_CHAT", "CONVERSATION_RECALL", "META_QUESTION"):
         return {
             "answer": generate_conversational_answer(question, conversation_context, intent),
             "sources": [],
