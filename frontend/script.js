@@ -26,6 +26,12 @@ const WELCOME_HTML = `
 
 function isCasualConversation(content) {
     if (!content) return false;
+    // If content has ANY markdown indicators, it's NOT casual — must be rendered
+    const hasMarkdown = content.includes('##') || content.includes('**') || 
+                        content.includes('```') || content.includes('- ') ||
+                        content.includes('1. ') || content.includes('> ');
+    if (hasMarkdown) return false;
+    
     const casualPatterns = [
         /^(hey|hi|hello|yo|sup|hiya|good morning|good afternoon|good evening)/i,
         /^(thanks|thank you|great|cool|awesome|nice|bye|goodbye)/i,
@@ -34,12 +40,11 @@ function isCasualConversation(content) {
         /^(ok|okay|got it|understood)$/i,
         /^(hmm|um|ah|oh)$/i
     ];
-    const lowerContent = content.toLowerCase().trim();
-    if (content.length < 100) {
-        return casualPatterns.some(pattern => pattern.test(lowerContent));
+    // Only casual if short AND matches a greeting pattern
+    if (content.length < 150) {
+        return casualPatterns.some(pattern => pattern.test(content.toLowerCase().trim()));
     }
-    const hasMarkdown = content.includes('##') || content.includes('**') || content.includes('- ') || content.includes('```');
-    return !hasMarkdown && content.length < 200;
+    return false;
 }
 
 // ─────────────────────────────────────────────
@@ -192,25 +197,25 @@ function fixMalformedCodeBlocks(content) {
 function cleanDualMindResponse(rawText) {
     if (!rawText || typeof rawText !== 'string') return '';
     
-    // First, extract and preserve code blocks
+    // Preserve code blocks before cleaning
     const codeBlocks = [];
     let cleaned = rawText;
     
     // Extract ```code blocks```
-    cleaned = cleaned.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-        const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
-        codeBlocks.push({ lang, code: code.trim(), placeholder });
+    cleaned = cleaned.replace(/```([\s\S]*?)```/g, (match) => {
+        const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
+        codeBlocks.push(match);
         return placeholder;
     });
     
     // Extract inline `code` (but not triple backticks)
-    cleaned = cleaned.replace(/`([^`\n]+)`/g, (match, code) => {
-        const placeholder = `__INLINE_CODE_${codeBlocks.length}__`;
-        codeBlocks.push({ lang: null, code: code.trim(), placeholder, isInline: true });
+    const inlineBlocks = [];
+    cleaned = cleaned.replace(/`([^`\n]+)`/g, (match) => {
+        const placeholder = `__INLINE_${inlineBlocks.length}__`;
+        inlineBlocks.push(match);
         return placeholder;
     });
     
-    // Now clean the rest of the text
     // Remove standalone numbers (chunk indices)
     cleaned = cleaned.replace(/^\d+\s*$/gm, '');
     cleaned = cleaned.replace(/^(\d+)\.\s*$/gm, '');
@@ -218,31 +223,30 @@ function cleanDualMindResponse(rawText) {
     // Remove internal source labels
     cleaned = cleaned.replace(/\[(Web Search|PDF Document|RAG|Hybrid)\]/gi, '');
     
-    // Fix malformed headers (only if not inside a code block)
-    cleaned = cleaned.replace(/^###\s*/gm, '## ');
-    cleaned = cleaned.replace(/^##([^ ])/gm, '## $1');
-    cleaned = cleaned.replace(/^#([^ ])/gm, '# $1');
+    // Fix malformed headers — ensure space after # but don't strip them
+    cleaned = cleaned.replace(/^##([^ #])/gm, '## $1');
+    cleaned = cleaned.replace(/^#([^ #])/gm, '# $1');
     
-    // Fix malformed bullet points
-    cleaned = cleaned.replace(/^[•\-*]\s*/gm, '- ');
+    // Fix bullet points: only replace actual bullet chars (•), NOT * or -
+    cleaned = cleaned.replace(/^•\s*/gm, '- ');
     
     // Clean up excessive newlines
     cleaned = cleaned.replace(/\n{4,}/g, '\n\n');
     
-    // Fix [object Object] issue
+    // Fix [object Object]
     cleaned = cleaned.replace(/\[object Object\]/gi, '');
     
-    // Restore code blocks
-    codeBlocks.forEach(block => {
-        if (block.isInline) {
-            cleaned = cleaned.replace(block.placeholder, `<code>${escapeHtml(block.code)}</code>`);
-        } else {
-            cleaned = cleaned.replace(block.placeholder, `\`\`\`${block.lang}\n${block.code}\n\`\`\``);
-        }
+    // Restore inline code
+    inlineBlocks.forEach((block, i) => {
+        cleaned = cleaned.replace(`__INLINE_${i}__`, block);
     });
     
-    cleaned = cleaned.trim();
-    return cleaned;
+    // Restore code blocks
+    codeBlocks.forEach((block, i) => {
+        cleaned = cleaned.replace(`__CODEBLOCK_${i}__`, block);
+    });
+    
+    return cleaned.trim();
 }
 
 // ─────────────────────────────────────────────
@@ -284,22 +288,31 @@ function setupMarked() {
 
 async function renderMarkdown(text) {
     if (!text) return '<div class="md-body"></div>';
-    let cleanText = String(text);
-    
     try {
+        if (typeof marked === 'undefined') {
+            return `<div class="md-body">${text.replace(/\n/g, '<br>')}</div>`;
+        }
         let html;
-        if (marked.parse && typeof marked.parse === 'function') {
-            const result = marked.parse(cleanText);
-            html = (result && typeof result.then === 'function') ? await result : result;
-        } else if (typeof marked === 'function') {
-            html = marked(cleanText);
-        } else {
-            html = cleanText;
+        try {
+            if (marked.parse && typeof marked.parse === 'function') {
+                const result = marked.parse(text);
+                html = (result && typeof result.then === 'function') ? await result : result;
+            } else if (typeof marked === 'function') {
+                html = marked(text);
+            } else {
+                html = text.replace(/\n/g, '<br>');
+            }
+        } catch (parseErr) {
+            console.error('Markdown parse error:', parseErr);
+            html = text.replace(/\n/g, '<br>');
+        }
+        if (!html || typeof html !== 'string') {
+            html = text.replace(/\n/g, '<br>');
         }
         return `<div class="md-body">${html}</div>`;
     } catch (e) {
-        console.error('Markdown render error:', e);
-        return `<div class="md-body">${cleanText.replace(/\n/g, '<br>')}</div>`;
+        console.error('renderMarkdown fatal error:', e);
+        return `<div class="md-body">${(text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>`;
     }
 }
 
@@ -452,7 +465,7 @@ async function sendMessage() {
 
         if (res.ok) {
             let finalAnswer = data.answer || data.response || data.content || '';
-            finalAnswer = cleanDualMindResponse(finalAnswer);
+            // Don't clean here — addMessageToChat already handles cleaning
             const searchSource = data.search_type_used || (currentMode === 'hybrid' ? 'Hybrid Search' : currentMode);
             await addMessageToChat('assistant', finalAnswer, null, searchSource);
         } else {
