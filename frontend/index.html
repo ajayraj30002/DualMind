@@ -7,7 +7,8 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked-highlight@2.1.1/lib/index.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -258,16 +259,12 @@ const WELCOME_HTML = `
 
 function isCasualConversation(content) {
     if (!content) return false;
-    // If content has ANY markdown indicators, it's NOT casual — must be rendered
     const hasMarkdown = content.includes('##') || content.includes('**') ||
                         content.includes('```') || content.includes('- ') ||
                         content.includes('1. ') || content.includes('> ') ||
                         content.includes('* ') || /^#{1,4}\s/m.test(content);
     if (hasMarkdown) return false;
-
-    // Only classify as casual if short AND matches a clear greeting/filler pattern
     if (content.length >= 200) return false;
-
     const casualPatterns = [
         /^(hey|hi|hello|yo|sup|hiya|good morning|good afternoon|good evening)/i,
         /^(thanks|thank you|great|cool|awesome|nice|bye|goodbye)/i,
@@ -344,47 +341,40 @@ function cleanDualMindResponse(rawText) {
 
 function setupMarked() {
     if (typeof marked === 'undefined') return;
-    marked.setOptions({
-        gfm: true,
-        breaks: true,
-        highlight: function(code, lang) {
-            if (lang && hljs.getLanguage(lang)) {
+    // Use marked.use() with markedHighlight — the setOptions highlight callback
+    // was removed in marked v5+. Using it caused marked.parse() to silently fail
+    // and fall back to plain text, which is why ## headers showed as raw text.
+    if (typeof markedHighlight !== 'undefined') {
+        marked.use(markedHighlight.markedHighlight({
+            langPrefix: 'hljs language-',
+            highlight(code, lang) {
+                const language = (lang && hljs.getLanguage(lang)) ? lang : 'plaintext';
                 try {
-                    return hljs.highlight(code, { language: lang }).value;
-                } catch(e) {}
+                    return hljs.highlight(code, { language }).value;
+                } catch (e) {
+                    return code;
+                }
             }
-            try {
-                return hljs.highlightAuto(code).value;
-            } catch(e) {}
-            return code;
-        }
-    });
+        }));
+    }
+    marked.use({ gfm: true, breaks: true });
 }
 
 async function renderMarkdown(text) {
     if (!text) return '<div class="md-body"></div>';
     try {
-        if (typeof marked === 'undefined' || !marked.parse) {
-            // Fallback if marked library failed to load
-            return `<div class="md-body">${text.replace(/\n/g, '<br>')}</div>`;
+        if (typeof marked === 'undefined' || typeof marked.parse !== 'function') {
+            // Fallback: escape HTML and preserve newlines
+            return `<div class="md-body">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`;
         }
-        let html;
-        try {
-            const result = marked.parse(text);
-            // Handle both sync and async return from marked
-            html = (result && typeof result.then === 'function') ? await result : result;
-        } catch (parseErr) {
-            console.error('Markdown parse error:', parseErr);
-            html = text.replace(/\n/g, '<br>');
-        }
+        const html = marked.parse(text);
         if (!html || typeof html !== 'string') {
-            html = text.replace(/\n/g, '<br>');
+            return `<div class="md-body">${text.replace(/\n/g, '<br>')}</div>`;
         }
         return `<div class="md-body">${html}</div>`;
     } catch(e) {
-        console.error('renderMarkdown fatal error:', e);
-        // Ultimate fallback — never crash
-        return `<div class="md-body">${(text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>`;
+        console.error('renderMarkdown error:', e);
+        return `<div class="md-body">${(text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`;
     }
 }
 
@@ -527,9 +517,7 @@ async function loadSession(sessionId) {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
                     const searchType = msg.metadata?.search_type_used || null;
-                    // FIX: Pass raw content — addMessageToChat already calls cleanDualMindResponse
-                    // internally. Pre-cleaning here caused double-processing that mangled markdown
-                    // (## headers, **bold**) on follow-up RAG responses.
+                    // Pass raw content — addMessageToChat already calls cleanDualMindResponse
                     const rawContent = msg.content || msg.answer || msg.response || '';
                     await addMessageToChat(msg.role, rawContent, msg.metadata?.filename, searchType);
                 }
