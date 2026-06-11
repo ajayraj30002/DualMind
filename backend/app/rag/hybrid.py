@@ -488,7 +488,7 @@ No relevant sources were found. Answer from your general knowledge if you can.
 Be honest — if you are not certain, say so clearly. Do not hallucinate.
 If this is a follow-up question, use the conversation context above.
 
-FORMATTING: Use ## headers and - bullets if the answer has multiple sections.
+Answer in plain text. Do not use markdown formatting.
 
 Answer:"""
     else:
@@ -513,7 +513,31 @@ Answer:"""
 
         doc_context = "\n\n---\n\n".join(context_parts)
 
-        if intent == "CODE_REQUEST":
+        # FOR FACTUAL_LOOKUP - PLAIN TEXT, NO MARKDOWN
+        if intent == "FACTUAL_LOOKUP":
+            prompt = f"""{context_section}Document content:
+
+{doc_context}
+
+User asked: "{question}"
+
+INSTRUCTIONS:
+1. Answer using ONLY the document content above
+2. Be precise and complete — extract all relevant details
+3. Resolve pronouns using conversation context if this is a follow-up
+4. Do NOT fabricate — if the document doesn't contain the answer, say so clearly
+5. Do not mention "chunk", "PDF Document", or internal labels
+
+CRITICAL FORMATTING RULES:
+- Write in PLAIN TEXT only - NO markdown formatting
+- Do NOT use ## headers, **bold**, or any markdown syntax
+- Use simple paragraphs and line breaks
+- Use - dashes for lists if needed, but no other formatting
+- Keep it clean and readable like normal text
+
+Answer:"""
+        
+        elif intent == "CODE_REQUEST":
             prompt = f"""{context_section}Relevant context from document(s):
 
 {doc_context}
@@ -534,8 +558,28 @@ FORMATTING:
 
 Answer:"""
 
+        elif intent == "COMPARE":
+            prompt = f"""{context_section}Document content:
+
+{doc_context}
+
+User asked: "{question}"
+
+INSTRUCTIONS:
+1. Compare the items based ONLY on document content
+2. Be specific about similarities and differences
+3. Do NOT fabricate
+
+FORMATTING RULES:
+- Write in PLAIN TEXT only - NO markdown headers
+- Use - dashes for listing differences
+- Keep it simple and readable
+
+Answer:"""
+
         elif pdf_sources and not web_sources:
-            prompt = f"""{context_section}FROM DOCUMENT:
+            # General PDF query - plain text for factual answers
+            prompt = f"""{context_section}Document content:
 
 {doc_context}
 
@@ -544,32 +588,16 @@ User asked: "{question}"
 INSTRUCTIONS:
 1. Answer using ONLY the document content above
 2. Be precise and complete — extract all relevant details
-3. Resolve pronouns using conversation context if this is a follow-up
-4. Do NOT fabricate — if the document doesn't contain the answer, say so clearly
-5. Do not mention "chunk", "PDF Document", or internal labels
+3. Do NOT fabricate — if the document doesn't contain the answer, say so clearly
 
-STRICT FORMATTING — no exceptions:
-- START your answer with a ## header on its own line
-- Use ## headers to separate every distinct topic or section
-- Use - bullet points under each header for the actual information
-- NEVER write a prose paragraph — everything must be a bullet point under a header
-- Every ## header must have a blank line before it and after it
-- **bold** for key terms, names, and values
-- NEVER use single # — always ## or ###
-
-BAD (do not do this):
-The job location is Dubai, UAE. ## Additional Details - The company...
-
-GOOD (do this):
-## Job Location
-- Dubai, United Arab Emirates
-
-## Additional Details
-- **Company:** Master Systems
-- **Salary:** 7-8 Lakhs per annum
+CRITICAL FORMATTING RULES:
+- Write in PLAIN TEXT only - NO markdown formatting
+- Do NOT use ## headers, **bold**, or any markdown syntax
+- Use simple paragraphs and line breaks
+- Use - dashes for lists if needed
+- Keep it clean and readable
 
 Answer:"""
-
         else:
             # Web search (with or without PDF)
             prompt = f"""{context_section}{doc_context}
@@ -584,12 +612,9 @@ INSTRUCTIONS:
 5. Do not mention source labels in the answer
 
 FORMATTING:
-- ## headers to separate major topics
-- - bullets for lists and key facts
-- Keep paragraphs short (2-3 sentences)
-- **bold** for important terms or names
-- Blank lines between sections
-- NEVER use single # for headings — always use ## or ### minimum
+- Write in clear paragraphs
+- Use - dashes for lists if needed
+- Keep formatting minimal and readable
 
 Answer:"""
 
@@ -600,13 +625,12 @@ Answer:"""
                 {
                     "role": "system",
                     "content": (
-                        "You are a precise AI assistant that answers questions from document sources. "
-                        "CRITICAL FORMATTING: Always start your response with a ## header on its own line. "
-                        "Never begin with a prose sentence. Every fact goes as a - bullet under a ## header. "
-                        "## headers must be on their own line with a blank line before and after them. "
-                        "Never write paragraphs — use only ## headers and - bullet points. "
+                        "You are a precise AI assistant that answers questions using provided sources. "
+                        "CRITICAL: For factual questions from documents, respond in PLAIN TEXT with NO markdown formatting. "
+                        "Do NOT use ## headers, **bold**, or any markdown syntax unless explicitly asked for code. "
+                        "Write in clean, natural paragraphs. Use simple - dashes for lists if needed. "
                         "You NEVER hallucinate — only state what the sources say. "
-                        "You handle follow-up questions using conversation context."
+                        "If the document doesn't have the answer, say 'I don't have that information in the document.'"
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -614,7 +638,19 @@ Answer:"""
             temperature=0.35,
             max_tokens=1400,
         )
-        return fix_markdown_formatting(completion.choices[0].message.content.strip())
+        answer = completion.choices[0].message.content.strip()
+        
+        # Post-process to remove any markdown that might have slipped through
+        import re
+        # Remove markdown headers
+        answer = re.sub(r'^#{1,3}\s+', '', answer, flags=re.MULTILINE)
+        # Remove bold markers
+        answer = re.sub(r'\*\*(.*?)\*\*', r'\1', answer)
+        # Remove italic markers
+        answer = re.sub(r'\*(.*?)\*', r'\1', answer)
+        
+        return fix_markdown_formatting(answer)
+        
     except Exception as e:
         print(f"Generate answer error: {e}")
         return "I had trouble processing your request. Please try again."
