@@ -27,6 +27,24 @@ from ..config import Config
 
 groq_client = Groq(api_key=Config.GROQ_API_KEY)
 
+# ─────────────────────────────────────────────
+# MARKDOWN POST-PROCESSOR
+# ─────────────────────────────────────────────
+
+def fix_markdown_formatting(text):
+    """Fix LLM markdown: ## headers mid-sentence, excess blank lines."""
+    if not text:
+        return text
+    import re as _re
+    # Ensure ## / ### headers always start on a new line
+    # e.g. "sentence.## Header" becomes "sentence.\n\n## Header"
+    text = _re.sub(r'([^\n])(#{2,4} )', r'\1\n\n\2', text)
+    # Ensure blank line before every ## header (single newline -> double)
+    text = _re.sub(r'\n(#{2,4} )', r'\n\n\1', text)
+    # Collapse 4+ newlines to 2
+    text = _re.sub(r'\n{4,}', '\n\n', text)
+    return text.strip()
+
 MAX_RERANK_CANDIDATES = int(os.getenv("MAX_RERANK_CANDIDATES", "10"))
 MAX_RERANK_DOC_CHARS  = int(os.getenv("MAX_RERANK_DOC_CHARS",  "1200"))
 MIN_RELEVANCE_SCORE   = float(os.getenv("MIN_RELEVANCE_SCORE",  "0.2"))
@@ -359,7 +377,7 @@ Answer:"""
             temperature=0.4,
             max_tokens=1400,
         )
-        return completion.choices[0].message.content.strip()
+        return fix_markdown_formatting(completion.choices[0].message.content.strip())
     except Exception as e:
         print(f"Conversational answer error: {e}")
         return "I had trouble with that. Please try again."
@@ -442,7 +460,7 @@ Answer:"""
             temperature=0.3,
             max_tokens=1400,
         )
-        return completion.choices[0].message.content.strip()
+        return fix_markdown_formatting(completion.choices[0].message.content.strip())
     except Exception as e:
         print(f"Full document answer error: {e}")
         return "I had trouble processing the document. Please try again."
@@ -530,13 +548,25 @@ INSTRUCTIONS:
 4. Do NOT fabricate — if the document doesn't contain the answer, say so clearly
 5. Do not mention "chunk", "PDF Document", or internal labels
 
-FORMATTING:
-- ## headers for major sections
-- - bullets for key points
-- **bold** for important terms
-- Numbered lists for sequences or steps
-- Blank lines between sections
-- NEVER use single # for headings — always use ## or ### minimum
+STRICT FORMATTING — no exceptions:
+- START your answer with a ## header on its own line
+- Use ## headers to separate every distinct topic or section
+- Use - bullet points under each header for the actual information
+- NEVER write a prose paragraph — everything must be a bullet point under a header
+- Every ## header must have a blank line before it and after it
+- **bold** for key terms, names, and values
+- NEVER use single # — always ## or ###
+
+BAD (do not do this):
+The job location is Dubai, UAE. ## Additional Details - The company...
+
+GOOD (do this):
+## Job Location
+- Dubai, United Arab Emirates
+
+## Additional Details
+- **Company:** Master Systems
+- **Salary:** 7-8 Lakhs per annum
 
 Answer:"""
 
@@ -570,12 +600,13 @@ Answer:"""
                 {
                     "role": "system",
                     "content": (
-                        "You are a precise, intelligent AI assistant. "
-                        "You answer questions accurately using provided sources. "
-                        "You NEVER hallucinate or invent facts — if unsure, say so. "
-                        "You format responses in clean markdown with ## headers and - bullets. "
-                        "For code, you write correct, commented code with a brief algorithm. "
-                        "You handle follow-up questions by using conversation context."
+                        "You are a precise AI assistant that answers questions from document sources. "
+                        "CRITICAL FORMATTING: Always start your response with a ## header on its own line. "
+                        "Never begin with a prose sentence. Every fact goes as a - bullet under a ## header. "
+                        "## headers must be on their own line with a blank line before and after them. "
+                        "Never write paragraphs — use only ## headers and - bullet points. "
+                        "You NEVER hallucinate — only state what the sources say. "
+                        "You handle follow-up questions using conversation context."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -583,7 +614,7 @@ Answer:"""
             temperature=0.35,
             max_tokens=1400,
         )
-        return completion.choices[0].message.content.strip()
+        return fix_markdown_formatting(completion.choices[0].message.content.strip())
     except Exception as e:
         print(f"Generate answer error: {e}")
         return "I had trouble processing your request. Please try again."
