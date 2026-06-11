@@ -259,22 +259,22 @@ const WELCOME_HTML = `
 function isCasualConversation(content) {
     if (!content) return false;
     // If content has ANY markdown indicators, it's NOT casual — must be rendered
-    const hasMarkdown = content.includes('##') || content.includes('**') || 
+    const hasMarkdown = content.includes('##') || content.includes('**') ||
                         content.includes('```') || content.includes('- ') ||
-                        content.includes('1. ') || content.includes('> ');
+                        content.includes('1. ') || content.includes('> ') ||
+                        content.includes('* ') || /^#{1,4}\s/m.test(content);
     if (hasMarkdown) return false;
-    
+
+    // Only classify as casual if short AND matches a clear greeting/filler pattern
+    if (content.length >= 200) return false;
+
     const casualPatterns = [
         /^(hey|hi|hello|yo|sup|hiya|good morning|good afternoon|good evening)/i,
         /^(thanks|thank you|great|cool|awesome|nice|bye|goodbye)/i,
         /^how are you/i,
         /^(ok|okay|got it|understood)$/i
     ];
-    // Only casual if short AND matches a greeting pattern
-    if (content.length < 150) {
-        return casualPatterns.some(pattern => pattern.test(content.toLowerCase().trim()));
-    }
-    return false;
+    return casualPatterns.some(pattern => pattern.test(content.toLowerCase().trim()));
 }
 
 function addCopyButtonsToCodeBlocks() {
@@ -527,9 +527,11 @@ async function loadSession(sessionId) {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
                     const searchType = msg.metadata?.search_type_used || null;
-                    let cleanMessageContent = msg.content || msg.answer || msg.response || '';
-                    if (msg.role === 'assistant') cleanMessageContent = cleanDualMindResponse(cleanMessageContent);
-                    await addMessageToChat(msg.role, cleanMessageContent, msg.metadata?.filename, searchType);
+                    // FIX: Pass raw content — addMessageToChat already calls cleanDualMindResponse
+                    // internally. Pre-cleaning here caused double-processing that mangled markdown
+                    // (## headers, **bold**) on follow-up RAG responses.
+                    const rawContent = msg.content || msg.answer || msg.response || '';
+                    await addMessageToChat(msg.role, rawContent, msg.metadata?.filename, searchType);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
