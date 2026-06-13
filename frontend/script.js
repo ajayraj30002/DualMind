@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
     attachBtn = document.getElementById('attachPdfBtn');
     fileInput = document.getElementById('pdfFileInput');
     fileBadge = document.getElementById('fileBadge');
-    modeBtns = document.querySelectorAll('.mode-btn');
+    modeBtns = document.querySelectorAll('.mode-pill');
     loadingOverlay = document.getElementById('loadingOverlay');
     sidebar = document.getElementById('sidebar');
     sidebarToggle = document.getElementById('sidebarToggle');
@@ -313,7 +313,7 @@ function setupEventListeners() {
     messageInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
     messageInput?.addEventListener('input', () => {
         messageInput.style.height = 'auto';
-        messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
     });
     newChatBtn?.addEventListener('click', createNewSession);
     renameBtn?.addEventListener('click', renameSession);
