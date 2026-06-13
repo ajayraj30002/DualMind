@@ -406,6 +406,8 @@ body {
 .messages-container {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
     padding: 1.25rem 1.5rem 2rem;
     display: flex;
     flex-direction: column;
@@ -628,6 +630,7 @@ body {
     z-index: 2;
     display: flex;
     justify-content: center;
+    scrollbar-gutter: stable;
 }
 .input-container {
     width: 100%;
