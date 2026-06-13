@@ -49,9 +49,6 @@
             <i class="fas fa-chevron-left"></i>
         </button>
         <div class="sidebar-header">
-            <div class="logo-area">
-                <i class="fas fa-brain"></i>
-            </div>
             <button id="newChatBtn" class="new-chat-btn">
                 <i class="fas fa-plus"></i>
                 <span>New chat</span>
@@ -69,67 +66,59 @@
         </div>
     </div>
     
-    <!-- Main Chat Area - DeepSeek Style -->
+    <!-- Main Chat Area -->
     <div class="main-chat">
-        <!-- Header - Blended, no harsh lines -->
+        <!-- Header -->
         <div class="chat-header">
-            <div class="title-area">
-                <h3 id="chatTitle">New conversation</h3>
-            </div>
-            <div class="logo-header">
+            <div class="chat-title" id="chatTitle">New conversation</div>
+            <div class="chat-logo">
                 <i class="fas fa-brain"></i>
                 <span>DualMind</span>
             </div>
         </div>
         
-        <!-- Messages Container -->
+        <!-- Messages -->
         <div id="messagesContainer" class="messages-container">
             <div class="welcome">
                 <i class="fas fa-brain"></i>
-                <h3>Ready when you are</h3>
-                <p>Ask from your PDFs, the web, or both. Hybrid mode gives you the best of both worlds.</p>
+                <h2>Ready when you are</h2>
+                <p>Ask from your PDFs, the web, or both.</p>
             </div>
         </div>
         
-        <!-- DeepSeek Style Input Area -->
+        <!-- Input Area - DeepSeek Style -->
         <div class="input-area">
-            <div class="input-container">
-                <!-- Mode Selector Row -->
-                <div class="mode-selector">
-                    <button class="mode-pill active" data-mode="hybrid">
-                        <i class="fas fa-link"></i>
-                        <span>Hybrid</span>
+            <div class="input-card">
+                <!-- Mode Toggle -->
+                <div class="mode-toggle">
+                    <button class="mode-option active" data-mode="hybrid">
+                        <i class="fas fa-link"></i> Hybrid
                     </button>
-                    <button class="mode-pill" data-mode="open">
-                        <i class="fas fa-globe"></i>
-                        <span>Web</span>
+                    <button class="mode-option" data-mode="open">
+                        <i class="fas fa-globe"></i> Web
                     </button>
                 </div>
                 
-                <!-- Main Input Box -->
-                <div class="input-box">
-                    <div class="input-wrapper">
-                        <textarea id="messageInput" placeholder="Ask DualMind anything..." rows="1"></textarea>
-                        <button id="sendMsgBtn" class="send-button">
-                            <i class="fas fa-arrow-up"></i>
+                <!-- Text Input -->
+                <div class="input-row">
+                    <textarea id="messageInput" placeholder="Ask DualMind anything..." rows="1"></textarea>
+                    <button id="sendMsgBtn" class="send-btn">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                </div>
+                
+                <!-- Bottom Bar -->
+                <div class="input-footer">
+                    <div class="attach-wrapper">
+                        <button id="attachPdfBtn" class="attach-link">
+                            <i class="fas fa-paperclip"></i>
+                            <span>Attach PDF</span>
                         </button>
+                        <input type="file" id="pdfFileInput" accept=".pdf" hidden>
+                        <div id="fileBadge" class="file-badge hidden"></div>
                     </div>
-                    
-                    <!-- Bottom Toolbar -->
-                    <div class="input-toolbar">
-                        <div class="toolbar-left">
-                            <button id="attachPdfBtn" class="toolbar-btn">
-                                <i class="fas fa-paperclip"></i>
-                                <span>Attach PDF</span>
-                            </button>
-                            <input type="file" id="pdfFileInput" accept=".pdf" hidden>
-                            <div id="fileBadge" class="file-badge hidden"></div>
-                        </div>
-                        <div class="toolbar-right">
-                            <span class="hint-text">
-                                <i class="fas fa-info-circle"></i> Press Enter to send
-                            </span>
-                        </div>
+                    <div class="input-hint">
+                        <i class="fas fa-info-circle"></i> Press Enter to send
                     </div>
                 </div>
             </div>
