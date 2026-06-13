@@ -413,7 +413,7 @@ body {
 }
 .messages-container > * {
     width: 100%;
-    max-width: 820px;
+    max-width: 880px;
 }
 
 /* Custom Scrollbar */
@@ -462,7 +462,7 @@ body {
     display: flex;
     gap: 0.85rem;
     margin-bottom: 1.75rem;
-    max-width: 88%;
+    width: 100%;
     animation: fadeInUp 0.4s ease;
 }
 .message.user {
@@ -631,7 +631,7 @@ body {
 }
 .input-container {
     width: 100%;
-    max-width: 820px;
+    max-width: 880px;
 }
 
 /* Unified Input Panel - mode selector + input box as one block, floating docked card */
