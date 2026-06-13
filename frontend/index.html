@@ -64,6 +64,7 @@
             </button>
         </div>
     </div>
+    
     <div class="main-chat">
         <div class="chat-header">
             <div class="title-area">
@@ -74,6 +75,7 @@
                 <span>DualMind</span>
             </div>
         </div>
+        
         <div id="messagesContainer" class="messages-container">
             <div class="welcome">
                 <i class="fas fa-brain"></i>
@@ -81,29 +83,35 @@
                 <p>Ask from your PDFs, the web, or both. Hybrid mode gives you the best of both worlds.</p>
             </div>
         </div>
+        
         <div class="input-section">
-            <div class="input-controls">
-                <div class="attach-row">
+            <div class="input-container">
+                <div class="toolbar">
                     <button id="attachPdfBtn" class="attach-btn">
-                        <i class="fas fa-paperclip"></i> Attach PDF
+                        <i class="fas fa-paperclip"></i>
+                        <span>Attach PDF</span>
                     </button>
                     <input type="file" id="pdfFileInput" accept=".pdf" hidden>
                     <div id="fileBadge" class="file-badge hidden"></div>
-                    <div class="search-modes">
+                    <div class="mode-switch">
                         <button class="mode-btn active" data-mode="hybrid">
-                            <i class="fas fa-link"></i> Hybrid
+                            <i class="fas fa-link"></i>
+                            <span>Hybrid</span>
                         </button>
                         <button class="mode-btn" data-mode="open">
-                            <i class="fas fa-globe"></i> Web
+                            <i class="fas fa-globe"></i>
+                            <span>Web</span>
                         </button>
                     </div>
                 </div>
-                <div class="input-row">
+                
+                <div class="input-wrapper">
                     <textarea id="messageInput" placeholder="Ask a question..." rows="1"></textarea>
                     <button id="sendMsgBtn" class="send-btn">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
+                
                 <div class="input-hint">
                     <i class="fas fa-info-circle"></i> Hybrid = PDF context + web search | Press Enter to send
                 </div>
