@@ -654,9 +654,9 @@ body {
     left: 50%;
     transform: translateX(-50%);
     margin-bottom: 1rem;
-    width: 42px;
-    height: 42px;
-    border-radius: 40%;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
     background: linear-gradient(135deg, #f97316, #ea580c);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #fff;
