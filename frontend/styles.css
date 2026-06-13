@@ -637,7 +637,8 @@ body {
     justify-content: center;
     pointer-events: none;
 }
-.input-area .input-container {
+.input-area .input-container,
+.input-area .scroll-bottom-btn {
     pointer-events: auto;
 }
 .input-container {
