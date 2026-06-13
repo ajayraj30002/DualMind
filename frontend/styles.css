@@ -46,7 +46,7 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-spinner p { color: #f97316; font-size: 0.875rem; }
 
-/* LOGIN PAGE - ILLUMINATING GLOW EFFECT */
+/* LOGIN PAGE */
 .login-page {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -174,7 +174,7 @@ body {
 .chat-page { display: flex; height: 100vh; width: 100%; }
 .chat-page.hidden { display: none; }
 
-/* SIDEBAR - Clean Design */
+/* SIDEBAR */
 .sidebar {
     width: 280px;
     background: #0d0d0d;
@@ -182,6 +182,7 @@ body {
     flex-direction: column;
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
+    border-right: 1px solid #1a1a1a;
 }
 .sidebar.collapsed { width: 70px; }
 .sidebar.collapsed .sidebar-header span,
@@ -190,8 +191,7 @@ body {
 .sidebar.collapsed .new-chat-btn span { display: none; }
 .sidebar.collapsed .new-chat-btn { justify-content: center; padding: 0.75rem; }
 .sidebar.collapsed .session-item { justify-content: center; padding: 0.6rem; }
-.sidebar.collapsed .delete-session { display: none; }
-.sidebar.collapsed .rename-session-btn { display: none; }
+.sidebar.collapsed .session-actions { display: none; }
 .sidebar.collapsed .sidebar-footer { justify-content: center; }
 
 .sidebar-toggle {
@@ -347,6 +347,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-bottom: 1px solid #1a1a1a;
 }
 .title-area h3 {
     font-weight: 500;
@@ -557,54 +558,55 @@ body {
     color: #fff;
 }
 
-/* INPUT SECTION */
+/* INPUT SECTION - PERFECTLY ALIGNED */
 .input-section {
     padding: 1rem 1.5rem 1.5rem;
     background: #0a0a0a;
+    border-top: 1px solid #1a1a1a;
 }
-.input-controls {
+.input-container {
     max-width: 900px;
     margin: 0 auto;
+    width: 100%;
 }
-.attach-row {
+.toolbar {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    flex-wrap: wrap;
     margin-bottom: 0.75rem;
+    flex-wrap: wrap;
 }
 .attach-btn {
-    padding: 0.4rem 1rem;
+    padding: 0.5rem 1rem;
     background: #141414;
     border: 1px solid #2a2a2a;
     border-radius: 2rem;
     color: #aaa;
     cursor: pointer;
-    font-size: 0.75rem;
-    display: inline-flex;
+    font-size: 0.8rem;
+    display: flex;
     align-items: center;
     gap: 0.5rem;
     font-family: inherit;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 .attach-btn:hover {
-    background: rgba(249, 115, 22, 0.2);
+    background: rgba(249, 115, 22, 0.15);
     color: #f97316;
     border-color: #f97316;
 }
 .file-badge {
-    padding: 0.3rem 1rem;
+    padding: 0.4rem 1rem;
     background: rgba(249, 115, 22, 0.15);
     border-radius: 2rem;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: #f97316;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
 }
 .file-badge.hidden { display: none; }
-
-.search-modes {
+.mode-switch {
     display: flex;
     gap: 0.5rem;
     background: #141414;
@@ -619,14 +621,14 @@ body {
     border-radius: 1.5rem;
     color: #aaa;
     cursor: pointer;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
     font-family: inherit;
     transition: all 0.2s ease;
 }
-.mode-btn i { font-size: 0.7rem; }
+.mode-btn i { font-size: 0.75rem; }
 .mode-btn.active {
     background: linear-gradient(135deg, #f97316, #ea580c);
     color: #fff;
@@ -635,18 +637,19 @@ body {
     background: #222;
     color: #fff;
 }
-
-.input-row {
+.input-wrapper {
     display: flex;
+    align-items: flex-end;
     gap: 0.75rem;
     background: #141414;
     border-radius: 1.5rem;
-    padding: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
     border: 1px solid #2a2a2a;
     transition: all 0.3s ease;
 }
-.input-row:focus-within {
+.input-wrapper:focus-within {
     border-color: #f97316;
+    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1);
 }
 #messageInput {
     flex: 1;
@@ -654,10 +657,11 @@ body {
     border: none;
     color: #fff;
     font-family: inherit;
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     resize: none;
-    padding: 0.5rem 0;
-    line-height: 1.4;
+    padding: 0;
+    line-height: 1.5;
+    max-height: 120px;
 }
 #messageInput:focus { outline: none; }
 #messageInput::placeholder { color: #555; }
@@ -674,10 +678,11 @@ body {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 .send-btn:hover:not(:disabled) {
     transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
 }
 .send-btn:disabled {
     opacity: 0.5;
@@ -685,9 +690,12 @@ body {
 }
 .input-hint {
     text-align: center;
-    font-size: 0.6rem;
+    font-size: 0.65rem;
     color: #555;
-    margin-top: 0.5rem;
+    margin-top: 0.75rem;
+}
+.input-hint i {
+    margin-right: 0.25rem;
 }
 
 /* TYPING INDICATOR */
@@ -719,8 +727,9 @@ body {
     .sidebar.collapsed { width: 55px; }
     .message { max-width: 92%; }
     .chat-header { padding: 0.5rem 1rem; }
-    .attach-row { flex-wrap: wrap; }
-    .search-modes { margin-left: 0; width: 100%; justify-content: center; }
+    .toolbar { flex-wrap: wrap; }
+    .mode-switch { margin-left: 0; width: 100%; justify-content: center; }
+    .input-wrapper { padding: 0.6rem 0.8rem; }
 }
 
 /* Syntax Highlighting */
