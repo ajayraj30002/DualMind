@@ -9,7 +9,7 @@ let currentSessionDocuments = [];
 
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
 let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
-let modeBtns, loadingOverlay, sidebar, sidebarToggle;
+let modeBtns, loadingOverlay, sidebar, sidebarToggle, scrollBottomBtn;
 
 const WELCOME_HTML = `
     <div class="welcome">
@@ -184,6 +184,7 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
     }
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    updateScrollBottomBtn();
 }
 
 async function sendMessage() {
@@ -295,6 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadingOverlay = document.getElementById('loadingOverlay');
     sidebar = document.getElementById('sidebar');
     sidebarToggle = document.getElementById('sidebarToggle');
+    scrollBottomBtn = document.getElementById('scrollBottomBtn');
     const savedSidebarState = localStorage.getItem('sidebar_collapsed');
     if (savedSidebarState === 'true' && sidebar) sidebar.classList.add('collapsed');
     setupEventListeners();
@@ -303,6 +305,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function showLoading() { if (loadingOverlay) loadingOverlay.classList.remove('hidden'); }
 function hideLoading() { if (loadingOverlay) loadingOverlay.classList.add('hidden'); }
+
+function updateScrollBottomBtn() {
+    if (!messagesDiv || !scrollBottomBtn) return;
+    const distanceFromBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
+    if (distanceFromBottom > 120) {
+        scrollBottomBtn.classList.remove('hidden');
+    } else {
+        scrollBottomBtn.classList.add('hidden');
+    }
+}
 
 function setupEventListeners() {
     document.getElementById('loginBtn')?.addEventListener('click', async () => { showLoading(); await doLogin(); hideLoading(); });
@@ -321,6 +333,12 @@ function setupEventListeners() {
     attachBtn?.addEventListener('click', () => fileInput?.click());
     fileInput?.addEventListener('change', onFileSelect);
     sidebarToggle?.addEventListener('click', toggleSidebar);
+
+    // Scroll-to-bottom button
+    scrollBottomBtn?.addEventListener('click', () => {
+        if (messagesDiv) messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
+    });
+    messagesDiv?.addEventListener('scroll', updateScrollBottomBtn);
     modeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             modeBtns.forEach(b => b.classList.remove('active'));
