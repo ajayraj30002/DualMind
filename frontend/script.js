@@ -7,7 +7,6 @@ let currentMode = 'hybrid';
 let pendingFile = null;
 let currentSessionDocuments = [];
 
-// DOM elements
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
 let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
 let modeBtns, loadingOverlay, sidebar, sidebarToggle;
@@ -16,59 +15,41 @@ const WELCOME_HTML = `
     <div class="welcome">
         <i class="fas fa-brain"></i>
         <h3>Ready when you are</h3>
-        <p>Ask from your PDFs, the web, or both. Use Hybrid for the best experience.</p>
+        <p>Ask from your PDFs, the web, or both. Hybrid mode gives you the best of both worlds.</p>
     </div>
 `;
 
-// ─────────────────────────────────────────────
-// CHECK IF RESPONSE NEEDS MARKDOWN FORMATTING
-// ─────────────────────────────────────────────
-
 function isCasualConversation(content) {
     if (!content) return false;
-    // If content has ANY markdown indicators, it's NOT casual — must be rendered
-    const hasMarkdown = content.includes('##') || content.includes('**') || 
+    const hasMarkdown = content.includes('##') || content.includes('**') ||
                         content.includes('```') || content.includes('- ') ||
-                        content.includes('1. ') || content.includes('> ');
+                        content.includes('1. ') || content.includes('> ') ||
+                        content.includes('* ') || /^#{1,4}\s/m.test(content);
     if (hasMarkdown) return false;
-    
+    if (content.length >= 200) return false;
     const casualPatterns = [
         /^(hey|hi|hello|yo|sup|hiya|good morning|good afternoon|good evening)/i,
         /^(thanks|thank you|great|cool|awesome|nice|bye|goodbye)/i,
         /^how are you/i,
-        /^(what's up|how's it going)/i,
-        /^(ok|okay|got it|understood)$/i,
-        /^(hmm|um|ah|oh)$/i
+        /^(ok|okay|got it|understood)$/i
     ];
-    // Only casual if short AND matches a greeting pattern
-    if (content.length < 150) {
-        return casualPatterns.some(pattern => pattern.test(content.toLowerCase().trim()));
-    }
-    return false;
+    return casualPatterns.some(pattern => pattern.test(content.toLowerCase().trim()));
 }
-
-// ─────────────────────────────────────────────
-// ADD COPY BUTTONS TO CODE BLOCKS
-// ─────────────────────────────────────────────
 
 function addCopyButtonsToCodeBlocks() {
     document.querySelectorAll('.md-body pre').forEach(pre => {
         if (pre.parentElement.classList.contains('code-wrapper')) return;
-        
         const code = pre.querySelector('code');
         if (!code) return;
-        
         const wrapper = document.createElement('div');
         wrapper.className = 'code-wrapper';
         pre.parentNode.insertBefore(wrapper, pre);
         wrapper.appendChild(pre);
-        
         const copyBtn = document.createElement('button');
         copyBtn.className = 'copy-btn';
         copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
         copyBtn.onclick = async () => {
-            const codeText = code.textContent || '';
-            await navigator.clipboard.writeText(codeText);
+            await navigator.clipboard.writeText(code.textContent || '');
             copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
             copyBtn.classList.add('copied');
             setTimeout(() => {
@@ -80,168 +61,25 @@ function addCopyButtonsToCodeBlocks() {
     });
 }
 
-// ─────────────────────────────────────────────
-// DETECT AND FIX MALFORMED CODE BLOCKS
-// Converts plain code into proper markdown code blocks
-// ─────────────────────────────────────────────
-
-function fixMalformedCodeBlocks(content) {
-    if (!content || typeof content !== 'string') return content;
-    
-    // Check if content already has proper markdown code blocks
-    if (content.includes('```')) return content;
-    
-    // Detect code patterns:
-    // Pattern 1: Has headers like "# Python" or "## Python" followed by code indentation
-    // Pattern 2: Has variable assignments, loops, functions with proper indentation
-    
-    const lines = content.split('\n');
-    let inCode = false;
-    let codeLines = [];
-    let normalLines = [];
-    let result = [];
-    let detectedLang = null;
-    
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmedLine = line.trim();
-        
-        // Detect language from header like "# Python" or "## JavaScript"
-        const langMatch = trimmedLine.match(/^#+\s*(python|javascript|js|java|cpp|c\+\+|go|rust|typescript|ts|html|css|sql|bash|shell)/i);
-        if (langMatch && !inCode) {
-            detectedLang = langMatch[1].toLowerCase();
-            if (detectedLang === 'js') detectedLang = 'javascript';
-            if (detectedLang === 'c++') detectedLang = 'cpp';
-            // Skip adding this header line - we'll replace with proper code block
-            continue;
-        }
-        
-        // Check if line looks like code
-        const isCodeLine = (
-            // Variable assignments
-            /^[a-zA-Z_][a-zA-Z0-9_]*\s*[=+\-*/]/.test(trimmedLine) ||
-            // Indented lines (4+ spaces or tab)
-            /^[ ]{4,}/.test(line) ||
-            /^\t+/.test(line) ||
-            // Keywords
-            /^(if|else|elif|for|while|def|function|class|import|from|return|break|continue|pass|try|except|finally|with|as|lambda|yield|raise|assert)/i.test(trimmedLine) ||
-            // Function definitions
-            /^def\s+\w+\s*\(/i.test(trimmedLine) ||
-            /^function\s+\w+\s*\(/i.test(trimmedLine) ||
-            // Print/console statements
-            /^(print|console\.log|echo|printf?|System\.out\.print)/i.test(trimmedLine) ||
-            // Type hints
-            /:\s*(int|str|float|bool|list|dict|tuple|set)/.test(trimmedLine) ||
-            // Code that starts with common patterns
-            /^[a-zA-Z_]\w*\s*=\s*int\(/.test(trimmedLine) ||
-            /^[a-zA-Z_]\w*\s*=\s*input\(/.test(trimmedLine) ||
-            // While loops
-            /^while\s+.+:\s*$/.test(trimmedLine)
-        );
-        
-        // Check if it's a comment
-        const isComment = trimmedLine.startsWith('#') || trimmedLine.startsWith('//') || trimmedLine.startsWith('<!--');
-        
-        if (isCodeLine || isComment) {
-            if (!inCode) {
-                inCode = true;
-                codeLines = [];
-                // Start new code block
-                codeLines.push(trimmedLine);
-            } else {
-                codeLines.push(trimmedLine);
-            }
-        } else {
-            if (inCode && codeLines.length > 0) {
-                // Close the code block
-                const lang = detectedLang || 'python';
-                result.push(`\`\`\`${lang}`);
-                result.push(codeLines.join('\n'));
-                result.push('```');
-                result.push(''); // Add empty line after code block
-                codeLines = [];
-                inCode = false;
-                detectedLang = null;
-            }
-            // Add normal line if not empty
-            if (trimmedLine !== '') {
-                result.push(line);
-            } else if (result.length > 0 && result[result.length - 1] !== '') {
-                result.push('');
-            }
-        }
-    }
-    
-    // Handle any remaining code at the end
-    if (inCode && codeLines.length > 0) {
-        const lang = detectedLang || 'python';
-        result.push(`\`\`\`${lang}`);
-        result.push(codeLines.join('\n'));
-        result.push('```');
-    }
-    
-    // If we detected and wrapped code, return the fixed content
-    const fixed = result.join('\n');
-    if (fixed !== content && fixed.includes('```')) {
-        console.log('✅ Fixed malformed code block');
-        return fixed;
-    }
-    
-    return content;
-}
-
-// ─────────────────────────────────────────────
-// CLEAN RESPONSE - PRESERVES CODE BLOCKS
-// ─────────────────────────────────────────────
-
 function cleanDualMindResponse(rawText) {
     if (!rawText || typeof rawText !== 'string') return '';
     
-    // Preserve code blocks before cleaning
     const codeBlocks = [];
-    let cleaned = rawText;
-    
-    // Extract ```code blocks```
-    cleaned = cleaned.replace(/```([\s\S]*?)```/g, (match) => {
+    let cleaned = rawText.replace(/```([\s\S]*?)```/g, (match) => {
         const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
         codeBlocks.push(match);
         return placeholder;
     });
     
-    // Extract inline `code` (but not triple backticks)
-    const inlineBlocks = [];
-    cleaned = cleaned.replace(/`([^`\n]+)`/g, (match) => {
-        const placeholder = `__INLINE_${inlineBlocks.length}__`;
-        inlineBlocks.push(match);
-        return placeholder;
-    });
-    
-    // Remove standalone numbers (chunk indices)
     cleaned = cleaned.replace(/^\d+\s*$/gm, '');
     cleaned = cleaned.replace(/^(\d+)\.\s*$/gm, '');
-    
-    // Remove internal source labels
     cleaned = cleaned.replace(/\[(Web Search|PDF Document|RAG|Hybrid)\]/gi, '');
-    
-    // Fix malformed headers — ensure space after # but don't strip them
     cleaned = cleaned.replace(/^##([^ #])/gm, '## $1');
     cleaned = cleaned.replace(/^#([^ #])/gm, '# $1');
-    
-    // Fix bullet points: only replace actual bullet chars (•), NOT * or -
     cleaned = cleaned.replace(/^•\s*/gm, '- ');
-    
-    // Clean up excessive newlines
     cleaned = cleaned.replace(/\n{4,}/g, '\n\n');
-    
-    // Fix [object Object]
     cleaned = cleaned.replace(/\[object Object\]/gi, '');
     
-    // Restore inline code
-    inlineBlocks.forEach((block, i) => {
-        cleaned = cleaned.replace(`__INLINE_${i}__`, block);
-    });
-    
-    // Restore code blocks
     codeBlocks.forEach((block, i) => {
         cleaned = cleaned.replace(`__CODEBLOCK_${i}__`, block);
     });
@@ -249,152 +87,93 @@ function cleanDualMindResponse(rawText) {
     return cleaned.trim();
 }
 
-// ─────────────────────────────────────────────
-// MARKDOWN RENDERER WITH HIGHLIGHT.JS
-// ─────────────────────────────────────────────
-
 function setupMarked() {
-    if (typeof marked === 'undefined') {
-        console.error('Marked library not loaded');
-        return;
-    }
-    
-    try {
-        if (marked.setOptions) {
-            marked.setOptions({
-                gfm: true,
-                breaks: true,
-                pedantic: false,
-                mangle: false,
-                headerIds: false,
-                highlight: function(code, lang) {
-                    if (lang && hljs.getLanguage(lang)) {
-                        try {
-                            return hljs.highlight(code, { language: lang }).value;
-                        } catch (e) {}
-                    }
-                    try {
-                        return hljs.highlightAuto(code).value;
-                    } catch (e) {}
+    if (typeof marked === 'undefined') return;
+    if (typeof markedHighlight !== 'undefined') {
+        marked.use(markedHighlight.markedHighlight({
+            langPrefix: 'hljs language-',
+            highlight(code, lang) {
+                const language = (lang && hljs.getLanguage(lang)) ? lang : 'plaintext';
+                try {
+                    return hljs.highlight(code, { language }).value;
+                } catch (e) {
                     return code;
                 }
-            });
-        }
-        console.log('✅ Markdown renderer configured');
-    } catch (e) {
-        console.error('Markdown setup error:', e);
+            }
+        }));
     }
+    marked.use({ gfm: true, breaks: true });
 }
 
 async function renderMarkdown(text) {
     if (!text) return '<div class="md-body"></div>';
     try {
-        if (typeof marked === 'undefined') {
+        if (typeof marked === 'undefined' || typeof marked.parse !== 'function') {
+            return `<div class="md-body">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`;
+        }
+        const html = marked.parse(text);
+        if (!html || typeof html !== 'string') {
             return `<div class="md-body">${text.replace(/\n/g, '<br>')}</div>`;
         }
-        let html;
-        try {
-            if (marked.parse && typeof marked.parse === 'function') {
-                const result = marked.parse(text);
-                html = (result && typeof result.then === 'function') ? await result : result;
-            } else if (typeof marked === 'function') {
-                html = marked(text);
-            } else {
-                html = text.replace(/\n/g, '<br>');
-            }
-        } catch (parseErr) {
-            console.error('Markdown parse error:', parseErr);
-            html = text.replace(/\n/g, '<br>');
-        }
-        if (!html || typeof html !== 'string') {
-            html = text.replace(/\n/g, '<br>');
-        }
         return `<div class="md-body">${html}</div>`;
-    } catch (e) {
-        console.error('renderMarkdown fatal error:', e);
-        return `<div class="md-body">${(text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>`;
+    } catch(e) {
+        console.error('renderMarkdown error:', e);
+        return `<div class="md-body">${(text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`;
     }
 }
-
-// ─────────────────────────────────────────────
-// SOURCE BADGE
-// ─────────────────────────────────────────────
 
 function buildSourceBadge(searchTypeUsed) {
     if (!searchTypeUsed || searchTypeUsed === 'Conversation') return '';
-
     let icon, label;
     const type = String(searchTypeUsed).toLowerCase();
-
     if (type.includes('pdf') || type.includes('document')) {
         icon = 'fa-file-pdf';
         label = '📄 PDF Document';
-    } else if (type.includes('web') || type.includes('open') || type.includes('fallback')) {
+    } else if (type.includes('web') || type.includes('open')) {
         icon = 'fa-globe';
         label = '🌐 Web Search';
-    } else if (type.includes('hybrid')) {
+    } else {
         icon = 'fa-link';
         label = '🔗 Hybrid Search';
-    } else {
-        icon = 'fa-database';
-        label = searchTypeUsed;
     }
-
     return `<div class="source-badge"><i class="fas ${icon}"></i> ${label}</div>`;
 }
 
-// ─────────────────────────────────────────────
-// ADD MESSAGE TO CHAT - WITH CODE FIXING
-// ─────────────────────────────────────────────
-
 async function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
     if (!messagesDiv) return;
-
-    const welcome = messagesDiv.querySelector('.welcome'); 
+    const welcome = messagesDiv.querySelector('.welcome');
     if (welcome && role === 'user') welcome.remove();
-
     const messageDiv = document.createElement('div');
-    
     let finalContent = content;
-    if (role === 'assistant') {
-        // First, fix any malformed code blocks
-        finalContent = fixMalformedCodeBlocks(content);
-        // Then clean the response
-        finalContent = cleanDualMindResponse(finalContent);
-    }
-    
+    if (role === 'assistant') finalContent = cleanDualMindResponse(content);
     messageDiv.className = `message ${role}`;
-
     let attachmentHTML = '';
     if (filename) {
         attachmentHTML = `<div class="message-doc-attachment"><i class="fas fa-file-pdf"></i> ${escapeHtml(filename)}</div>`;
     }
-
     if (role === 'user') {
-        const plainText = escapeHtml(finalContent).replace(/\n/g, '<br>');
         messageDiv.innerHTML = `
             <div class="message-avatar"><i class="fas fa-user"></i></div>
             <div class="message-content">
                 ${attachmentHTML}
-                <span>${plainText}</span>
+                <span>${escapeHtml(finalContent).replace(/\n/g, '<br>')}</span>
             </div>
         `;
     } else {
-        // Check if this is casual conversation
         const isCasual = isCasualConversation(finalContent);
         let renderedContent;
-        
         if (isCasual) {
             renderedContent = `<div class="md-body">${escapeHtml(finalContent).replace(/\n/g, '<br>')}</div>`;
         } else {
-            // Render markdown (this will handle code blocks with syntax highlighting)
             renderedContent = await renderMarkdown(finalContent);
-            setTimeout(() => addCopyButtonsToCodeBlocks(), 50);
+            setTimeout(() => {
+                addCopyButtonsToCodeBlocks();
+                document.querySelectorAll('.md-body pre code').forEach(block => {
+                    hljs.highlightElement(block);
+                });
+            }, 100);
         }
-        
-        const effectiveSource = searchTypeUsed || (currentMode === 'hybrid' ? 'Hybrid Search' : currentMode);
-        const sourceBadge = buildSourceBadge(effectiveSource);
-
+        const sourceBadge = buildSourceBadge(searchTypeUsed || currentMode);
         messageDiv.innerHTML = `
             <div class="message-avatar"><i class="fas fa-brain"></i></div>
             <div class="message-content">
@@ -403,30 +182,20 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
             </div>
         `;
     }
-
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-// ─────────────────────────────────────────────
-// SEND MESSAGE
-// ─────────────────────────────────────────────
-
 async function sendMessage() {
     const text = messageInput?.value.trim();
     if (!text || !currentSessionId) return;
-
     const hasFile = !!pendingFile;
     const uploadedFilename = hasFile ? pendingFile.name : null;
-
     messageInput.value = '';
     messageInput.style.height = 'auto';
-
     await addMessageToChat('user', text, uploadedFilename);
-
     const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
     if (messageCount === 1) await autoTitle(currentSessionId, text);
-
     if (hasFile) {
         try {
             showTyping();
@@ -436,74 +205,53 @@ async function sendMessage() {
             hideTyping();
         } catch (err) {
             hideTyping();
-            await addMessageToChat('assistant', `❌ Upload failed: ${err.message}. Please try again.`);
+            await addMessageToChat('assistant', `❌ Upload failed: ${err.message}`);
             return;
         }
     }
-
     showTyping();
     if (sendBtn) sendBtn.disabled = true;
-
     try {
         const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                question: text,
-                search_type: currentMode,
-                include_sources: true,
-                uploaded_document: uploadedFilename
-            })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ question: text, search_type: currentMode, include_sources: true, uploaded_document: uploadedFilename })
         });
-
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
         hideTyping();
-
         if (res.ok) {
             let finalAnswer = data.answer || data.response || data.content || '';
-            // Don't clean here — addMessageToChat already handles cleaning
-            const searchSource = data.search_type_used || (currentMode === 'hybrid' ? 'Hybrid Search' : currentMode);
+            const searchSource = data.search_type_used || currentMode;
             await addMessageToChat('assistant', finalAnswer, null, searchSource);
         } else {
-            await addMessageToChat('assistant', 'Sorry, something went wrong. Please try again.');
+            await addMessageToChat('assistant', 'Sorry, something went wrong.');
         }
     } catch (err) {
         hideTyping();
-        await addMessageToChat('assistant', 'Connection error. Please check your network.');
+        await addMessageToChat('assistant', 'Connection error.');
     } finally {
         if (sendBtn) sendBtn.disabled = false;
         messageInput?.focus();
     }
 }
 
-// ─────────────────────────────────────────────
-// LOAD SESSION MESSAGES
-// ─────────────────────────────────────────────
-
 async function loadSession(sessionId) {
     if (sessionId === currentSessionId) return;
     currentSessionId = sessionId;
-
     try {
         await loadSessionDocuments(sessionId);
-
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
-
         const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const sessionsData = await sessionsRes.json();
         const sessionInfo = sessionsData.sessions?.find(s => s.id === sessionId);
         if (sessionInfo) chatTitleSpan.innerText = sessionInfo.title;
-
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
                 messagesDiv.innerHTML = WELCOME_HTML;
@@ -511,24 +259,15 @@ async function loadSession(sessionId) {
                 messagesDiv.innerHTML = '';
                 for (const msg of data.messages) {
                     const searchType = msg.metadata?.search_type_used || null;
-                    let cleanMessageContent = msg.content || msg.answer || msg.response || '';
-                    if (msg.role === 'assistant') {
-                        cleanMessageContent = fixMalformedCodeBlocks(cleanMessageContent);
-                        cleanMessageContent = cleanDualMindResponse(cleanMessageContent);
-                    }
-                    await addMessageToChat(msg.role, cleanMessageContent, msg.metadata?.filename, searchType);
+                    const rawContent = msg.content || msg.answer || msg.response || '';
+                    await addMessageToChat(msg.role, rawContent, msg.metadata?.filename, searchType);
                 }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
         }
-
         await loadSessions();
     } catch (err) { console.error(err); }
 }
-
-// ─────────────────────────────────────────────
-// SIDEBAR TOGGLE
-// ─────────────────────────────────────────────
 
 function toggleSidebar() {
     if (sidebar) {
@@ -537,13 +276,8 @@ function toggleSidebar() {
     }
 }
 
-// ─────────────────────────────────────────────
-// INTERFACE INITIALIZATION
-// ─────────────────────────────────────────────
-
 document.addEventListener('DOMContentLoaded', () => {
     setupMarked();
-
     loginPage = document.getElementById('loginPage');
     chatPage = document.getElementById('chatPage');
     sessionListDiv = document.getElementById('sessionList');
@@ -561,12 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadingOverlay = document.getElementById('loadingOverlay');
     sidebar = document.getElementById('sidebar');
     sidebarToggle = document.getElementById('sidebarToggle');
-
     const savedSidebarState = localStorage.getItem('sidebar_collapsed');
-    if (savedSidebarState === 'true' && sidebar) {
-        sidebar.classList.add('collapsed');
-    }
-
+    if (savedSidebarState === 'true' && sidebar) sidebar.classList.add('collapsed');
     setupEventListeners();
     checkAuth();
 });
@@ -579,24 +309,18 @@ function setupEventListeners() {
     document.getElementById('registerBtn')?.addEventListener('click', async () => { showLoading(); await doRegister(); hideLoading(); });
     document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
     document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
-
     sendBtn?.addEventListener('click', sendMessage);
-    messageInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    });
-
+    messageInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
     messageInput?.addEventListener('input', () => {
         messageInput.style.height = 'auto';
         messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
     });
-
     newChatBtn?.addEventListener('click', createNewSession);
     renameBtn?.addEventListener('click', renameSession);
     logoutBtn?.addEventListener('click', async () => { showLoading(); doLogout(); hideLoading(); });
     attachBtn?.addEventListener('click', () => fileInput?.click());
     fileInput?.addEventListener('change', onFileSelect);
     sidebarToggle?.addEventListener('click', toggleSidebar);
-
     modeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             modeBtns.forEach(b => b.classList.remove('active'));
@@ -606,19 +330,13 @@ function setupEventListeners() {
     });
 }
 
-// ─────────────────────────────────────────────
-// AUTH MANAGEMENT
-// ─────────────────────────────────────────────
-
 async function doLogin() {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
     if (!email || !password) { alert('Enter email and password'); hideLoading(); return; }
-
     try {
         const res = await fetch(`${API_URL}/auth/signin`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
         const data = await res.json();
@@ -629,9 +347,7 @@ async function doLogin() {
             localStorage.setItem('dm_user', JSON.stringify(user));
             showChatUI();
             await loadSessions();
-        } else {
-            alert('Login failed: ' + (data.detail || 'Error'));
-        }
+        } else { alert('Login failed: ' + (data.detail || 'Error')); }
     } catch (err) { alert('Connection error'); }
 }
 
@@ -641,11 +357,9 @@ async function doRegister() {
     const password = document.getElementById('registerPassword').value;
     if (!email || !password) { alert('Fill all fields'); return; }
     if (password.length < 6) { alert('Password min 6 chars'); return; }
-
     try {
         const res = await fetch(`${API_URL}/auth/signup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, full_name: name })
         });
         if (res.ok) {
@@ -673,9 +387,7 @@ function checkAuth() {
         user = JSON.parse(savedUser);
         showChatUI();
         loadSessions();
-    } else {
-        showLoginUI();
-    }
+    } else { showLoginUI(); }
 }
 
 function showLoginUI() {
@@ -694,43 +406,60 @@ function toggleForms(showRegister) {
     document.getElementById('registerForm').classList.toggle('active', showRegister);
 }
 
-// ─────────────────────────────────────────────
-// CHAT SESSION MANAGEMENT
-// ─────────────────────────────────────────────
-
 async function loadSessions() {
     if (!sessionListDiv) return;
-    sessionListDiv.innerHTML = '<div class="loading-text">Loading...</div>';
-
+    sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666;">Loading...</div>';
     try {
-        const res = await fetch(`${API_URL}/chat/sessions`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_URL}/chat/sessions`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
-
         if (res.ok && data.sessions && data.sessions.length > 0) {
             renderSessionList(data.sessions);
-            if (!currentSessionId && data.sessions[0]) {
-                await loadSession(data.sessions[0].id);
-            }
+            if (!currentSessionId && data.sessions[0]) await loadSession(data.sessions[0].id);
         } else {
-            sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
+            sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666;">No conversations yet</div>';
             if (!currentSessionId) await createNewSession();
         }
     } catch (err) {
-        console.error(err);
-        sessionListDiv.innerHTML = '<div class="loading-text">Failed to load</div>';
+        sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666;">Failed to load</div>';
     }
+}
+
+async function renameSessionFromSidebar(sessionId, currentTitle) {
+    const newName = prompt('Rename conversation:', currentTitle);
+    if (!newName || newName === currentTitle) return;
+    try {
+        await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(newName)}`, {
+            method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (currentSessionId === sessionId) {
+            chatTitleSpan.innerText = newName;
+        }
+        await loadSessions();
+    } catch (err) { console.error(err); }
+}
+
+async function deleteSessionFromSidebar(sessionId) {
+    if (!confirm('Delete this conversation?')) return;
+    try {
+        await fetch(`${API_URL}/chat/sessions/${sessionId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        if (currentSessionId === sessionId) {
+            currentSessionId = null;
+            currentSessionDocuments = [];
+            const sessionsRes = await fetch(`${API_URL}/chat/sessions`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const sessionsData = await sessionsRes.json();
+            if (sessionsData.sessions && sessionsData.sessions.length > 0) {
+                await loadSession(sessionsData.sessions[0].id);
+            } else {
+                await createNewSession();
+            }
+        }
+        await loadSessions();
+    } catch (err) { console.error(err); }
 }
 
 function renderSessionList(sessions) {
     if (!sessionListDiv) return;
-    if (!sessions || sessions.length === 0) {
-        sessionListDiv.innerHTML = '<div class="loading-text">No conversations</div>';
-        return;
-    }
-
     sessionListDiv.innerHTML = '';
     for (const s of sessions) {
         const div = document.createElement('div');
@@ -738,14 +467,27 @@ function renderSessionList(sessions) {
         div.dataset.id = s.id;
         div.innerHTML = `
             <span class="session-title">${escapeHtml(s.title)}</span>
-            <button class="delete-session" data-id="${s.id}"><i class="fas fa-times"></i></button>
+            <div class="session-actions">
+                <button class="rename-session-btn" data-id="${s.id}" data-title="${escapeHtml(s.title)}" title="Rename">
+                    <i class="fas fa-pen"></i>
+                </button>
+                <button class="delete-session" data-id="${s.id}" title="Delete">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
         `;
         div.addEventListener('click', (e) => {
-            if (!e.target.closest('.delete-session')) loadSession(s.id);
+            if (!e.target.closest('.delete-session') && !e.target.closest('.rename-session-btn')) {
+                loadSession(s.id);
+            }
         });
         div.querySelector('.delete-session')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            deleteSession(s.id);
+            deleteSessionFromSidebar(s.id);
+        });
+        div.querySelector('.rename-session-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            renameSessionFromSidebar(s.id, s.title);
         });
         sessionListDiv.appendChild(div);
     }
@@ -754,8 +496,7 @@ function renderSessionList(sessions) {
 async function createNewSession() {
     try {
         const res = await fetch(`${API_URL}/chat/sessions`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
         });
         if (res.status === 401) { doLogout(); return; }
         const data = await res.json();
@@ -771,43 +512,9 @@ async function createNewSession() {
 
 async function loadSessionDocuments(sessionId) {
     try {
-        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/documents`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-            const data = await res.json();
-            currentSessionDocuments = data.documents || [];
-        }
-    } catch (err) {
-        console.error('Load session docs error:', err);
-        currentSessionDocuments = [];
-    }
-}
-
-async function deleteSession(sessionId) {
-    if (!confirm('Delete this conversation?')) return;
-
-    try {
-        await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (currentSessionId === sessionId) {
-            currentSessionId = null;
-            currentSessionDocuments = [];
-            const sessionsRes = await fetch(`${API_URL}/chat/sessions`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const sessionsData = await sessionsRes.json();
-            if (sessionsData.sessions && sessionsData.sessions.length > 0) {
-                await loadSession(sessionsData.sessions[0].id);
-            } else {
-                await createNewSession();
-            }
-        }
-        await loadSessions();
-    } catch (err) { console.error(err); }
+        const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/documents`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) { const data = await res.json(); currentSessionDocuments = data.documents || []; }
+    } catch (err) { currentSessionDocuments = []; }
 }
 
 function clearMessages() {
@@ -815,22 +522,13 @@ function clearMessages() {
     messagesDiv.innerHTML = WELCOME_HTML;
 }
 
-// ─────────────────────────────────────────────
-// TYPING ANIMATION
-// ─────────────────────────────────────────────
-
 function showTyping() {
     if (!messagesDiv) return;
     hideTyping();
     const typing = document.createElement('div');
     typing.className = 'message assistant';
     typing.id = 'typingIndicator';
-    typing.innerHTML = `
-        <div class="message-avatar"><i class="fas fa-brain"></i></div>
-        <div class="message-content">
-            <div class="typing-dots"><span></span><span></span><span></span></div>
-        </div>
-    `;
+    typing.innerHTML = `<div class="message-avatar"><i class="fas fa-brain"></i></div><div class="message-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
     messagesDiv.appendChild(typing);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
@@ -839,10 +537,6 @@ function hideTyping() {
     const el = document.getElementById('typingIndicator');
     if (el) el.remove();
 }
-
-// ─────────────────────────────────────────────
-// FILE HANDLING
-// ─────────────────────────────────────────────
 
 function onFileSelect(e) {
     const file = e.target.files[0];
@@ -857,31 +551,19 @@ function onFileSelect(e) {
 async function uploadFile(file, sessionId) {
     const fd = new FormData();
     fd.append('file', file);
-
     const res = await fetch(`${API_URL}/upload?session_id=${sessionId}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: fd
+        method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd
     });
-
     if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
-    if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.detail || 'Upload failed');
-    }
+    if (!res.ok) { const error = await res.json(); throw new Error(error.detail || 'Upload failed'); }
     return await res.json();
 }
-
-// ─────────────────────────────────────────────
-// UTILITIES
-// ─────────────────────────────────────────────
 
 async function autoTitle(sessionId, firstMsg) {
     const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
     try {
         await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
+            method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
         });
         chatTitleSpan.innerText = short;
         await loadSessions();
@@ -891,11 +573,9 @@ async function autoTitle(sessionId, firstMsg) {
 async function renameSession() {
     const newName = prompt('Rename conversation:', chatTitleSpan?.innerText);
     if (!newName || newName === chatTitleSpan?.innerText || !currentSessionId) return;
-
     try {
         await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
+            method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
         });
         chatTitleSpan.innerText = newName;
         await loadSessions();
@@ -904,10 +584,5 @@ async function renameSession() {
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
