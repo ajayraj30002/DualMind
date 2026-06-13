@@ -32,45 +32,91 @@
 
 ```mermaid
 flowchart TB
-    subgraph CLIENT["🖥️ Client Layer"]
-        FRONTEND["Frontend (Vercel)<br/>HTML/CSS/JS + Marked + hljs"]
+    subgraph CLIENT["🖥️ CLIENT LAYER"]
+        UI["Frontend<br/>HTML/CSS/JS + Marked + hljs"]
     end
 
-    subgraph BACKEND["⚙️ Backend Layer (Render/Docker)"]
-        API["FastAPI Server<br/>Auth | Chat | Upload | Documents"]
-        
-        subgraph INTELLIGENCE["🧠 Intelligence Layer"]
-            ROUTER["Agentic Router (Groq)<br/>Intent + Mode + Rewrite"]
-            GENERATE["Answer Generator (Groq)<br/>RAG | Summary | Code"]
-        end
-        
-        subgraph RETRIEVAL["🔍 Retrieval Layer"]
-            PDF["PDF Search<br/>Semantic + Keyword"]
-            WEB["Web Search<br/>Tavily API"]
-            RERANK["Cohere Rerank"]
-        end
+    subgraph API["🚪 API GATEWAY"]
+        FAST["FastAPI Server<br/>Auth | Chat | Upload"]
+        AUTH["JWT + bcrypt"]
     end
 
-    subgraph DATA["💾 Data Layer"]
-        SUPABASE[(Supabase<br/>Postgres<br/>Users/Sessions/Messages)]
-        VECTOR[(Vector Store<br/>MiniLM-L3-v2<br/>Embeddings)]
+    subgraph CORE["⚙️ CORE ORCHESTRATION"]
+        ROUTER["Agentic Router (Groq)<br/>Intent + Mode + Rewrite"]
+        GENERATOR["Answer Generator (Groq)"]
     end
 
-    FRONTEND -->|HTTP Request| API
-    API --> ROUTER
-    ROUTER -->|Retrieval Mode| RETRIEVAL
-    ROUTER -->|Intent| GENERATE
-    
-    PDF --> RERANK
-    WEB --> RERANK
-    RERANK -->|Top K Sources| GENERATE
-    
-    GENERATE -->|Final Answer| API
-    API -->|JSON Response| FRONTEND
-    
-    PDF -.->|Query| VECTOR
-    API -.->|CRUD| SUPABASE
+    subgraph RETRIEVAL["🔍 RETRIEVAL LAYER"]
+        PDF["PDF Search"]
+        SEMANTIC["Semantic (pgvector)"]
+        KEYWORD["Keyword (BM25)"]
+        WEB["Web Search (Tavily)"]
+        RERANK["Cohere Rerank"]
+    end
 
+    subgraph DATA["💾 DATA LAYER"]
+        SUPABASE["Supabase pgvector<br/>Embeddings + Chunks"]
+        VECTOR["MiniLM-L3-v2<br/>Local Embeddings"]
+    end
+
+    subgraph EXTERNAL["☁️ EXTERNAL SERVICES"]
+        GROQ["Groq API<br/>Llama 3.3 70B"]
+        TAVILY["Tavily API"]
+        COHERE["Cohere API"]
+    end
+
+    subgraph DEPLOY["🚀 DEPLOYMENT"]
+        GHA["GitHub Actions"]
+        DOCKER["Docker Hub"]
+        RENDER["Render"]
+        VERCEL["Vercel"]
+    end
+
+    %% USER FLOW (left to right)
+    UI -->|1. POST /messages| FAST
+    FAST -->|2. Forward question| ROUTER
+    ROUTER -->|3. Groq call| GROQ
+    GROQ -->|4. intent + mode + query| ROUTER
+    ROUTER -->|5. rewritten query| PDF
+    ROUTER -->|5. rewritten query| WEB
+    
+    %% PDF RETRIEVAL FLOW
+    PDF -->|semantic search| SEMANTIC
+    PDF -->|keyword search| KEYWORD
+    SEMANTIC -->|query embedding| VECTOR
+    VECTOR -->|similarity search| SUPABASE
+    SUPABASE -->|chunks + scores| SEMANTIC
+    KEYWORD -->|fetch chunks| SUPABASE
+    
+    %% COMBINE RESULTS
+    SEMANTIC -->|chunks| RERANK
+    KEYWORD -->|chunks| RERANK
+    WEB -->|search| TAVILY
+    TAVILY -->|results| WEB
+    WEB -->|chunks| RERANK
+    RERANK -->|call| COHERE
+    COHERE -->|scores| RERANK
+    
+    %% FINAL ANSWER
+    RERANK -->|top sources| GENERATOR
+    GENERATOR -->|call| GROQ
+    GROQ -->|answer| GENERATOR
+    GENERATOR -->|response| FAST
+    FAST -->|6. answer + sources| UI
+    
+    %% DEPLOYMENT FLOW
+    GHA -->|build & push| DOCKER
+    DOCKER -->|pull| RENDER
+    UI -->|deploy| VERCEL
+
+    %% Styling
+    style CLIENT fill:#667eea,stroke:#5a67d8,stroke-width:2px,color:#fff
+    style API fill:#48bb78,stroke:#38a169,stroke-width:2px,color:#fff
+    style CORE fill:#ed8936,stroke:#dd6b20,stroke-width:2px,color:#fff
+    style RETRIEVAL fill:#4299e1,stroke:#3182ce,stroke-width:2px,color:#fff
+    style DATA fill:#9f7aea,stroke:#805ad5,stroke-width:2px,color:#fff
+    style EXTERNAL fill:#fc8181,stroke:#f56565,stroke-width:2px,color:#fff
+    style DEPLOY fill:#a0aec0,stroke:#718096,stroke-width:2px,color:#fff
 ```
 
 ## 🧩 Tech Stack
