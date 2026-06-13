@@ -48,9 +48,6 @@
             <i class="fas fa-chevron-left"></i>
         </button>
         <div class="sidebar-header">
-            <div class="logo-area">
-                <i class="fas fa-brain"></i>
-            </div>
             <button id="newChatBtn" class="new-chat-btn">
                 <i class="fas fa-plus"></i>
                 <span>New chat</span>
@@ -70,16 +67,11 @@
     <div class="main-chat">
         <div class="chat-header">
             <div class="title-area">
-                <i class="fas fa-brain"></i>
-                <h3 id="chatTitle">DualMind</h3>
+                <h3 id="chatTitle">New conversation</h3>
             </div>
-            <div class="search-modes">
-                <button class="mode-btn active" data-mode="hybrid">
-                    <i class="fas fa-link"></i> Hybrid
-                </button>
-                <button class="mode-btn" data-mode="open">
-                    <i class="fas fa-globe"></i> Web
-                </button>
+            <div class="logo-header">
+                <i class="fas fa-brain"></i>
+                <span>DualMind</span>
             </div>
         </div>
         <div id="messagesContainer" class="messages-container">
@@ -90,21 +82,31 @@
             </div>
         </div>
         <div class="input-section">
-            <div class="attach-row">
-                <button id="attachPdfBtn" class="attach-btn">
-                    <i class="fas fa-paperclip"></i> Attach PDF
-                </button>
-                <input type="file" id="pdfFileInput" accept=".pdf" hidden>
-                <div id="fileBadge" class="file-badge hidden"></div>
-            </div>
-            <div class="input-row">
-                <textarea id="messageInput" placeholder="Ask a question..." rows="1"></textarea>
-                <button id="sendMsgBtn" class="send-btn">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-            </div>
-            <div class="input-hint">
-                <i class="fas fa-info-circle"></i> Hybrid = PDF context + web search | Press Enter to send
+            <div class="input-controls">
+                <div class="attach-row">
+                    <button id="attachPdfBtn" class="attach-btn">
+                        <i class="fas fa-paperclip"></i> Attach PDF
+                    </button>
+                    <input type="file" id="pdfFileInput" accept=".pdf" hidden>
+                    <div id="fileBadge" class="file-badge hidden"></div>
+                    <div class="search-modes">
+                        <button class="mode-btn active" data-mode="hybrid">
+                            <i class="fas fa-link"></i> Hybrid
+                        </button>
+                        <button class="mode-btn" data-mode="open">
+                            <i class="fas fa-globe"></i> Web
+                        </button>
+                    </div>
+                </div>
+                <div class="input-row">
+                    <textarea id="messageInput" placeholder="Ask a question..." rows="1"></textarea>
+                    <button id="sendMsgBtn" class="send-btn">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div class="input-hint">
+                    <i class="fas fa-info-circle"></i> Hybrid = PDF context + web search | Press Enter to send
+                </div>
             </div>
         </div>
     </div>
