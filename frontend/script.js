@@ -309,7 +309,7 @@ function hideLoading() { if (loadingOverlay) loadingOverlay.classList.add('hidde
 function updateScrollBottomBtn() {
     if (!messagesDiv || !scrollBottomBtn) return;
     const distanceFromBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
-    if (distanceFromBottom > 120) {
+    if (distanceFromBottom > 200) {
         scrollBottomBtn.classList.remove('hidden');
     } else {
         scrollBottomBtn.classList.add('hidden');
