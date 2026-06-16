@@ -23,8 +23,14 @@ class Config:
     UPLOAD_DIR = "uploads"
     
     # Model settings
-    EMBEDDING_MODEL = "embed-english-v3.0"  # Cohere V1 embedding model
+    EMBEDDING_MODEL = "embed-english-v3.0"
     LLM_MODEL = "llama-3.3-70b-versatile"
     
     # CORS
-    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS").split(",")
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+    
+    # SMTP Configuration (for email verification)
+    SMTP_EMAIL = os.getenv("SMTP_EMAIL")
+    SMTP_APP_PASSWORD = os.getenv("SMTP_APP_PASSWORD")
+    SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
