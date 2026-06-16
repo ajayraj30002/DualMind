@@ -6,6 +6,7 @@ let currentSessionId = null;
 let currentMode = 'hybrid';
 let pendingFile = null;
 let currentSessionDocuments = [];
+let pendingSignupEmail = null;
 
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
 let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
@@ -333,12 +334,19 @@ function setupEventListeners() {
     attachBtn?.addEventListener('click', () => fileInput?.click());
     fileInput?.addEventListener('change', onFileSelect);
     sidebarToggle?.addEventListener('click', toggleSidebar);
-
-    // Scroll-to-bottom button
     scrollBottomBtn?.addEventListener('click', () => {
         if (messagesDiv) messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
     });
     messagesDiv?.addEventListener('scroll', updateScrollBottomBtn);
+    
+    // OTP Event Listeners
+    document.getElementById('verifyOtpBtn')?.addEventListener('click', verifyOtp);
+    document.getElementById('resendOtpBtn')?.addEventListener('click', resendOtp);
+    document.getElementById('backToSignin')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        hideOtpForm();
+    });
+    
     modeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             modeBtns.forEach(b => b.classList.remove('active'));
@@ -375,24 +383,32 @@ async function doRegister() {
     const password = document.getElementById('registerPassword').value;
     if (!email || !password) { alert('Fill all fields'); return; }
     if (password.length < 6) { alert('Password min 6 chars'); return; }
+    showLoading();
     try {
         const res = await fetch(`${API_URL}/auth/signup`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, full_name: name })
         });
+        const data = await res.json();
+        hideLoading();
         if (res.ok) {
-            alert('Signup successful! Please login.');
-            toggleForms(false);
-            document.getElementById('loginEmail').value = email;
+            pendingSignupEmail = email;
+            showOtpForm(email);
         } else {
-            const data = await res.json();
             alert('Signup failed: ' + (data.detail || 'Error'));
         }
-    } catch (err) { alert('Connection error'); }
+    } catch (err) {
+        hideLoading();
+        alert('Connection error');
+    }
 }
 
 function doLogout() {
-    token = null; user = null; currentSessionId = null; currentSessionDocuments = [];
+    token = null;
+    user = null;
+    currentSessionId = null;
+    currentSessionDocuments = [];
+    pendingSignupEmail = null;
     localStorage.clear();
     showLoginUI();
 }
@@ -422,6 +438,73 @@ function showChatUI() {
 function toggleForms(showRegister) {
     document.getElementById('loginForm').classList.toggle('active', !showRegister);
     document.getElementById('registerForm').classList.toggle('active', showRegister);
+}
+
+function showOtpForm(email) {
+    document.getElementById('registerForm').classList.remove('active');
+    document.getElementById('loginForm').classList.remove('active');
+    document.getElementById('otpForm').classList.add('active');
+    document.getElementById('otpEmailDisplay').textContent = email;
+    document.getElementById('otpInput').value = '';
+    document.getElementById('otpInput').focus();
+}
+
+function hideOtpForm() {
+    document.getElementById('otpForm').classList.remove('active');
+    document.getElementById('loginForm').classList.add('active');
+}
+
+async function verifyOtp() {
+    const otp = document.getElementById('otpInput').value.trim();
+    if (!otp || otp.length !== 6) {
+        alert('Please enter the 6-digit OTP');
+        return;
+    }
+    showLoading();
+    try {
+        const res = await fetch(`${API_URL}/auth/verify-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: pendingSignupEmail, otp: otp })
+        });
+        const data = await res.json();
+        hideLoading();
+        if (res.ok) {
+            token = data.access_token;
+            user = { id: data.user_id, email: data.email };
+            localStorage.setItem('dm_token', token);
+            localStorage.setItem('dm_user', JSON.stringify(user));
+            showChatUI();
+            await loadSessions();
+        } else {
+            alert('Verification failed: ' + (data.detail || 'Invalid OTP'));
+        }
+    } catch (err) {
+        hideLoading();
+        alert('Connection error');
+    }
+}
+
+async function resendOtp() {
+    if (!pendingSignupEmail) return;
+    showLoading();
+    try {
+        const res = await fetch(`${API_URL}/auth/resend-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: pendingSignupEmail })
+        });
+        hideLoading();
+        if (res.ok) {
+            alert('OTP resent successfully. Check your email.');
+        } else {
+            const data = await res.json();
+            alert('Failed to resend: ' + (data.detail || 'Error'));
+        }
+    } catch (err) {
+        hideLoading();
+        alert('Connection error');
+    }
 }
 
 async function loadSessions() {
