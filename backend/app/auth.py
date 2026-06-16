@@ -138,6 +138,7 @@ If you didn't request this, please ignore this email.
 def store_otp(email: str, otp: str, full_name: str, hashed_password: str) -> bool:
     """Store OTP in Supabase"""
     try:
+        # Delete any existing OTP for this email
         supabase.table("otp_verifications").delete().eq("email", email).execute()
         
         expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
@@ -190,3 +191,41 @@ def get_otp_record(email: str) -> dict:
     except Exception as e:
         print(f"Get OTP record error: {e}")
         return None
+
+
+def create_user_from_otp(email: str) -> dict:
+    """Create a verified user from OTP record"""
+    try:
+        # Get OTP record
+        record = get_otp_record(email)
+        if not record:
+            return None
+        
+        # Create user
+        response = supabase.table("users").insert({
+            "email": email,
+            "hashed_password": record["hashed_password"],
+            "full_name": record["full_name"],
+            "is_verified": True,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+        
+        if response.data:
+            # Delete OTP record after successful user creation
+            supabase.table("otp_verifications").delete().eq("email", email).execute()
+            return response.data[0]
+        
+        return None
+    except Exception as e:
+        print(f"Create user from OTP error: {e}")
+        return None
+
+
+def delete_otp_record(email: str) -> bool:
+    """Delete OTP record for email"""
+    try:
+        supabase.table("otp_verifications").delete().eq("email", email).execute()
+        return True
+    except Exception as e:
+        print(f"Delete OTP error: {e}")
+        return False
