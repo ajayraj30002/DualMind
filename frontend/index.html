@@ -21,6 +21,7 @@
     </div>
 </div>
 
+<!-- LOGIN PAGE -->
 <div id="loginPage" class="login-page">
     <div class="login-card">
         <div class="login-icon"><i class="fas fa-brain"></i></div>
@@ -29,6 +30,7 @@
         
         <!-- Login Form -->
         <div id="loginForm" class="login-form active">
+            <div id="loginError" class="form-error hidden"></div>
             <input type="email" id="loginEmail" placeholder="Email" class="login-input">
             <input type="password" id="loginPassword" placeholder="Password" class="login-input">
             <button id="loginBtn" class="login-btn">Sign In</button>
@@ -37,6 +39,8 @@
         
         <!-- Register Form -->
         <div id="registerForm" class="login-form">
+            <div id="registerError" class="form-error hidden"></div>
+            <div id="registerSuccess" class="form-success hidden"></div>
             <input type="text" id="registerName" placeholder="Full name" class="login-input">
             <input type="email" id="registerEmail" placeholder="Email" class="login-input">
             <input type="password" id="registerPassword" placeholder="Password (min 6)" class="login-input">
@@ -46,23 +50,26 @@
         
         <!-- OTP Verification Form -->
         <div id="otpForm" class="login-form">
-            <h3>Verify Your Email</h3>
-            <p style="color: #888; font-size: 0.85rem; margin-bottom: 1.5rem;">
-                We've sent a 6-digit code to <strong id="otpEmailDisplay"></strong>
-            </p>
-            <input type="text" id="otpInput" placeholder="Enter 6-digit OTP" maxlength="6" class="login-input" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*">
-            <button id="verifyOtpBtn" class="login-btn">Verify & Sign In</button>
-            <div style="margin-top: 1rem; text-align: center;">
-                <span style="color: #666; font-size: 0.8rem;">Didn't get the code?</span>
-                <a href="#" id="resendOtpBtn" style="color: #f97316; font-size: 0.8rem; text-decoration: none;">Resend</a>
+            <div class="login-icon" style="margin-bottom: 0.5rem;"><i class="fas fa-envelope" style="font-size: 2.5rem;"></i></div>
+            <h2 style="font-size: 1.2rem; margin-bottom: 0.25rem; color: #fff;">Verify Your Email</h2>
+            <p style="color: #888; font-size: 0.8rem; margin-bottom: 1rem;">We sent a 6-digit code to <span id="otpEmailDisplay" style="color: #f97316;"></span></p>
+            <div id="otpError" class="form-error hidden"></div>
+            <div id="otpSuccess" class="form-success hidden"></div>
+            <div class="otp-input-container">
+                <input type="text" id="otpInput" class="login-input" placeholder="Enter 6-digit code" maxlength="6" style="text-align: center; font-size: 1.5rem; letter-spacing: 4px;">
             </div>
-            <p style="margin-top: 1.5rem; color: #666; font-size: 0.8rem;">
-                <a href="#" id="backToSignin" style="color: #f97316; text-decoration: none;">Back to Sign In</a>
+            <button id="verifyOtpBtn" class="login-btn">Verify Email</button>
+            <p class="login-switch" style="margin-top: 0.75rem;">
+                Didn't receive code? <a href="#" id="resendOtpBtn">Resend OTP</a>
+            </p>
+            <p class="login-switch" style="margin-top: 0.5rem;">
+                <a href="#" id="backToLoginBtn" style="color: #666; font-size: 0.75rem;">← Back to sign in</a>
             </p>
         </div>
     </div>
 </div>
 
+<!-- CHAT PAGE -->
 <div id="chatPage" class="chat-page hidden">
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
@@ -93,7 +100,6 @@
     
     <!-- Main Chat Area -->
     <div class="main-chat">
-        <!-- Header -->
         <div class="chat-header">
             <div class="title-area">
                 <h3 id="chatTitle">New conversation</h3>
@@ -104,7 +110,6 @@
             </div>
         </div>
         
-        <!-- Messages Container -->
         <div id="messagesContainer" class="messages-container">
             <div class="welcome">
                 <i class="fas fa-brain"></i>
@@ -113,7 +118,6 @@
             </div>
         </div>
 
-        <!-- Input Area -->
         <div class="input-area">
             <button id="scrollBottomBtn" class="scroll-bottom-btn hidden" title="Scroll to bottom">
                 <i class="fas fa-arrow-down"></i>
