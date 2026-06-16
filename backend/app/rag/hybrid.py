@@ -27,24 +27,6 @@ from ..config import Config
 
 groq_client = Groq(api_key=Config.GROQ_API_KEY)
 
-# ─────────────────────────────────────────────
-# MARKDOWN POST-PROCESSOR
-# ─────────────────────────────────────────────
-
-def fix_markdown_formatting(text):
-    """Fix LLM markdown: ## headers mid-sentence, excess blank lines."""
-    if not text:
-        return text
-    import re as _re
-    # Ensure ## / ### headers always start on a new line
-    # e.g. "sentence.## Header" becomes "sentence.\n\n## Header"
-    text = _re.sub(r'([^\n])(#{2,4} )', r'\1\n\n\2', text)
-    # Ensure blank line before every ## header (single newline -> double)
-    text = _re.sub(r'\n(#{2,4} )', r'\n\n\1', text)
-    # Collapse 4+ newlines to 2
-    text = _re.sub(r'\n{4,}', '\n\n', text)
-    return text.strip()
-
 MAX_RERANK_CANDIDATES = int(os.getenv("MAX_RERANK_CANDIDATES", "10"))
 MAX_RERANK_DOC_CHARS  = int(os.getenv("MAX_RERANK_DOC_CHARS",  "1200"))
 MIN_RELEVANCE_SCORE   = float(os.getenv("MIN_RELEVANCE_SCORE",  "0.2"))
@@ -58,7 +40,7 @@ MIN_USEFUL_PDF_SCORE  = float(os.getenv("MIN_USEFUL_PDF_SCORE", "0.3"))
 VALID_INTENTS = {
     "FACTUAL_LOOKUP", "SUMMARIZE", "GENERATE_NOTES",
     "COMPARE", "WEB_SEARCH", "CASUAL_CHAT", "CONVERSATION_RECALL",
-    "CODE_REQUEST", "META_QUESTION",
+    "CODE_REQUEST", "META_QUESTION", "FACTUAL_LOOKUP_WEB_FALLBACK",
 }
 VALID_RETRIEVAL_MODES = {"rag", "full_document", "web", "none"}
 
@@ -107,9 +89,9 @@ CLASSIFY into exactly one intent:
                       "what type of files", "how do I use this", "what is this app"
 
 CHOOSE retrieval_mode:
-- "rag"           : FACTUAL_LOOKUP, COMPARE, CODE_REQUEST (when file attached)
-- "full_document" : SUMMARIZE, GENERATE_NOTES
-- "web"           : WEB_SEARCH
+- "rag"           : FACTUAL_LOOKUP or COMPARE when a file IS attached
+- "full_document" : SUMMARIZE, GENERATE_NOTES (file attached)
+- "web"           : WEB_SEARCH, or FACTUAL_LOOKUP when NO file is attached and question is about general knowledge/people/facts
 - "none"          : CASUAL_CHAT, CONVERSATION_RECALL, CODE_REQUEST (no file), META_QUESTION
 
 REWRITE the query for retrieval:
@@ -172,6 +154,10 @@ JSON format:
         if intent == "CODE_REQUEST" and not filename:
             retrieval_mode = "none"
 
+        # Safety: FACTUAL_LOOKUP with no file → web (not none, not rag)
+        if intent == "FACTUAL_LOOKUP" and not filename and retrieval_mode in ("none", "rag"):
+            retrieval_mode = "web"
+
         print(f"🧠 Router → intent:{intent} | mode:{retrieval_mode} | query:{rewritten_query[:60]}")
         return {"intent": intent, "retrieval_mode": retrieval_mode, "rewritten_query": rewritten_query}
 
@@ -224,7 +210,9 @@ def _fallback_route(question: str, filename: Optional[str], search_type: str) ->
 
     words = re.findall(r'\b[a-zA-Z0-9]+\b', q)
     short = " ".join(words[:10]) if len(words) > 10 else " ".join(words)
-    return {"intent": "FACTUAL_LOOKUP", "retrieval_mode": "rag", "rewritten_query": short}
+    # No file attached → general knowledge question → use web
+    mode = "rag" if filename else "web"
+    return {"intent": "FACTUAL_LOOKUP", "retrieval_mode": mode, "rewritten_query": short}
 
 
 # ─────────────────────────────────────────────
@@ -377,7 +365,7 @@ Answer:"""
             temperature=0.4,
             max_tokens=1400,
         )
-        return fix_markdown_formatting(completion.choices[0].message.content.strip())
+        return completion.choices[0].message.content.strip()
     except Exception as e:
         print(f"Conversational answer error: {e}")
         return "I had trouble with that. Please try again."
@@ -460,7 +448,7 @@ Answer:"""
             temperature=0.3,
             max_tokens=1400,
         )
-        return fix_markdown_formatting(completion.choices[0].message.content.strip())
+        return completion.choices[0].message.content.strip()
     except Exception as e:
         print(f"Full document answer error: {e}")
         return "I had trouble processing the document. Please try again."
@@ -488,7 +476,7 @@ No relevant sources were found. Answer from your general knowledge if you can.
 Be honest — if you are not certain, say so clearly. Do not hallucinate.
 If this is a follow-up question, use the conversation context above.
 
-Answer in plain text. Do not use markdown formatting.
+FORMATTING: Use ## headers and - bullets if the answer has multiple sections.
 
 Answer:"""
     else:
@@ -513,31 +501,7 @@ Answer:"""
 
         doc_context = "\n\n---\n\n".join(context_parts)
 
-        # FOR FACTUAL_LOOKUP - PLAIN TEXT, NO MARKDOWN
-        if intent == "FACTUAL_LOOKUP":
-            prompt = f"""{context_section}Document content:
-
-{doc_context}
-
-User asked: "{question}"
-
-INSTRUCTIONS:
-1. Answer using ONLY the document content above
-2. Be precise and complete — extract all relevant details
-3. Resolve pronouns using conversation context if this is a follow-up
-4. Do NOT fabricate — if the document doesn't contain the answer, say so clearly
-5. Do not mention "chunk", "PDF Document", or internal labels
-
-CRITICAL FORMATTING RULES:
-- Write in PLAIN TEXT only - NO markdown formatting
-- Do NOT use ## headers, **bold**, or any markdown syntax
-- Use simple paragraphs and line breaks
-- Use - dashes for lists if needed, but no other formatting
-- Keep it clean and readable like normal text
-
-Answer:"""
-        
-        elif intent == "CODE_REQUEST":
+        if intent == "CODE_REQUEST":
             prompt = f"""{context_section}Relevant context from document(s):
 
 {doc_context}
@@ -558,28 +522,8 @@ FORMATTING:
 
 Answer:"""
 
-        elif intent == "COMPARE":
-            prompt = f"""{context_section}Document content:
-
-{doc_context}
-
-User asked: "{question}"
-
-INSTRUCTIONS:
-1. Compare the items based ONLY on document content
-2. Be specific about similarities and differences
-3. Do NOT fabricate
-
-FORMATTING RULES:
-- Write in PLAIN TEXT only - NO markdown headers
-- Use - dashes for listing differences
-- Keep it simple and readable
-
-Answer:"""
-
         elif pdf_sources and not web_sources:
-            # General PDF query - plain text for factual answers
-            prompt = f"""{context_section}Document content:
+            prompt = f"""{context_section}FROM DOCUMENT:
 
 {doc_context}
 
@@ -588,18 +532,42 @@ User asked: "{question}"
 INSTRUCTIONS:
 1. Answer using ONLY the document content above
 2. Be precise and complete — extract all relevant details
-3. Do NOT fabricate — if the document doesn't contain the answer, say so clearly
+3. Resolve pronouns using conversation context if this is a follow-up
+4. Do NOT fabricate — if the document doesn't contain the answer, say so clearly
+5. Do not mention "chunk", "PDF Document", or internal labels
 
-CRITICAL FORMATTING RULES:
-- Write in PLAIN TEXT only - NO markdown formatting
-- Do NOT use ## headers, **bold**, or any markdown syntax
-- Use simple paragraphs and line breaks
-- Use - dashes for lists if needed
-- Keep it clean and readable
+FORMATTING:
+- ## headers for major sections
+- - bullets for key points
+- **bold** for important terms
+- Numbered lists for sequences or steps
+- Blank lines between sections
+- NEVER use single # for headings — always use ## or ### minimum
 
 Answer:"""
+
+        elif intent == "FACTUAL_LOOKUP_WEB_FALLBACK":
+            # PDF had no relevant info — fell back to web — tell user clearly
+            prompt = f"""{context_section}{doc_context}
+
+User asked: "{question}"
+
+INSTRUCTIONS:
+1. Start your answer with this exact prefix on its own line:
+   "I couldn't find anything about this in your uploaded document(s). Here's what I found from the web:"
+2. Then answer the question fully using the web sources above
+3. Be accurate — only state what the web sources say
+4. Do NOT fabricate anything not in the sources
+
+FORMATTING:
+- ## headers for major sections
+- - bullets for key points
+- **bold** for important names/terms
+- NEVER use single # for headings
+
+Answer:"""
+
         else:
-            # Web search (with or without PDF)
             prompt = f"""{context_section}{doc_context}
 
 User asked: "{question}"
@@ -612,9 +580,12 @@ INSTRUCTIONS:
 5. Do not mention source labels in the answer
 
 FORMATTING:
-- Write in clear paragraphs
-- Use - dashes for lists if needed
-- Keep formatting minimal and readable
+- ## headers to separate major topics
+- - bullets for lists and key facts
+- Keep paragraphs short (2-3 sentences)
+- **bold** for important terms or names
+- Blank lines between sections
+- NEVER use single # for headings — always use ## or ### minimum
 
 Answer:"""
 
@@ -625,12 +596,12 @@ Answer:"""
                 {
                     "role": "system",
                     "content": (
-                        "You are a precise AI assistant that answers questions using provided sources. "
-                        "CRITICAL: For factual questions from documents, respond in PLAIN TEXT with NO markdown formatting. "
-                        "Do NOT use ## headers, **bold**, or any markdown syntax unless explicitly asked for code. "
-                        "Write in clean, natural paragraphs. Use simple - dashes for lists if needed. "
-                        "You NEVER hallucinate — only state what the sources say. "
-                        "If the document doesn't have the answer, say 'I don't have that information in the document.'"
+                        "You are a precise, intelligent AI assistant. "
+                        "You answer questions accurately using provided sources. "
+                        "You NEVER hallucinate or invent facts — if unsure, say so. "
+                        "You format responses in clean markdown with ## headers and - bullets. "
+                        "For code, you write correct, commented code with a brief algorithm. "
+                        "You handle follow-up questions by using conversation context."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -638,19 +609,7 @@ Answer:"""
             temperature=0.35,
             max_tokens=1400,
         )
-        answer = completion.choices[0].message.content.strip()
-        
-        # Post-process to remove any markdown that might have slipped through
-        import re
-        # Remove markdown headers
-        answer = re.sub(r'^#{1,3}\s+', '', answer, flags=re.MULTILINE)
-        # Remove bold markers
-        answer = re.sub(r'\*\*(.*?)\*\*', r'\1', answer)
-        # Remove italic markers
-        answer = re.sub(r'\*(.*?)\*', r'\1', answer)
-        
-        return fix_markdown_formatting(answer)
-        
+        return completion.choices[0].message.content.strip()
     except Exception as e:
         print(f"Generate answer error: {e}")
         return "I had trouble processing your request. Please try again."
@@ -846,11 +805,15 @@ async def hybrid_search(
 
         # Web fallback if hybrid and no useful PDF results
         if search_type == "hybrid" and not closed_results:
+            print(f"📄 No useful PDF results — falling back to web search")
             try:
                 open_results = search_open_domain(rewritten_query, top_k=3)
                 print(f"🌐 Web fallback: {len(open_results)}")
             except Exception as e:
                 print(f"Web fallback error: {e}")
+            # Flag that we fell back so the answer generator knows
+            if open_results:
+                intent = "FACTUAL_LOOKUP_WEB_FALLBACK"
 
     # ── Step 2d: Web search mode ──
     elif retrieval_mode == "web":
