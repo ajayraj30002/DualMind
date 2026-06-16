@@ -3,12 +3,25 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 import jwt
+import bcrypt
+import smtplib
+import random
+import os
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from .config import Config
 
 security = HTTPBearer()
 
-# Initialize Supabase client 
+# Initialize Supabase client
 supabase: Client = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
+
+# SMTP Configuration
+SMTP_EMAIL = os.getenv("SMTP_EMAIL")
+SMTP_APP_PASSWORD = os.getenv("SMTP_APP_PASSWORD")
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+
 
 def create_access_token(data: dict) -> str:
     """Create JWT access token"""
@@ -18,14 +31,15 @@ def create_access_token(data: dict) -> str:
     encoded_jwt = jwt.encode(to_encode, Config.JWT_SECRET_KEY, algorithm=Config.JWT_ALGORITHM)
     return encoded_jwt
 
+
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     """Verify JWT token and return user data"""
     token = credentials.credentials
     
     try:
         payload = jwt.decode(
-            token, 
-            Config.JWT_SECRET_KEY, 
+            token,
+            Config.JWT_SECRET_KEY,
             algorithms=[Config.JWT_ALGORITHM]
         )
         return payload
@@ -42,6 +56,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+
 def get_current_user(payload: dict = Depends(verify_token)) -> dict:
     """Get current user from token payload"""
     user_id = payload.get("sub")
@@ -53,7 +68,6 @@ def get_current_user(payload: dict = Depends(verify_token)) -> dict:
             detail="Invalid token payload"
         )
     
-    # Verify user still exists in Supabase
     try:
         response = supabase.table("users").select("*").eq("id", user_id).execute()
         if not response.data:
@@ -61,6 +75,15 @@ def get_current_user(payload: dict = Depends(verify_token)) -> dict:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"
             )
+        
+        user = response.data[0]
+        if not user.get("is_verified", False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Email not verified. Please verify your email first."
+            )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -68,3 +91,102 @@ def get_current_user(payload: dict = Depends(verify_token)) -> dict:
         )
     
     return {"user_id": user_id, "email": email}
+
+
+# ========== OTP FUNCTIONS ==========
+
+def generate_otp() -> str:
+    """Generate a 6-digit OTP"""
+    return f"{random.randint(100000, 999999)}"
+
+
+def send_otp_email(to_email: str, otp: str, full_name: str = "") -> bool:
+    """Send OTP email using SMTP"""
+    try:
+        if not SMTP_EMAIL or not SMTP_APP_PASSWORD:
+            print("SMTP credentials not configured")
+            return False
+        
+        subject = "DualMind - Email Verification OTP"
+        body = f"""Hello {full_name or 'there'},
+
+Your OTP for email verification is: {otp}
+
+This OTP is valid for 5 minutes.
+
+If you didn't request this, please ignore this email.
+
+- DualMind Team"""
+        
+        msg = MIMEMultipart()
+        msg['From'] = f"DualMind <{SMTP_EMAIL}>"
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_EMAIL, SMTP_APP_PASSWORD)
+            server.send_message(msg)
+        
+        return True
+    except Exception as e:
+        print(f"SMTP error: {e}")
+        return False
+
+
+def store_otp(email: str, otp: str, full_name: str, hashed_password: str) -> bool:
+    """Store OTP in Supabase"""
+    try:
+        supabase.table("otp_verifications").delete().eq("email", email).execute()
+        
+        expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+        supabase.table("otp_verifications").insert({
+            "email": email,
+            "otp": otp,
+            "full_name": full_name,
+            "hashed_password": hashed_password,
+            "expires_at": expires_at
+        }).execute()
+        return True
+    except Exception as e:
+        print(f"Store OTP error: {e}")
+        return False
+
+
+def verify_otp(email: str, otp: str) -> bool:
+    """Verify OTP from Supabase"""
+    try:
+        response = supabase.table("otp_verifications")\
+            .select("*")\
+            .eq("email", email)\
+            .eq("otp", otp)\
+            .execute()
+        
+        if not response.data:
+            return False
+        
+        record = response.data[0]
+        expires_at = datetime.fromisoformat(record["expires_at"])
+        
+        if datetime.utcnow() > expires_at:
+            supabase.table("otp_verifications").delete().eq("email", email).execute()
+            return False
+        
+        return True
+    except Exception as e:
+        print(f"Verify OTP error: {e}")
+        return False
+
+
+def get_otp_record(email: str) -> dict:
+    """Get OTP record for email"""
+    try:
+        response = supabase.table("otp_verifications")\
+            .select("*")\
+            .eq("email", email)\
+            .execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"Get OTP record error: {e}")
+        return None
