@@ -317,26 +317,48 @@ function updateScrollBottomBtn() {
     }
 }
 
+// ========== AUTH FUNCTIONS ==========
+
 function setupEventListeners() {
     // Login
-    document.getElementById('loginBtn')?.addEventListener('click', async () => { showLoading(); await doLogin(); hideLoading(); });
+    document.getElementById('loginBtn')?.addEventListener('click', async () => { 
+        showLoading(); 
+        await doLogin(); 
+        hideLoading(); 
+    });
     document.getElementById('loginPassword')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('loginBtn').click(); }
+        if (e.key === 'Enter') { 
+            e.preventDefault(); 
+            document.getElementById('loginBtn').click(); 
+        }
     });
     document.getElementById('loginEmail')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('loginBtn').click(); }
+        if (e.key === 'Enter') { 
+            e.preventDefault(); 
+            document.getElementById('loginBtn').click(); 
+        }
     });
     
     // Register
-    document.getElementById('registerBtn')?.addEventListener('click', async () => { showLoading(); await doRegister(); hideLoading(); });
+    document.getElementById('registerBtn')?.addEventListener('click', async () => { 
+        showLoading(); 
+        await doRegister(); 
+        hideLoading(); 
+    });
     document.getElementById('registerPassword')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('registerBtn').click(); }
+        if (e.key === 'Enter') { 
+            e.preventDefault(); 
+            document.getElementById('registerBtn').click(); 
+        }
     });
     
     // OTP
     document.getElementById('verifyOtpBtn')?.addEventListener('click', verifyOtp);
     document.getElementById('otpInput')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); verifyOtp(); }
+        if (e.key === 'Enter') { 
+            e.preventDefault(); 
+            verifyOtp(); 
+        }
     });
     document.getElementById('resendOtpBtn')?.addEventListener('click', resendOtp);
     document.getElementById('backToSignin')?.addEventListener('click', (e) => {
@@ -408,7 +430,8 @@ async function doLogin() {
     
     try {
         const res = await fetch(`${API_URL}/auth/signin`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
         const data = await res.json();
@@ -442,16 +465,11 @@ async function doRegister() {
     const email = document.getElementById('registerEmail').value.trim();
     const password = document.getElementById('registerPassword').value;
     const errorEl = document.getElementById('registerError');
-    const successEl = document.getElementById('registerSuccess');
     
     // Clear previous messages
     if (errorEl) {
         errorEl.textContent = '';
         errorEl.classList.add('hidden');
-    }
-    if (successEl) {
-        successEl.textContent = '';
-        successEl.classList.add('hidden');
     }
     
     if (!name || !email || !password) {
@@ -474,7 +492,8 @@ async function doRegister() {
     
     try {
         const res = await fetch(`${API_URL}/auth/signup`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, full_name: name })
         });
         const data = await res.json();
@@ -483,10 +502,6 @@ async function doRegister() {
             // Signup successful - show OTP form
             pendingSignupEmail = email;
             showOtpForm(email);
-            if (successEl) {
-                successEl.textContent = 'Verification code sent to your email!';
-                successEl.classList.remove('hidden');
-            }
         } else {
             // Show error (user already exists, etc.)
             if (errorEl) {
@@ -579,11 +594,12 @@ function hideOtpForm() {
 async function verifyOtp() {
     const otp = document.getElementById('otpInput').value.trim();
     const errorEl = document.getElementById('otpError');
-    const successEl = document.getElementById('otpSuccess');
     
     // Clear previous messages
-    if (errorEl) { errorEl.textContent = ''; errorEl.classList.add('hidden'); }
-    if (successEl) { successEl.textContent = ''; successEl.classList.add('hidden'); }
+    if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
     
     if (!otp || otp.length !== 6 || !/^\d{6}$/.test(otp)) {
         if (errorEl) {
@@ -614,20 +630,27 @@ async function verifyOtp() {
         
         if (res.ok) {
             // Verification successful - auto login
-            if (successEl) {
-                successEl.textContent = 'Email verified! Logging you in...';
-                successEl.classList.remove('hidden');
-            }
-            
             token = data.access_token;
             user = { id: data.user_id, email: data.email };
             localStorage.setItem('dm_token', token);
             localStorage.setItem('dm_user', JSON.stringify(user));
             
+            // Show success message
+            const successEl = document.getElementById('otpSuccess');
+            if (successEl) {
+                successEl.textContent = '✅ Email verified! Logging you in...';
+                successEl.classList.remove('hidden');
+            }
+            
             setTimeout(() => {
                 showChatUI();
                 loadSessions();
-                hideOtpForm();
+                // Reset OTP form
+                document.getElementById('otpForm').classList.remove('active');
+                document.getElementById('loginForm').classList.add('active');
+                document.getElementById('otpInput').value = '';
+                pendingSignupEmail = null;
+                if (successEl) successEl.classList.add('hidden');
             }, 1500);
         } else {
             if (errorEl) {
@@ -672,7 +695,7 @@ async function resendOtp() {
         
         if (res.ok) {
             if (successEl) {
-                successEl.textContent = 'New verification code sent to your email!';
+                successEl.textContent = '✅ New verification code sent to your email!';
                 successEl.classList.remove('hidden');
             }
             document.getElementById('otpInput').value = '';
