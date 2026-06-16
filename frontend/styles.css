@@ -939,6 +939,10 @@ body {
     display: block;
 }
 
+.form-error.hidden, .form-success.hidden {
+    display: none;
+}
+
 #otpEmailDisplay {
     color: #f97316;
     font-weight: 500;
@@ -954,14 +958,18 @@ body {
     text-decoration: underline;
 }
 
-#backToLoginBtn {
+#backToSignin {
     cursor: pointer;
     color: #666;
     text-decoration: none;
     font-size: 0.75rem;
 }
 
-#backToLoginBtn:hover {
+#backToSignin:hover {
     color: #f97316;
     text-decoration: underline;
+}
+
+.form-error:not(.hidden) {
+    display: block;
 }
