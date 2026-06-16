@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from .rag.hybrid import hybrid_search
 import os
+import re
 import shutil
 from .vector_store import process_and_store_pdf
 from supabase import create_client, Client
@@ -14,6 +15,23 @@ from .models.schemas import (
     UploadResponse
 )
 from .auth import create_access_token, get_current_user, supabase
+
+# Email validation regex (RFC 5322 simplified)
+EMAIL_REGEX = re.compile(
+    r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'
+)
+
+def validate_email_format(email: str) -> bool:
+    """Check email format and that domain has a valid TLD."""
+    if not EMAIL_REGEX.match(email):
+        return False
+    # Reject obviously fake domains / common typos
+    domain = email.split("@")[1].lower()
+    parts = domain.split(".")
+    # Must have at least domain + TLD, TLD must be 2+ chars, no consecutive dots
+    if len(parts) < 2 or len(parts[-1]) < 2 or ".." in domain:
+        return False
+    return True
 
 app = FastAPI(title="DualMind API", version="1.0.0")
 
@@ -42,6 +60,21 @@ def health_check():
 # ========== AUTH ENDPOINTS ==========
 @app.post("/auth/signup", response_model=SignUpResponse)
 async def signup(request: SignUpRequest):
+    # 1. Validate email format first
+    if not validate_email_format(request.email):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid email address. Please enter a valid email (e.g. name@example.com)."
+        )
+
+    # 2. Check password length
+    if len(request.password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 6 characters."
+        )
+
+    # 3. Check if email already registered
     existing = supabase.table("users").select("*").eq("email", request.email).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="Email already registered")
