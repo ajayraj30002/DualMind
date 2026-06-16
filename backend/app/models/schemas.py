@@ -12,6 +12,21 @@ class SignUpResponse(BaseModel):
     message: str
     user_id: str
     email: str
+    requires_otp: bool = True
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+class VerifyOTPResponse(BaseModel):
+    message: str
+    user_id: str
+    email: str
+    access_token: str
+    token_type: str = "bearer"
+
+class ResendOTPRequest(BaseModel):
+    email: EmailStr
 
 class SignInRequest(BaseModel):
     email: EmailStr
@@ -33,7 +48,7 @@ class QueryRequest(BaseModel):
     question: str
     search_type: str = "hybrid"
     include_sources: bool = True
-    uploaded_document: Optional[str] = None  # CRITICAL: For PDF priority
+    uploaded_document: Optional[str] = None
 
 class QueryResponse(BaseModel):
     answer: str
