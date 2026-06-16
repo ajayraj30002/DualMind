@@ -7,14 +7,20 @@ import shutil
 from .vector_store import process_and_store_pdf
 from supabase import create_client, Client
 import bcrypt
+from datetime import datetime, timedelta
 from .config import Config
 from .models.schemas import (
     SignUpRequest, SignUpResponse, 
     SignInRequest, SignInResponse,
     QueryRequest, QueryResponse,  
-    UploadResponse
+    UploadResponse,
+    VerifyOTPRequest, VerifyOTPResponse,
+    ResendOTPRequest
 )
-from .auth import create_access_token, get_current_user, supabase
+from .auth import (
+    create_access_token, get_current_user, supabase,
+    generate_otp, send_otp_email, store_otp, verify_otp, get_otp_record
+)
 
 # Email validation regex (RFC 5322 simplified)
 EMAIL_REGEX = re.compile(
@@ -25,10 +31,8 @@ def validate_email_format(email: str) -> bool:
     """Check email format and that domain has a valid TLD."""
     if not EMAIL_REGEX.match(email):
         return False
-    # Reject obviously fake domains / common typos
     domain = email.split("@")[1].lower()
     parts = domain.split(".")
-    # Must have at least domain + TLD, TLD must be 2+ chars, no consecutive dots
     if len(parts) < 2 or len(parts[-1]) < 2 or ".." in domain:
         return False
     return True
@@ -57,10 +61,13 @@ def root():
 def health_check():
     return {"status": "ok"}
 
-# ========== AUTH ENDPOINTS ==========
+# ========== AUTH & OTP ENDPOINTS ==========
+
 @app.post("/auth/signup", response_model=SignUpResponse)
 async def signup(request: SignUpRequest):
-    # 1. Validate email format first
+    """User signup with email and password - sends OTP"""
+    
+    # 1. Validate email format
     if not validate_email_format(request.email):
         raise HTTPException(
             status_code=400,
@@ -79,23 +86,100 @@ async def signup(request: SignUpRequest):
     if existing.data:
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # 4. Hash password
     hashed_password = bcrypt.hashpw(request.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
-    try:
+    # 5. Generate OTP
+    otp = generate_otp()
+    
+    # 6. Store OTP in otp_verifications table
+    if not store_otp(request.email, otp, request.full_name or "", hashed_password):
+        raise HTTPException(status_code=500, detail="Failed to store OTP")
+    
+    # 7. Send OTP email
+    if not send_otp_email(request.email, otp, request.full_name or ""):
+        raise HTTPException(status_code=500, detail="Failed to send OTP email")
+    
+    return SignUpResponse(
+        message="OTP sent to your email",
+        user_id="",
+        email=request.email,
+        requires_otp=True
+    )
+
+
+@app.post("/auth/verify-otp", response_model=VerifyOTPResponse)
+async def verify_otp_endpoint(request: VerifyOTPRequest):
+    """Verify OTP and complete signup"""
+    
+    # 1. Verify OTP
+    if not verify_otp(request.email, request.otp):
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+    
+    # 2. Get OTP record
+    otp_record = get_otp_record(request.email)
+    if not otp_record:
+        raise HTTPException(status_code=400, detail="OTP record not found")
+    
+    # 3. Check if user already exists
+    existing = supabase.table("users").select("*").eq("email", request.email).execute()
+    if existing.data:
+        # User exists, just verify them
+        supabase.table("users").update({"is_verified": True}).eq("email", request.email).execute()
+        user = existing.data[0]
+    else:
+        # Create user from OTP record
         response = supabase.table("users").insert({
             "email": request.email,
-            "hashed_password": hashed_password,
-            "full_name": request.full_name,
+            "hashed_password": otp_record["hashed_password"],
+            "full_name": otp_record["full_name"],
+            "is_verified": True,
             "created_at": "now()"
         }).execute()
         user = response.data[0]
-        return SignUpResponse(
-            message="User created successfully",
-            user_id=user["id"],
-            email=user["email"]
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}")
+    
+    # 4. Delete used OTP record
+    supabase.table("otp_verifications").delete().eq("email", request.email).execute()
+    
+    # 5. Generate JWT token
+    access_token = create_access_token(data={"sub": user["id"], "email": user["email"]})
+    
+    return VerifyOTPResponse(
+        message="Email verified successfully",
+        user_id=user["id"],
+        email=user["email"],
+        access_token=access_token
+    )
+
+
+@app.post("/auth/resend-otp")
+async def resend_otp(request: ResendOTPRequest):
+    """Resend OTP to email"""
+    
+    # 1. Check if user already exists and is verified
+    existing = supabase.table("users").select("*").eq("email", request.email).execute()
+    if existing.data and existing.data[0].get("is_verified", False):
+        raise HTTPException(status_code=400, detail="Email already verified")
+    
+    # 2. Check if OTP record exists
+    otp_record = get_otp_record(request.email)
+    if not otp_record:
+        raise HTTPException(status_code=400, detail="No pending signup found. Please sign up again.")
+    
+    # 3. Generate new OTP
+    otp = generate_otp()
+    expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+    supabase.table("otp_verifications").update({
+        "otp": otp,
+        "expires_at": expires_at
+    }).eq("email", request.email).execute()
+    
+    # 4. Send OTP email
+    if not send_otp_email(request.email, otp, otp_record.get("full_name", "")):
+        raise HTTPException(status_code=500, detail="Failed to send OTP email")
+    
+    return {"message": "OTP resent successfully"}
+
 
 @app.post("/auth/signin", response_model=SignInResponse)
 async def signin(request: SignInRequest):
@@ -104,6 +188,14 @@ async def signin(request: SignInRequest):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     user = response.data[0]
+    
+    # Check if user is verified
+    if not user.get("is_verified", False):
+        raise HTTPException(
+            status_code=403, 
+            detail="Email not verified. Please check your inbox for OTP."
+        )
+    
     if not bcrypt.checkpw(request.password.encode('utf-8'), user["hashed_password"].encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
@@ -115,9 +207,11 @@ async def signin(request: SignInRequest):
         email=user["email"]
     )
 
+
 @app.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     return {"user_id": current_user["user_id"], "email": current_user["email"]}
+
 
 # ========== CHAT SESSION ENDPOINTS ==========
 
