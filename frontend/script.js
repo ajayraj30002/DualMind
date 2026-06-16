@@ -318,12 +318,50 @@ function updateScrollBottomBtn() {
 }
 
 function setupEventListeners() {
+    // Login
     document.getElementById('loginBtn')?.addEventListener('click', async () => { showLoading(); await doLogin(); hideLoading(); });
+    document.getElementById('loginPassword')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('loginBtn').click(); }
+    });
+    document.getElementById('loginEmail')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('loginBtn').click(); }
+    });
+    
+    // Register
     document.getElementById('registerBtn')?.addEventListener('click', async () => { showLoading(); await doRegister(); hideLoading(); });
-    document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
-    document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
+    document.getElementById('registerPassword')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('registerBtn').click(); }
+    });
+    
+    // OTP
+    document.getElementById('verifyOtpBtn')?.addEventListener('click', verifyOtp);
+    document.getElementById('otpInput')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); verifyOtp(); }
+    });
+    document.getElementById('resendOtpBtn')?.addEventListener('click', resendOtp);
+    document.getElementById('backToSignin')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        hideOtpForm();
+    });
+    
+    // Form switches
+    document.getElementById('showRegister')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleForms(true);
+    });
+    document.getElementById('showLogin')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleForms(false);
+    });
+    
+    // Chat
     sendBtn?.addEventListener('click', sendMessage);
-    messageInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    messageInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
     messageInput?.addEventListener('input', () => {
         messageInput.style.height = 'auto';
         messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
@@ -339,14 +377,6 @@ function setupEventListeners() {
     });
     messagesDiv?.addEventListener('scroll', updateScrollBottomBtn);
     
-    // OTP Event Listeners
-    document.getElementById('verifyOtpBtn')?.addEventListener('click', verifyOtp);
-    document.getElementById('resendOtpBtn')?.addEventListener('click', resendOtp);
-    document.getElementById('backToSignin')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        hideOtpForm();
-    });
-    
     modeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             modeBtns.forEach(b => b.classList.remove('active'));
@@ -359,13 +389,30 @@ function setupEventListeners() {
 async function doLogin() {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
-    if (!email || !password) { alert('Enter email and password'); hideLoading(); return; }
+    const errorEl = document.getElementById('loginError');
+    
+    // Clear previous errors
+    if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
+    
+    if (!email || !password) {
+        if (errorEl) {
+            errorEl.textContent = 'Please enter both email and password.';
+            errorEl.classList.remove('hidden');
+        }
+        hideLoading();
+        return;
+    }
+    
     try {
         const res = await fetch(`${API_URL}/auth/signin`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
         const data = await res.json();
+        
         if (res.ok) {
             token = data.access_token;
             user = { id: data.user_id, email: data.email };
@@ -373,33 +420,87 @@ async function doLogin() {
             localStorage.setItem('dm_user', JSON.stringify(user));
             showChatUI();
             await loadSessions();
-        } else { alert('Login failed: ' + (data.detail || 'Error')); }
-    } catch (err) { alert('Connection error'); }
+        } else {
+            // Show error inside the page
+            if (errorEl) {
+                errorEl.textContent = data.detail || 'Invalid email or password. Please try again.';
+                errorEl.classList.remove('hidden');
+            }
+        }
+    } catch (err) {
+        if (errorEl) {
+            errorEl.textContent = 'Connection error. Please check your network.';
+            errorEl.classList.remove('hidden');
+        }
+    } finally {
+        hideLoading();
+    }
 }
 
 async function doRegister() {
-    const name = document.getElementById('registerName').value;
+    const name = document.getElementById('registerName').value.trim();
     const email = document.getElementById('registerEmail').value.trim();
     const password = document.getElementById('registerPassword').value;
-    if (!email || !password) { alert('Fill all fields'); return; }
-    if (password.length < 6) { alert('Password min 6 chars'); return; }
-    showLoading();
+    const errorEl = document.getElementById('registerError');
+    const successEl = document.getElementById('registerSuccess');
+    
+    // Clear previous messages
+    if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
+    if (successEl) {
+        successEl.textContent = '';
+        successEl.classList.add('hidden');
+    }
+    
+    if (!name || !email || !password) {
+        if (errorEl) {
+            errorEl.textContent = 'Please fill in all fields.';
+            errorEl.classList.remove('hidden');
+        }
+        hideLoading();
+        return;
+    }
+    
+    if (password.length < 6) {
+        if (errorEl) {
+            errorEl.textContent = 'Password must be at least 6 characters.';
+            errorEl.classList.remove('hidden');
+        }
+        hideLoading();
+        return;
+    }
+    
     try {
         const res = await fetch(`${API_URL}/auth/signup`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, full_name: name })
         });
         const data = await res.json();
-        hideLoading();
+        
         if (res.ok) {
+            // Signup successful - show OTP form
             pendingSignupEmail = email;
             showOtpForm(email);
+            if (successEl) {
+                successEl.textContent = 'Verification code sent to your email!';
+                successEl.classList.remove('hidden');
+            }
         } else {
-            alert('Signup failed: ' + (data.detail || 'Error'));
+            // Show error (user already exists, etc.)
+            if (errorEl) {
+                errorEl.textContent = data.detail || 'Signup failed. Please try again.';
+                errorEl.classList.remove('hidden');
+            }
         }
     } catch (err) {
+        if (errorEl) {
+            errorEl.textContent = 'Connection error. Please check your network.';
+            errorEl.classList.remove('hidden');
+        }
+    } finally {
         hideLoading();
-        alert('Connection error');
     }
 }
 
@@ -421,7 +522,9 @@ function checkAuth() {
         user = JSON.parse(savedUser);
         showChatUI();
         loadSessions();
-    } else { showLoginUI(); }
+    } else {
+        showLoginUI();
+    }
 }
 
 function showLoginUI() {
@@ -438,6 +541,15 @@ function showChatUI() {
 function toggleForms(showRegister) {
     document.getElementById('loginForm').classList.toggle('active', !showRegister);
     document.getElementById('registerForm').classList.toggle('active', showRegister);
+    document.getElementById('otpForm').classList.remove('active');
+    
+    // Clear errors
+    const loginError = document.getElementById('loginError');
+    const registerError = document.getElementById('registerError');
+    const otpError = document.getElementById('otpError');
+    if (loginError) { loginError.textContent = ''; loginError.classList.add('hidden'); }
+    if (registerError) { registerError.textContent = ''; registerError.classList.add('hidden'); }
+    if (otpError) { otpError.textContent = ''; otpError.classList.add('hidden'); }
 }
 
 function showOtpForm(email) {
@@ -447,20 +559,50 @@ function showOtpForm(email) {
     document.getElementById('otpEmailDisplay').textContent = email;
     document.getElementById('otpInput').value = '';
     document.getElementById('otpInput').focus();
+    
+    // Clear OTP errors
+    const otpError = document.getElementById('otpError');
+    if (otpError) { otpError.textContent = ''; otpError.classList.add('hidden'); }
 }
 
 function hideOtpForm() {
     document.getElementById('otpForm').classList.remove('active');
     document.getElementById('loginForm').classList.add('active');
+    document.getElementById('otpInput').value = '';
+    pendingSignupEmail = null;
+    
+    // Clear OTP errors
+    const otpError = document.getElementById('otpError');
+    if (otpError) { otpError.textContent = ''; otpError.classList.add('hidden'); }
 }
 
 async function verifyOtp() {
     const otp = document.getElementById('otpInput').value.trim();
-    if (!otp || otp.length !== 6) {
-        alert('Please enter the 6-digit OTP');
+    const errorEl = document.getElementById('otpError');
+    const successEl = document.getElementById('otpSuccess');
+    
+    // Clear previous messages
+    if (errorEl) { errorEl.textContent = ''; errorEl.classList.add('hidden'); }
+    if (successEl) { successEl.textContent = ''; successEl.classList.add('hidden'); }
+    
+    if (!otp || otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+        if (errorEl) {
+            errorEl.textContent = 'Please enter a valid 6-digit code.';
+            errorEl.classList.remove('hidden');
+        }
         return;
     }
+    
+    if (!pendingSignupEmail) {
+        if (errorEl) {
+            errorEl.textContent = 'Session expired. Please sign up again.';
+            errorEl.classList.remove('hidden');
+        }
+        return;
+    }
+    
     showLoading();
+    
     try {
         const res = await fetch(`${API_URL}/auth/verify-otp`, {
             method: 'POST',
@@ -469,41 +611,84 @@ async function verifyOtp() {
         });
         const data = await res.json();
         hideLoading();
+        
         if (res.ok) {
+            // Verification successful - auto login
+            if (successEl) {
+                successEl.textContent = 'Email verified! Logging you in...';
+                successEl.classList.remove('hidden');
+            }
+            
             token = data.access_token;
             user = { id: data.user_id, email: data.email };
             localStorage.setItem('dm_token', token);
             localStorage.setItem('dm_user', JSON.stringify(user));
-            showChatUI();
-            await loadSessions();
+            
+            setTimeout(() => {
+                showChatUI();
+                loadSessions();
+                hideOtpForm();
+            }, 1500);
         } else {
-            alert('Verification failed: ' + (data.detail || 'Invalid OTP'));
+            if (errorEl) {
+                errorEl.textContent = data.detail || 'Invalid or expired OTP. Please try again.';
+                errorEl.classList.remove('hidden');
+            }
         }
     } catch (err) {
         hideLoading();
-        alert('Connection error');
+        if (errorEl) {
+            errorEl.textContent = 'Connection error. Please check your network.';
+            errorEl.classList.remove('hidden');
+        }
     }
 }
 
 async function resendOtp() {
-    if (!pendingSignupEmail) return;
+    const errorEl = document.getElementById('otpError');
+    const successEl = document.getElementById('otpSuccess');
+    
+    if (errorEl) { errorEl.textContent = ''; errorEl.classList.add('hidden'); }
+    if (successEl) { successEl.textContent = ''; successEl.classList.add('hidden'); }
+    
+    if (!pendingSignupEmail) {
+        if (errorEl) {
+            errorEl.textContent = 'Session expired. Please sign up again.';
+            errorEl.classList.remove('hidden');
+        }
+        return;
+    }
+    
     showLoading();
+    
     try {
         const res = await fetch(`${API_URL}/auth/resend-otp`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: pendingSignupEmail })
         });
+        const data = await res.json();
         hideLoading();
+        
         if (res.ok) {
-            alert('OTP resent successfully. Check your email.');
+            if (successEl) {
+                successEl.textContent = 'New verification code sent to your email!';
+                successEl.classList.remove('hidden');
+            }
+            document.getElementById('otpInput').value = '';
+            document.getElementById('otpInput').focus();
         } else {
-            const data = await res.json();
-            alert('Failed to resend: ' + (data.detail || 'Error'));
+            if (errorEl) {
+                errorEl.textContent = data.detail || 'Failed to resend code. Please try again.';
+                errorEl.classList.remove('hidden');
+            }
         }
     } catch (err) {
         hideLoading();
-        alert('Connection error');
+        if (errorEl) {
+            errorEl.textContent = 'Connection error. Please check your network.';
+            errorEl.classList.remove('hidden');
+        }
     }
 }
 
