@@ -872,3 +872,96 @@ body {
 .hljs-number { color: #79c0ff !important; }
 .hljs-comment { color: #6a9955 !important; font-style: italic; }
 .hljs-variable, .hljs-params { color: #ffa657 !important; }
+
+/* ===== ADD THESE STYLES AT THE END OF YOUR EXISTING styles.css ===== */
+
+/* OTP Form Styles */
+#otpForm .login-icon i {
+    font-size: 2.5rem;
+    background: linear-gradient(135deg, #f97316, #ffb347);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: none;
+}
+
+#otpForm h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.25rem;
+    color: #fff;
+}
+
+.otp-input-container {
+    margin-bottom: 1rem;
+}
+
+#otpInput {
+    text-align: center;
+    font-size: 1.5rem;
+    letter-spacing: 4px;
+    font-weight: 600;
+}
+
+#otpInput:focus {
+    border-color: #f97316;
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+}
+
+.form-error {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+    text-align: left;
+    display: none;
+}
+
+.form-error.show {
+    display: block;
+}
+
+.form-success {
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #22c55e;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+    text-align: left;
+    display: none;
+}
+
+.form-success.show {
+    display: block;
+}
+
+#otpEmailDisplay {
+    color: #f97316;
+    font-weight: 500;
+}
+
+#resendOtpBtn {
+    cursor: pointer;
+    color: #f97316;
+    text-decoration: none;
+}
+
+#resendOtpBtn:hover {
+    text-decoration: underline;
+}
+
+#backToLoginBtn {
+    cursor: pointer;
+    color: #666;
+    text-decoration: none;
+    font-size: 0.75rem;
+}
+
+#backToLoginBtn:hover {
+    color: #f97316;
+    text-decoration: underline;
+}
