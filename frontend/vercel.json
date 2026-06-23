@@ -1,0 +1,5 @@
+{
+    "outputDirectory": ".",
+    "installCommand": "echo 'No deps'",
+    "buildCommand": "sed -i 's|\\${BACKEND_URL}|'\"$BACKEND_URL\"'|g' frontend/index.html"
+}
