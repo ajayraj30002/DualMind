@@ -1,4 +1,4 @@
-
+const BACKEND_URL = window.__ENV__?.BACKEND_URL;
 
 let token = null;
 let user = null;
