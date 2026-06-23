@@ -1,4 +1,4 @@
-const API_URL = 'https://dualmind.onrender.com';
+
 
 let token = null;
 let user = null;
