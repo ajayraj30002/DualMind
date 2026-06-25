@@ -75,37 +75,49 @@ Recent conversation:
 
 Latest user message: "{question}"
 
-CLASSIFY into exactly one intent:
-- FACTUAL_LOOKUP    : specific factual question about a document or general knowledge
-- SUMMARIZE         : vague queries — "whats this", "explain", "describe", "overview", "tell me about this"
-- GENERATE_NOTES    : "make notes", "bullet points", "key points", "summarize as notes"
-- COMPARE           : "compare", "difference between", "vs"
-- CODE_REQUEST      : any request to write, fix, explain, or improve code or algorithms
-- WEB_SEARCH        : needs live/current info — news, prices, weather, latest events, current affairs
-- CASUAL_CHAT       : greetings, thanks, opinions, general conversation, "how are you", follow-up chat
-- CONVERSATION_RECALL : "what did we discuss", "earlier you said", "remind me", "as you mentioned"
-- META_QUESTION     : questions about this AI system itself — "what can you do", "what documents are supported", 
-                      "how does this work", "what formats do you accept", "what are your features",
-                      "what type of files", "how do I use this", "what is this app"
+STEP 1 — CLASSIFY into exactly one intent:
 
-CHOOSE retrieval_mode:
-- "rag"           : FACTUAL_LOOKUP or COMPARE when a file IS attached
-- "full_document" : SUMMARIZE, GENERATE_NOTES (file attached)
-- "web"           : WEB_SEARCH, or FACTUAL_LOOKUP when NO file is attached and question is about general knowledge/people/facts
-- "none"          : CASUAL_CHAT, CONVERSATION_RECALL, CODE_REQUEST (no file), META_QUESTION
+DOCUMENT INTENTS (require an attached file):
+- SUMMARIZE         : "whats this", "explain this document", "overview" — vague queries ABOUT AN ATTACHED DOCUMENT
+- GENERATE_NOTES    : "make notes", "bullet points", "key points" — ABOUT AN ATTACHED DOCUMENT
+- COMPARE           : "compare", "difference between" sections IN AN ATTACHED DOCUMENT
 
-REWRITE the query for retrieval:
+KNOWLEDGE INTENTS:
+- FACTUAL_LOOKUP    : specific factual question (with file = search document, without file = search web)
+- WEB_SEARCH        : needs live/current info — news, prices, weather, latest events
+                      OR any general knowledge question when NO file is attached
+                      Examples: "tell me about X", "who is Y", "what is Z", "explain [topic]"
+- CODE_REQUEST      : write, fix, explain, or improve code or algorithms
+
+CONVERSATION INTENTS:
+- CASUAL_CHAT       : greetings, thanks, opinions, "how are you"
+- CONVERSATION_RECALL : "what did we discuss", "earlier you said", "remind me"
+- META_QUESTION     : questions about THIS AI system — "what can you do", "what formats supported"
+
+KEY DECISION: If NO file is attached and the user asks about a person, topic, concept, or wants
+information about something in the real world → use WEB_SEARCH, NOT SUMMARIZE.
+SUMMARIZE is ONLY for summarizing an attached document.
+
+STEP 2 — CHOOSE retrieval_mode:
+- "rag"           : FACTUAL_LOOKUP or COMPARE (file attached)
+- "full_document" : SUMMARIZE or GENERATE_NOTES (file attached)
+- "web"           : WEB_SEARCH, or FACTUAL_LOOKUP with NO file attached
+- "none"          : CASUAL_CHAT, CONVERSATION_RECALL, META_QUESTION, CODE_REQUEST (no file)
+
+STEP 3 — REWRITE the query for retrieval:
 - SHORT keyword-focused query, 5-12 words max
 - Resolve pronouns using conversation context (e.g. "he" → actual name)
 - Remove filler words ("tell me", "can you", "what is", "how do")
 - For SUMMARIZE/GENERATE_NOTES: use "document overview summary main topics"
-- For CASUAL_CHAT/CONVERSATION_RECALL/CODE_REQUEST with no file/META_QUESTION: return original question unchanged
+- For WEB_SEARCH: extract the core topic (e.g. "tell me about sunil chhetri" → "Sunil Chhetri biography career achievements")
+- For CASUAL_CHAT/CONVERSATION_RECALL/CODE_REQUEST/META_QUESTION: return original question unchanged
 
 CRITICAL RULES:
-- CASUAL_CHAT, CONVERSATION_RECALL, and META_QUESTION must NEVER use retrieval — always "none"
-- META_QUESTION = any question about the system/app capabilities, supported formats, features — NOT about uploaded document contents
-- Follow-up questions in a conversation (e.g. "explain more", "what about X", "and Y?") are CASUAL_CHAT or FACTUAL_LOOKUP — never WEB_SEARCH unless explicitly asking for live data
-- CODE_REQUEST without a file → retrieval_mode "none" (LLM answers from knowledge)
+- NO file attached + "tell me about X" / "who is X" / "what is X" / "explain X" → WEB_SEARCH + "web"
+- SUMMARIZE and GENERATE_NOTES REQUIRE a file — if no file, reclassify as WEB_SEARCH
+- CASUAL_CHAT, CONVERSATION_RECALL, META_QUESTION → always "none"
+- CODE_REQUEST without a file → "none"
+- Follow-up questions about earlier conversation → CASUAL_CHAT or FACTUAL_LOOKUP, not WEB_SEARCH
 - Return ONLY valid JSON, no markdown, no explanation
 
 JSON format:
@@ -121,7 +133,7 @@ JSON format:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a precise query router. Return only valid JSON. Never use retrieval for casual conversation or follow-up chat.",
+                    "content": "You are a precise query router. Return only valid JSON. Key rule: if no file is attached and user asks about a real-world topic/person/concept, use WEB_SEARCH with mode web. SUMMARIZE is only for attached documents.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -146,15 +158,22 @@ JSON format:
         if retrieval_mode not in VALID_RETRIEVAL_MODES:
             retrieval_mode = "rag"
 
-        # Safety: casual/recall/meta must never retrieve
+        # ── Safety guards ──
+
+        # Casual/recall/meta must never retrieve
         if intent in ("CASUAL_CHAT", "CONVERSATION_RECALL", "META_QUESTION"):
             retrieval_mode = "none"
 
-        # Safety: code without file → no retrieval
+        # Code without file → no retrieval
         if intent == "CODE_REQUEST" and not filename:
             retrieval_mode = "none"
 
-        # Safety: FACTUAL_LOOKUP with no file → web (not none, not rag)
+        # SUMMARIZE / GENERATE_NOTES without a file → reclassify to WEB_SEARCH
+        if intent in ("SUMMARIZE", "GENERATE_NOTES") and not filename:
+            intent = "WEB_SEARCH"
+            retrieval_mode = "web"
+
+        # FACTUAL_LOOKUP with no file → web search (not rag against empty docs)
         if intent == "FACTUAL_LOOKUP" and not filename and retrieval_mode in ("none", "rag"):
             retrieval_mode = "web"
 
