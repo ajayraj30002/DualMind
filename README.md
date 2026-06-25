@@ -4,7 +4,7 @@
 
 ![DualMind Banner](https://img.shields.io/badge/DualMind-Agentic%20Hybrid%20RAG-6366f1?style=for-the-badge)
 
-**Agentic Hybrid RAG System | PDF & Web Search | Multi-Intent Routing**
+**Agentic Hybrid RAG System | PDF & Web Search | Multi-Intent Routing** 
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
