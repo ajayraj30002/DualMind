@@ -1,5 +1,5 @@
 # 🧠 DualMind
-
+ 
 <div align="center">
 
 ![DualMind Banner](https://img.shields.io/badge/DualMind-Agentic%20Hybrid%20RAG-6366f1?style=for-the-badge)
