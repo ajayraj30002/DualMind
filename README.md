@@ -28,6 +28,24 @@
 
 ---
 
+## ✨ Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Agentic Intent Router** | LLM-powered router detects query intent (conversation/document/web/hybrid) and dynamically selects the optimal retrieval strategy |
+| 🔀 **Multi-Intent Routing** | Routes queries to appropriate sources: PDF-only, web-only, or hybrid combination based on context |
+| 📄 **PDF Processing** | Upload and process PDFs with semantic chunking (500 chars, 100 overlap) and store embeddings in pgvector |
+| 🔍 **Hybrid Retrieval** | Combines semantic search (pgvector) + keyword search (BM25-style) for comprehensive document retrieval |
+| 🌐 **Real-time Web Search** | Tavily API integration for live information retrieval |
+| 🔗 **Cohere Reranking** | Re-ranks retrieved results for improved relevance |
+| 💬 **Chat Sessions** | Persistent conversation history with auto-naming |
+| 🎨 **Modern UI** | Dark theme, responsive design, chat-like interface with code syntax highlighting |
+| 🔐 **JWT Authentication** | Secure authentication with bcrypt password hashing and email verification (OTP) |
+| 🐳 **Containerized** | Dockerized backend for consistent deployment |
+| ⚙️ **CI/CD Pipeline** | GitHub Actions automates testing, Docker build, and deployment to Render |
+
+---
+
 ## 🏗️ Architecture
 
 ```mermaid
