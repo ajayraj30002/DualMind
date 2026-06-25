@@ -143,31 +143,41 @@ flowchart TB
 ### Backend
 | Technology | Purpose |
 |------------|---------|
-| **FastAPI** | Async web framework |
-| **Groq API** | LLM inference (Llama 3.3 70B) |
-| **Tavily API** | Web search |
-| **Cohere API** | Result reranking |
-| **Supabase** | PostgreSQL + Auth |
-| **SentenceTransformers** | Local embeddings (paraphrase-MiniLM-L3-v2) |
-| **PyPDF** | PDF text extraction |
-| **JWT** | Authentication |
+| **FastAPI** | Async web framework for building REST APIs |
+| **Groq API** | LLM inference (Llama 3.3 70B) for response generation |
+| **Tavily API** | Real-time web search for live information retrieval |
+| **Cohere API** | Result reranking for improved retrieval accuracy |
+| **Supabase + pgvector** | PostgreSQL database with vector extension for embedding storage and similarity search |
+| **SentenceTransformers** | Local embeddings (paraphrase-MiniLM-L3-v2) for document chunk vectorization |
+| **PyPDF** | PDF text extraction and chunking |
+| **JWT + bcrypt** | Authentication and password hashing |
+| **SMTP** | Email verification with OTP |
+| **Docker** | Containerization for consistent deployment |
 
 ### Frontend
 | Technology | Purpose |
 |------------|---------|
-| **HTML5/CSS3** | UI structure & styling |
-| **Vanilla JS** | Core logic |
-| **Marked.js** | Markdown rendering |
-| **Highlight.js** | Code syntax highlighting |
-| **Font Awesome** | Icons |
+| **HTML5/CSS3** | UI structure & styling with dark theme |
+| **Vanilla JavaScript** | Core chat and session logic |
+| **Marked.js** | Markdown rendering for LLM responses |
+| **Highlight.js** | Code syntax highlighting in chat responses |
+| **Font Awesome** | Icon library for UI elements |
 
-### DevOps
-| Tool | Purpose |
-|------|---------|
-| **Docker** | Containerization |
-| **GitHub Actions** | CI/CD Pipeline |
-| **Render** | Backend hosting |
-| **Vercel** | Frontend hosting |
+### DevOps & Infrastructure
+| Technology | Purpose |
+|------------|---------|
+| **Docker** | Containerization for backend deployment |
+| **GitHub Actions** | CI/CD pipeline for testing, building, and deploying |
+| **Render** | Backend hosting (Docker containers) |
+| **Vercel** | Frontend hosting (static site) |
+| **Docker Hub** | Container registry for storing Docker images |
+| **Git** | Version control |
+
+### Monitoring & Observability
+| Technology | Purpose |
+|------------|---------|
+| **Render Logs** | Real-time logging for debugging |
+| **Health Check Endpoints** | `/health` and `/` for service monitoring |
 
 ---
 
