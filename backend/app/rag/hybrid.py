@@ -638,8 +638,8 @@ def filter_results_by_relevance(
     if not filtered:
         max_score = max((r.get("extracted_score", 0) for r in results), default=0)
         print(f"📊 No results met threshold {min_score}. Max score: {max_score:.3f}")
-        # Return top 2 as fallback rather than nothing
-        return results[:2]
+        # Return empty — let web fallback handle it instead of returning garbage
+        return []
     return filtered
 
 
@@ -790,6 +790,7 @@ async def hybrid_search(
     closed_results, open_results = [], []
 
     if retrieval_mode == "rag":
+        has_useful, max_score = False, 0.0
         try:
             closed_results = search_closed_domain(rewritten_query, user_id, top_k=8, filename=filename)
             print(f"PDF raw: {len(closed_results)}")
@@ -803,8 +804,8 @@ async def hybrid_search(
         except Exception as e:
             print(f"PDF search error: {e}")
 
-        # Web fallback if hybrid and no useful PDF results
-        if search_type == "hybrid" and not closed_results:
+        # Web fallback if hybrid and PDF results are low quality or empty
+        if search_type == "hybrid" and (not closed_results or not has_useful or max_score < MIN_USEFUL_PDF_SCORE):
             print(f"📄 No useful PDF results — falling back to web search")
             try:
                 open_results = search_open_domain(rewritten_query, top_k=3)
