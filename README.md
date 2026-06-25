@@ -12,6 +12,7 @@
 [![Cohere](https://img.shields.io/badge/Cohere-Rerank-FF4D00?logo=cohere&logoColor=white)](https://cohere.com)
 [![Tavily](https://img.shields.io/badge/Tavily-Search-00B4D8?logo=tavily&logoColor=white)](https://tavily.com)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com)
+[![pgvector](https://img.shields.io/badge/pgvector-Vector%20DB-4169E1?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://docker.com)
 [![GitHub Actions](https://img.shields.io/badge/CI%2FCD-Automated-2088FF?logo=githubactions&logoColor=white)](https://github.com/features/actions)
 [![Render](https://img.shields.io/badge/Deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com)
