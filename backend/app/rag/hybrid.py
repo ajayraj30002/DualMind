@@ -65,66 +65,48 @@ def route_query(
     elif search_type == "open":
         search_hint = "User explicitly wants web search only."
 
-    prompt = f"""You are a precise query router for a hybrid RAG + conversational AI assistant.
+    prompt = f"""You are an autonomous Agentic Router for a hybrid RAG + conversational AI assistant.
+Your job is to analyze the user's query, understand their goal, and select the right tool/intent to fulfill it.
 
-{file_info}
-{search_hint}
+Context:
+- Attached file: {filename if filename else "None (User has NOT uploaded a document)"}
+- Search Hint: {search_hint if search_hint else "None"}
+- Recent conversation: {trimmed_context or "None"}
 
-Recent conversation:
-{trimmed_context or "none"}
+User's Latest Query: "{question}"
 
-Latest user message: "{question}"
+AVAILABLE INTENTS:
+1. FACTUAL_LOOKUP: The user is asking a specific factual question. (Uses RAG if file attached, Web if no file).
+2. SUMMARIZE: The user wants a summary or overview of the ATTACHED FILE. (Cannot be used if no file is attached).
+3. GENERATE_NOTES: The user wants bullet points or notes from the ATTACHED FILE.
+4. COMPARE: The user wants to compare concepts within the ATTACHED FILE.
+5. WEB_SEARCH: The user is asking about a real-world topic, person, or current event, and NO file is attached.
+6. CODE_REQUEST: The user wants to write, fix, or explain code.
+7. CASUAL_CHAT: Greetings, thanks, or general conversation.
+8. CONVERSATION_RECALL: The user is referring to something discussed earlier in this chat.
+9. META_QUESTION: The user is asking what you (the AI) can do, your features, or supported formats.
 
-STEP 1 — CLASSIFY into exactly one intent:
+AVAILABLE RETRIEVAL MODES:
+- "rag": Search within the attached file (best for FACTUAL_LOOKUP or COMPARE with file).
+- "full_document": Read the entire attached file (best for SUMMARIZE or GENERATE_NOTES).
+- "web": Search the internet (best for WEB_SEARCH, or FACTUAL_LOOKUP with no file).
+- "none": Rely entirely on your own internal knowledge or conversation history (best for CASUAL_CHAT, CONVERSATION_RECALL, META_QUESTION, CODE_REQUEST without file).
 
-DOCUMENT INTENTS (require an attached file):
-- SUMMARIZE         : "whats this", "explain this document", "overview" — vague queries ABOUT AN ATTACHED DOCUMENT
-- GENERATE_NOTES    : "make notes", "bullet points", "key points" — ABOUT AN ATTACHED DOCUMENT
-- COMPARE           : "compare", "difference between" sections IN AN ATTACHED DOCUMENT
-
-KNOWLEDGE INTENTS:
-- FACTUAL_LOOKUP    : specific factual question (with file = search document, without file = search web)
-- WEB_SEARCH        : needs live/current info — news, prices, weather, latest events
-                      OR any general knowledge question when NO file is attached
-                      Examples: "tell me about X", "who is Y", "what is Z", "explain [topic]"
-- CODE_REQUEST      : write, fix, explain, or improve code or algorithms
-
-CONVERSATION INTENTS:
-- CASUAL_CHAT       : greetings, thanks, opinions, "how are you"
-- CONVERSATION_RECALL : "what did we discuss", "earlier you said", "remind me"
-- META_QUESTION     : questions about THIS AI system — "what can you do", "what formats supported"
-
-KEY DECISION: If NO file is attached and the user asks about a person, topic, concept, or wants
-information about something in the real world → use WEB_SEARCH, NOT SUMMARIZE.
-SUMMARIZE is ONLY for summarizing an attached document.
-
-STEP 2 — CHOOSE retrieval_mode:
-- "rag"           : FACTUAL_LOOKUP or COMPARE (file attached)
-- "full_document" : SUMMARIZE or GENERATE_NOTES (file attached)
-- "web"           : WEB_SEARCH, or FACTUAL_LOOKUP with NO file attached
-- "none"          : CASUAL_CHAT, CONVERSATION_RECALL, META_QUESTION, CODE_REQUEST (no file)
-
-STEP 3 — REWRITE the query for retrieval:
-- SHORT keyword-focused query, 5-12 words max
-- Resolve pronouns using conversation context (e.g. "he" → actual name)
-- Remove filler words ("tell me", "can you", "what is", "how do")
-- For SUMMARIZE/GENERATE_NOTES: use "document overview summary main topics"
-- For WEB_SEARCH: extract the core topic (e.g. "tell me about sunil chhetri" → "Sunil Chhetri biography career achievements")
-- For CASUAL_CHAT/CONVERSATION_RECALL/CODE_REQUEST/META_QUESTION: return original question unchanged
+YOUR TASK (CHAIN OF THOUGHT):
+1. Think step-by-step about what the user wants and what context (file) is available. Write your reasoning in the 'reasoning' field.
+2. Based on your reasoning, select the most appropriate 'intent' and 'retrieval_mode'.
+3. Generate a 'rewritten_query' that is optimized for the selected retrieval mode (5-12 keywords max, resolve pronouns). If mode is 'none', leave it as the original query.
 
 CRITICAL RULES:
-- NO file attached + "tell me about X" / "who is X" / "what is X" / "explain X" → WEB_SEARCH + "web"
-- SUMMARIZE and GENERATE_NOTES REQUIRE a file — if no file, reclassify as WEB_SEARCH
-- CASUAL_CHAT, CONVERSATION_RECALL, META_QUESTION → always "none"
-- CODE_REQUEST without a file → "none"
-- Follow-up questions about earlier conversation → CASUAL_CHAT or FACTUAL_LOOKUP, not WEB_SEARCH
-- Return ONLY valid JSON, no markdown, no explanation
+- If NO file is attached, you CANNOT use SUMMARIZE or GENERATE_NOTES. You must use WEB_SEARCH or FACTUAL_LOOKUP (with 'web' mode) for knowledge questions.
+- Output ONLY valid JSON. No markdown, no pre-text, no post-text.
 
-JSON format:
+JSON Format:
 {{
-  "intent": "INTENT_HERE",
-  "retrieval_mode": "mode_here",
-  "rewritten_query": "short keyword query here"
+  "reasoning": "Step-by-step logic explaining your choice based on the context...",
+  "intent": "ONE_OF_THE_AVAILABLE_INTENTS",
+  "retrieval_mode": "rag|full_document|web|none",
+  "rewritten_query": "Optimized query here"
 }}"""
 
     try:
@@ -133,17 +115,18 @@ JSON format:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a precise query router. Return only valid JSON. Key rule: if no file is attached and user asks about a real-world topic/person/concept, use WEB_SEARCH with mode web. SUMMARIZE is only for attached documents.",
+                    "content": "You are a highly intelligent, autonomous routing agent. Analyze the context and output only valid JSON containing your reasoning, intent, retrieval mode, and rewritten query.",
                 },
                 {"role": "user", "content": prompt},
             ],
             temperature=0,
-            max_tokens=150,
+            max_tokens=350,
         )
         raw = completion.choices[0].message.content.strip()
         raw = raw.replace("```json", "").replace("```", "").strip()
         parsed = json.loads(raw)
 
+        reasoning      = parsed.get("reasoning", "No reasoning provided")
         intent         = parsed.get("intent", "FACTUAL_LOOKUP").upper()
         retrieval_mode = parsed.get("retrieval_mode", "rag").lower()
         rewritten_query = parsed.get("rewritten_query", question).strip() or question
@@ -158,7 +141,8 @@ JSON format:
         if retrieval_mode not in VALID_RETRIEVAL_MODES:
             retrieval_mode = "rag"
 
-        # ── Safety guards ──
+        # ── Absolute Minimum Safety Nets ──
+        # Even autonomous agents need basic physical constraints
 
         # Casual/recall/meta must never retrieve
         if intent in ("CASUAL_CHAT", "CONVERSATION_RECALL", "META_QUESTION"):
@@ -168,15 +152,7 @@ JSON format:
         if intent == "CODE_REQUEST" and not filename:
             retrieval_mode = "none"
 
-        # SUMMARIZE / GENERATE_NOTES without a file → reclassify to WEB_SEARCH
-        if intent in ("SUMMARIZE", "GENERATE_NOTES") and not filename:
-            intent = "WEB_SEARCH"
-            retrieval_mode = "web"
-
-        # FACTUAL_LOOKUP with no file → web search (not rag against empty docs)
-        if intent == "FACTUAL_LOOKUP" and not filename and retrieval_mode in ("none", "rag"):
-            retrieval_mode = "web"
-
+        print(f"🧠 Router Reason: {reasoning}")
         print(f"🧠 Router → intent:{intent} | mode:{retrieval_mode} | query:{rewritten_query[:60]}")
         return {"intent": intent, "retrieval_mode": retrieval_mode, "rewritten_query": rewritten_query}
 
