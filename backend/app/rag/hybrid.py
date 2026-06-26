@@ -84,7 +84,7 @@ AVAILABLE INTENTS:
 6. CODE_REQUEST: The user wants to write, fix, or explain code.
 7. CASUAL_CHAT: Greetings, thanks, or general conversation.
 8. CONVERSATION_RECALL: The user is referring to something discussed earlier in this chat.
-9. META_QUESTION: The user is asking what you (the AI) can do, your features, or supported formats.
+9. META_QUESTION: The user is asking what you (the AI) can do, your features, who created you, or your origins.
 
 AVAILABLE RETRIEVAL MODES:
 - "rag": Search within the attached file (best for FACTUAL_LOOKUP or COMPARE with file).
