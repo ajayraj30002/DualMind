@@ -111,11 +111,15 @@ async function renderMarkdown(text) {
         if (typeof marked === 'undefined' || typeof marked.parse !== 'function') {
             return `<div class="md-body">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`;
         }
-        const html = marked.parse(text);
-        if (!html || typeof html !== 'string') {
+        const rawHtml = marked.parse(text);
+        if (!rawHtml || typeof rawHtml !== 'string') {
             return `<div class="md-body">${text.replace(/\n/g, '<br>')}</div>`;
         }
-        return `<div class="md-body">${html}</div>`;
+        
+        // Sanitize the HTML to prevent XSS
+        const safeHtml = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(rawHtml) : rawHtml;
+        
+        return `<div class="md-body">${safeHtml}</div>`;
     } catch(e) {
         console.error('renderMarkdown error:', e);
         return `<div class="md-body">${(text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`;

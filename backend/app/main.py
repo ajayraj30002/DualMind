@@ -1,5 +1,8 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from .rag.hybrid import hybrid_search
 import os
 import re
@@ -38,7 +41,10 @@ def validate_email_format(email: str) -> bool:
         return False
     return True
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="DualMind API", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS properly
 app.add_middleware(
@@ -339,9 +345,11 @@ async def get_messages(session_id: str, current_user: dict = Depends(get_current
         return {"messages": []}
 
 @app.post("/chat/sessions/{session_id}/messages")
+@limiter.limit("50/day")
 async def send_message(
+    request: Request,
     session_id: str,
-    request: QueryRequest,
+    query_request: QueryRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """Send a chat message using the user's selected retrieval mode."""
@@ -371,21 +379,21 @@ async def send_message(
     user_message = {
         "session_id": session_id,
         "role": "user",
-        "content": request.question
+        "content": query_request.question
     }
-    if request.uploaded_document:
-        user_message["metadata"] = {"filename": request.uploaded_document}
+    if query_request.uploaded_document:
+        user_message["metadata"] = {"filename": query_request.uploaded_document}
     supabase.table("chat_messages").insert(user_message).execute()
     
-    effective_mode = request.search_type
+    effective_mode = query_request.search_type
     
     # Hybrid search with the effective mode
     result = await hybrid_search(
-        question=request.question,
+        question=query_request.question,
         user_id=current_user["user_id"],
         search_type=effective_mode,
         conversation_context=conversation_context,
-        filename=request.uploaded_document
+        filename=query_request.uploaded_document
     )
     
     # Save assistant message
@@ -462,7 +470,8 @@ async def get_session_documents(session_id: str, current_user: dict = Depends(ge
 # ========== DOCUMENT ENDPOINTS ==========
 
 @app.post("/upload")
-async def upload_pdf(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+@limiter.limit("20/day")
+async def upload_pdf(request: Request, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     if not file.filename.endswith('.pdf'):
         raise HTTPException(400, "Only PDF files are supported")
     
