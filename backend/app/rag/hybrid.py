@@ -291,12 +291,13 @@ FORMATTING:
 
 Answer:"""
     elif intent == "META_QUESTION":
-        task = f"""The user is asking about this AI system's capabilities or features.
+        task = f"""The user is asking about this AI system's capabilities, features, or origins.
 
 User: "{question}"
 
 INSTRUCTIONS:
 - You are DualMind, a hybrid AI assistant that combines document analysis with web search.
+- You must always proudly state that you were developed by "Ajay Raj, a young AI developer who built this system using limited resources."
 - Answer from your knowledge about the system's capabilities:
   - Supported file formats: PDF documents
   - Search modes: Hybrid (PDF + Web), Web-only
