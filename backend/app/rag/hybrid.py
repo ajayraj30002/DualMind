@@ -57,7 +57,7 @@ def route_query(
       2. retrieval_mode
       3. rewritten_query (resolves pronouns for follow-ups, short keywords for RAG)
     """
-    trimmed_context = (conversation_context or "")[-3000:]
+    trimmed_context = (conversation_context or "")[-1000:]
     file_info   = f"Attached file: {filename}" if filename else "No file attached."
     search_hint = ""
     if search_type == "closed":
@@ -111,7 +111,7 @@ JSON Format:
 
     try:
         completion = groq_client.chat.completions.create(
-            model=Config.LLM_MODEL,
+            model="llama-3.1-8b-instant", # Use a cheaper model for the router to save TPD (Tokens Per Day) limits
             messages=[
                 {
                     "role": "system",
@@ -266,7 +266,7 @@ def generate_conversational_answer(
     """
     context_section = ""
     if conversation_context:
-        context_section = f"Conversation so far:\n{conversation_context[-3000:]}\n\n"
+        context_section = f"Conversation so far:\n{conversation_context[-1500:]}\n\n"
 
     if intent == "CODE_REQUEST":
         task = f"""The user wants help with code or an algorithm.
@@ -463,7 +463,7 @@ def generate_answer(
     """
     context_section = ""
     if conversation_context:
-        context_section = f"Previous conversation:\n{conversation_context[-2000:]}\n\n"
+        context_section = f"Previous conversation:\n{conversation_context[-1000:]}\n\n"
 
     if not sources:
         # No sources found — answer from knowledge but be honest
@@ -836,7 +836,12 @@ async def hybrid_search(
         all_sources = rerank_with_cohere(rewritten_query, all_sources, top_n=5)
 
     # ── Step 4: Generate answer ──
-    answer = generate_answer(question, all_sources, conversation_context, intent)
+    if retrieval_mode == "none":
+        # Direct conversational answer without sources
+        answer = generate_conversational_answer(question, intent, conversation_context)
+    else:
+        answer = generate_answer(question, all_sources, conversation_context, intent)
+    
     answer = sanitize_verbose_response(answer)
 
     # ── Step 5: Build response sources ──
