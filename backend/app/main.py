@@ -1,8 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from .rag.hybrid import hybrid_search
 import os
 import re
@@ -41,10 +38,7 @@ def validate_email_format(email: str) -> bool:
         return False
     return True
 
-limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="DualMind API", version="1.0.0")
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS properly
 app.add_middleware(
@@ -345,9 +339,7 @@ async def get_messages(session_id: str, current_user: dict = Depends(get_current
         return {"messages": []}
 
 @app.post("/chat/sessions/{session_id}/messages")
-@limiter.limit("50/day")
 async def send_message(
-    request: Request,
     session_id: str,
     query_request: QueryRequest,
     current_user: dict = Depends(get_current_user)
@@ -470,8 +462,7 @@ async def get_session_documents(session_id: str, current_user: dict = Depends(ge
 # ========== DOCUMENT ENDPOINTS ==========
 
 @app.post("/upload")
-@limiter.limit("20/day")
-async def upload_pdf(request: Request, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+async def upload_pdf(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     if not file.filename.endswith('.pdf'):
         raise HTTPException(400, "Only PDF files are supported")
     
