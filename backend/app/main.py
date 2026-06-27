@@ -170,6 +170,7 @@ async def verify_otp_endpoint(request: VerifyOTPRequest):
             "email": user_data["email"],
             "hashed_password": user_data["hashed_password"],
             "full_name": user_data["full_name"],
+            "is_verified": True,
             "created_at": "now()"
         }).execute()
         

@@ -135,7 +135,7 @@ If you didn't request this, please ignore this email.
         return False
 
 
-def store_otp(email: str, otp: str, full_name: str, hashed_password: str) -> bool:
+def store_otp(email: str, otp: str, full_name: str = "", hashed_password: str = "") -> bool:
     """Store OTP in Supabase"""
     try:
         # Delete any existing OTP for this email
