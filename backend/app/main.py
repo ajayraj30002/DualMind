@@ -12,7 +12,7 @@ from .models.schemas import (
     SignUpRequest, SignUpResponse, 
     SignInRequest, SignInResponse,
     VerifyOTPRequest, VerifyOTPResponse,
-    SendOTPRequest,
+    ResendOTPRequest,
     QueryRequest, QueryResponse,  
     UploadResponse
 )
@@ -193,7 +193,7 @@ async def verify_otp_endpoint(request: VerifyOTPRequest):
         raise HTTPException(status_code=500, detail=f"Account creation failed: {str(e)}")
 
 @app.post("/auth/resend-otp")
-async def resend_otp(request: SendOTPRequest):
+async def resend_otp(request: ResendOTPRequest):
     """Resend OTP for existing pending user"""
     
     # 1. Check if user already exists (already verified)
