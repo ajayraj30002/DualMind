@@ -838,7 +838,7 @@ async def hybrid_search(
     # ── Step 4: Generate answer ──
     if retrieval_mode == "none":
         # Direct conversational answer without sources
-        answer = generate_conversational_answer(question, intent, conversation_context)
+        answer = generate_conversational_answer(question, conversation_context, intent)
     else:
         answer = generate_answer(question, all_sources, conversation_context, intent)
     
