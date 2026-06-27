@@ -89,20 +89,30 @@ function cleanDualMindResponse(rawText) {
 
 function setupMarked() {
     if (typeof marked === 'undefined') return;
-    if (typeof markedHighlight !== 'undefined') {
-        marked.use(markedHighlight.markedHighlight({
-            langPrefix: 'hljs language-',
-            highlight(code, lang) {
-                const language = (lang && hljs.getLanguage(lang)) ? lang : 'plaintext';
-                try {
-                    return hljs.highlight(code, { language }).value;
-                } catch (e) {
-                    return code;
-                }
-            }
-        }));
-    }
-    marked.use({ gfm: true, breaks: true });
+
+    // Custom renderer: escape HTML entities inside code blocks BEFORE
+    // highlight.js processes them. This prevents the highlight.js
+    // "unescaped HTML" security warning and closes the XSS vector
+    // where LLM-generated code blocks could contain raw <script> tags.
+    const renderer = new marked.Renderer();
+    renderer.code = function(code, language) {
+        // Step 1: escape any HTML entities in the raw code string
+        const escaped = code
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        // Step 2: syntax-highlight the already-escaped code
+        const lang = (language && hljs.getLanguage(language)) ? language : 'plaintext';
+        try {
+            const highlighted = hljs.highlight(escaped, { language: lang }).value;
+            return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`;
+        } catch (e) {
+            return `<pre><code class="hljs">${escaped}</code></pre>`;
+        }
+    };
+
+    marked.use({ renderer, gfm: true, breaks: true });
 }
 
 async function renderMarkdown(text) {
@@ -116,8 +126,24 @@ async function renderMarkdown(text) {
             return `<div class="md-body">${text.replace(/\n/g, '<br>')}</div>`;
         }
         
-        // Sanitize the HTML to prevent XSS
-        const safeHtml = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(rawHtml) : rawHtml;
+        // Sanitize HTML to prevent XSS — explicit allowlist blocks
+        // dangerous tags/attrs, and ALLOWED_URI_REGEXP blocks javascript: hrefs
+        // even if the LLM outputs them (e.g. via indirect prompt injection
+        // through a malicious PDF or poisoned Tavily search result).
+        const safeHtml = typeof DOMPurify !== 'undefined'
+            ? DOMPurify.sanitize(rawHtml, {
+                ALLOWED_TAGS: [
+                    'p', 'strong', 'em', 'b', 'i', 'u', 's',
+                    'code', 'pre', 'blockquote',
+                    'ul', 'ol', 'li',
+                    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                    'a', 'br', 'hr', 'span', 'div',
+                    'table', 'thead', 'tbody', 'tr', 'th', 'td'
+                ],
+                ALLOWED_ATTR: ['href', 'class', 'data-highlighted', 'target', 'rel'],
+                ALLOWED_URI_REGEXP: /^(https?|mailto):/i
+            })
+            : rawHtml;
         
         return `<div class="md-body">${safeHtml}</div>`;
     } catch(e) {
@@ -170,11 +196,11 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
             renderedContent = `<div class="md-body">${escapeHtml(finalContent).replace(/\n/g, '<br>')}</div>`;
         } else {
             renderedContent = await renderMarkdown(finalContent);
+            // Code blocks are already highlighted inside setupMarked's renderer.
+            // Only run addCopyButtonsToCodeBlocks here — calling hljs.highlightElement
+            // again would trigger the "already highlighted" warning.
             setTimeout(() => {
                 addCopyButtonsToCodeBlocks();
-                document.querySelectorAll('.md-body pre code').forEach(block => {
-                    hljs.highlightElement(block);
-                });
             }, 100);
         }
         const sourceBadge = buildSourceBadge(searchTypeUsed || currentMode);
