@@ -98,6 +98,7 @@ YOUR TASK (CHAIN OF THOUGHT):
 3. Generate a 'rewritten_query' that is optimized for the selected retrieval mode (5-12 keywords max, resolve pronouns). If mode is 'none', leave it as the original query.
 
 CRITICAL RULES:
+- If a file IS attached and the user asks a vague question like "whats this", "explain this", or "summarize", you MUST choose SUMMARIZE with "full_document" mode. Assume "this" refers to the attached file, NOT the conversation history.
 - If NO file is attached, you CANNOT use SUMMARIZE or GENERATE_NOTES. You must use WEB_SEARCH or FACTUAL_LOOKUP (with 'web' mode) for knowledge questions.
 - Output ONLY valid JSON. No markdown, no pre-text, no post-text.
 

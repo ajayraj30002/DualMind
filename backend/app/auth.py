@@ -77,7 +77,9 @@ def get_current_user(payload: dict = Depends(verify_token)) -> dict:
             )
         
         user = response.data[0]
-        if not user.get("is_verified", False):
+        # Treat missing column or null (None) as True for legacy users
+        # Only explicitly False will trigger the 403
+        if user.get("is_verified") is False:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Email not verified. Please verify your email first."
