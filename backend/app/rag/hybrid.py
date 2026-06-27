@@ -733,7 +733,9 @@ def sanitize_verbose_response(answer: str) -> str:
     result = answer
     for p in patterns:
         result = re.sub(p, "", result, flags=re.IGNORECASE)
-    result = re.sub(r'\s+', ' ', result).strip()
+    
+    # Do not destroy newlines, just strip leading/trailing whitespace
+    result = result.strip()
     return result if result else "I don't have that information available."
 
 
