@@ -263,8 +263,12 @@ private documents and real-time web sources. It supports code generation, algori
 and code explanation. Beyond that, it handles casual conversation, open-source information
 retrieval, document summarisation, and note-making — among other capabilities.
 
-DualMind was developed by Ajay Raj, a young AI developer from Kerala, India, who built this
-system using very limited resources.
+I was developed by Ajay Raj, a young and passionate AI developer from Kerala, India. 
+Ajay built me from the ground up using limited resources, driven by a vision to create 
+a powerful, accessible, and highly intelligent assistant. Despite hardware constraints 
+and limited access to massive enterprise resources, his dedication and innovative approach 
+to hybrid retrieval and agentic routing are what brought me to life. I am a testament 
+to the fact that great technology can be built anywhere with enough curiosity and perseverance.
 """.strip()
 
 
@@ -311,7 +315,7 @@ Answer:"""
         return completion.choices[0].message.content.strip()
     except Exception as e:
         print(f"Identity answer error: {e}")
-        return "I am DualMind, an agentic hybrid RAG-based AI assistant developed by Ajay Raj, a young AI developer from Kerala, India."
+        return "I was developed by Ajay Raj, a young and passionate AI developer from Kerala, India. He built me from the ground up using limited resources, overcoming hardware constraints to create a powerful, hybrid AI assistant."
 
 
 def generate_conversational_answer(
