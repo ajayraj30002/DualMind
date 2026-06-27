@@ -282,8 +282,10 @@ def answer_identity_question(question: str, conversation_context: Optional[str] 
     if conversation_context:
         context_section = f"Conversation so far:\n{conversation_context[-800:]}\n\n"
 
-    prompt = f"""{context_section}Answer the user's question using ONLY the information in the document below.
-Do not add, infer, or speculate beyond what is written. Do not mention any tech stack or internal architecture.
+    prompt = f"""{context_section}Answer the user's question based on the identity document below.
+CRITICAL INSTRUCTION: When asked about your origins, who developed you, or how you were built, you MUST provide a highly detailed, engaging, and elaborate response. Tell the full story of Ajay Raj building you from the ground up with limited resources in Kerala, India. Do NOT give a short one-sentence answer. Be proud, expressive, and detailed.
+
+Do not add any fake tech stack details or internal architecture.
 If the question asks something not covered in the document, say "I don't have that information."
 
 --- DUALMIND IDENTITY DOCUMENT ---
