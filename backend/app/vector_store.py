@@ -91,26 +91,37 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         return 0
 
     successful = 0
-    for i, chunk in enumerate(chunks):
-        print(f"  Chunk {i + 1}/{len(chunks)}: {len(chunk)} chars", flush=True)
-        embedding = get_embedding(chunk)
-        if embedding:
-            try:
-                supabase.table("document_chunks").insert(
-                    {
-                        "user_id": user_id,
-                        "filename": filename,
-                        "chunk_text": chunk,
-                        "chunk_index": i,
-                        "embedding": embedding,
-                    }
-                ).execute()
-                successful += 1
-                print("    Stored in Supabase", flush=True)
-            except Exception as e:
-                print(f"    Supabase error: {e}", flush=True)
-        else:
-            print("    Embedding failed", flush=True)
+    batch_size = 50
+    
+    for i in range(0, len(chunks), batch_size):
+        batch_chunks = chunks[i:i + batch_size]
+        print(f"  Processing batch {i//batch_size + 1} (chunks {i + 1} to {min(i + batch_size, len(chunks))}/{len(chunks)})", flush=True)
+        
+        # Pre-process text similarly to get_embedding
+        processed_texts = [text.replace("\n", " ").strip() for text in batch_chunks]
+        
+        try:
+            embeddings = embedding_model.encode(processed_texts).tolist()
+            records = []
+            for j, (chunk, embedding) in enumerate(zip(batch_chunks, embeddings)):
+                # sentence_transformers outputs embedding even if empty, but we guard anyway
+                if embedding:
+                    records.append(
+                        {
+                            "user_id": user_id,
+                            "filename": filename,
+                            "chunk_text": chunk,
+                            "chunk_index": i + j,
+                            "embedding": embedding,
+                        }
+                    )
+            
+            if records:
+                supabase.table("document_chunks").insert(records).execute()
+                successful += len(records)
+                print(f"    Stored {len(records)} chunks in Supabase", flush=True)
+        except Exception as e:
+            print(f"    Batch processing/Supabase error: {e}", flush=True)
 
     if successful > 0:
         try:
