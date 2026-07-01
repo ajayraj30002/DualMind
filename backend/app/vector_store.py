@@ -91,7 +91,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         return 0
 
     successful = 0
-    batch_size = 50
+    batch_size = 10
     
     for i in range(0, len(chunks), batch_size):
         batch_chunks = chunks[i:i + batch_size]
@@ -112,7 +112,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
                             "filename": filename,
                             "chunk_text": chunk,
                             "chunk_index": i + j,
-                            "embedding": embedding,
+                            "embedding": [float(val) for val in embedding],
                         }
                     )
             
