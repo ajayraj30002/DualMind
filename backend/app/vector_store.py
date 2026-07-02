@@ -77,8 +77,8 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         return 0
 
     chunks = []
-    chunk_size = 500
-    overlap = 100
+    chunk_size = 1000
+    overlap = 200
 
     for i in range(0, len(text), chunk_size - overlap):
         chunk = text[i:i + chunk_size]

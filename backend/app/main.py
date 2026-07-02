@@ -4,6 +4,7 @@ from .rag.hybrid import hybrid_search
 import os
 import re
 import shutil
+import asyncio
 from .vector_store import process_and_store_pdf
 from supabase import create_client, Client
 import bcrypt
@@ -474,7 +475,7 @@ async def upload_pdf(file: UploadFile = File(...), current_user: dict = Depends(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    chunk_count = process_and_store_pdf(file_path, current_user["user_id"], file.filename)
+    chunk_count = await asyncio.to_thread(process_and_store_pdf, file_path, current_user["user_id"], file.filename)
     return UploadResponse(
         message="File uploaded and processed successfully",
         filename=file.filename,
