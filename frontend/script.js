@@ -169,7 +169,7 @@ function buildSourceBadge(searchTypeUsed) {
     return `<div class="source-badge"><i class="fas ${icon}"></i> ${label}</div>`;
 }
 
-async function addMessageToChat(role, content, filename = null, searchTypeUsed = null) {
+async function addMessageToChat(role, content, filename = null, searchTypeUsed = null, resumeAnalysis = null) {
     if (!messagesDiv) return;
     const welcome = messagesDiv.querySelector('.welcome');
     if (welcome && role === 'user') welcome.remove();
@@ -190,27 +190,37 @@ async function addMessageToChat(role, content, filename = null, searchTypeUsed =
             </div>
         `;
     } else {
-        const isCasual = isCasualConversation(finalContent);
-        let renderedContent;
-        if (isCasual) {
-            renderedContent = `<div class="md-body">${escapeHtml(finalContent).replace(/\n/g, '<br>')}</div>`;
+        // Check for ATS resume analysis — from explicit data or parsed from content
+        const atsData = resumeAnalysis || tryParseResumeAnalysis(finalContent);
+        if (atsData && atsData.overall_score) {
+            const scoreCardHtml = renderResumeScoreCard(atsData);
+            messageDiv.innerHTML = `
+                <div class="message-avatar"><i class="fas fa-brain"></i></div>
+                <div class="message-content">
+                    ${scoreCardHtml}
+                    <div class="source-badge"><i class="fas fa-file-pdf"></i> 📊 ATS Analysis</div>
+                </div>
+            `;
         } else {
-            renderedContent = await renderMarkdown(finalContent);
-            // Code blocks are already highlighted inside setupMarked's renderer.
-            // Only run addCopyButtonsToCodeBlocks here — calling hljs.highlightElement
-            // again would trigger the "already highlighted" warning.
-            setTimeout(() => {
-                addCopyButtonsToCodeBlocks();
-            }, 100);
+            const isCasual = isCasualConversation(finalContent);
+            let renderedContent;
+            if (isCasual) {
+                renderedContent = `<div class="md-body">${escapeHtml(finalContent).replace(/\n/g, '<br>')}</div>`;
+            } else {
+                renderedContent = await renderMarkdown(finalContent);
+                setTimeout(() => {
+                    addCopyButtonsToCodeBlocks();
+                }, 100);
+            }
+            const sourceBadge = buildSourceBadge(searchTypeUsed || currentMode);
+            messageDiv.innerHTML = `
+                <div class="message-avatar"><i class="fas fa-brain"></i></div>
+                <div class="message-content">
+                    ${renderedContent}
+                    ${sourceBadge}
+                </div>
+            `;
         }
-        const sourceBadge = buildSourceBadge(searchTypeUsed || currentMode);
-        messageDiv.innerHTML = `
-            <div class="message-avatar"><i class="fas fa-brain"></i></div>
-            <div class="message-content">
-                ${renderedContent}
-                ${sourceBadge}
-            </div>
-        `;
     }
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -254,7 +264,8 @@ async function sendMessage() {
         if (res.ok) {
             let finalAnswer = data.answer || data.response || data.content || '';
             const searchSource = data.search_type_used || currentMode;
-            await addMessageToChat('assistant', finalAnswer, null, searchSource);
+            const resumeData = data.resume_analysis || null;
+            await addMessageToChat('assistant', finalAnswer, null, searchSource, resumeData);
         } else {
             await addMessageToChat('assistant', 'Sorry, something went wrong.');
         }
@@ -923,4 +934,134 @@ async function renameSession() {
 function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ========== ATS RESUME SCORE CARD ==========
+
+function getScoreColor(score) {
+    if (score >= 8) return '#22c55e';
+    if (score >= 6) return '#f59e0b';
+    if (score >= 4) return '#f97316';
+    return '#ef4444';
+}
+
+function getScoreLabel(score) {
+    if (score >= 9) return 'Exceptional';
+    if (score >= 8) return 'Excellent';
+    if (score >= 7) return 'Good';
+    if (score >= 5) return 'Average';
+    if (score >= 3) return 'Below Average';
+    return 'Needs Work';
+}
+
+function renderResumeScoreCard(data) {
+    if (!data || data.error) {
+        return `<div class="ats-error"><i class="fas fa-exclamation-triangle"></i> Unable to analyze resume. Please try again.</div>`;
+    }
+
+    const overall = data.overall_score || 0;
+    const overallColor = getScoreColor(overall);
+    const overallLabel = getScoreLabel(overall);
+    const circumference = 2 * Math.PI * 54;
+    const offset = circumference - (overall / 10) * circumference;
+
+    let sectionsHtml = '';
+    if (data.sections && data.sections.length > 0) {
+        const sectionIcons = {
+            'Contact Information': 'fa-address-card',
+            'Professional Summary': 'fa-file-alt',
+            'Work Experience': 'fa-briefcase',
+            'Skills & Keywords': 'fa-tags',
+            'Education': 'fa-graduation-cap',
+            'Formatting & ATS Compatibility': 'fa-align-left',
+        };
+        for (const section of data.sections) {
+            const sColor = getScoreColor(section.score);
+            const barWidth = (section.score / 10) * 100;
+            const icon = sectionIcons[section.name] || 'fa-check-circle';
+            let improvementsHtml = '';
+            if (section.improvements && section.improvements.length > 0) {
+                improvementsHtml = `<div class="ats-improvements">`;
+                for (const imp of section.improvements) {
+                    improvementsHtml += `<div class="ats-improvement-item"><i class="fas fa-lightbulb"></i><span>${escapeHtml(imp)}</span></div>`;
+                }
+                improvementsHtml += `</div>`;
+            }
+            sectionsHtml += `
+                <div class="ats-section-card">
+                    <div class="ats-section-header">
+                        <div class="ats-section-title"><i class="fas ${icon}"></i><span>${escapeHtml(section.name)}</span></div>
+                        <div class="ats-section-score" style="color: ${sColor}">${section.score}/10</div>
+                    </div>
+                    <div class="ats-bar-track"><div class="ats-bar-fill" style="width: ${barWidth}%; background: ${sColor}"></div></div>
+                    <p class="ats-section-feedback">${escapeHtml(section.feedback)}</p>
+                    ${improvementsHtml}
+                </div>`;
+        }
+    }
+
+    let strengthsHtml = '';
+    if (data.top_strengths && data.top_strengths.length > 0) {
+        strengthsHtml = `<div class="ats-pills-section"><h4><i class="fas fa-star"></i> Top Strengths</h4><div class="ats-pills">`;
+        for (const s of data.top_strengths) {
+            strengthsHtml += `<span class="ats-pill strength">${escapeHtml(s)}</span>`;
+        }
+        strengthsHtml += `</div></div>`;
+    }
+
+    let fixesHtml = '';
+    if (data.critical_fixes && data.critical_fixes.length > 0) {
+        fixesHtml = `<div class="ats-pills-section"><h4><i class="fas fa-tools"></i> Critical Improvements</h4><div class="ats-pills">`;
+        for (const f of data.critical_fixes) {
+            fixesHtml += `<span class="ats-pill fix">${escapeHtml(f)}</span>`;
+        }
+        fixesHtml += `</div></div>`;
+    }
+
+    return `
+    <div class="ats-score-card">
+        <div class="ats-header">
+            <div class="ats-badge"><i class="fas fa-file-contract"></i> ATS Resume Analysis</div>
+        </div>
+
+        <div class="ats-overall">
+            <div class="ats-circle-wrap">
+                <svg class="ats-circle" viewBox="0 0 120 120">
+                    <circle class="ats-circle-bg" cx="60" cy="60" r="54"/>
+                    <circle class="ats-circle-progress" cx="60" cy="60" r="54"
+                        style="stroke: ${overallColor}; stroke-dasharray: ${circumference}; stroke-dashoffset: ${offset}"/>
+                </svg>
+                <div class="ats-circle-text">
+                    <span class="ats-score-number" style="color: ${overallColor}">${overall}</span>
+                    <span class="ats-score-of">/10</span>
+                </div>
+            </div>
+            <div class="ats-overall-info">
+                <div class="ats-overall-label" style="color: ${overallColor}">${overallLabel}</div>
+                <p class="ats-summary">${escapeHtml(data.summary || '')}</p>
+            </div>
+        </div>
+
+        <div class="ats-sections">
+            <h4><i class="fas fa-chart-bar"></i> Section Breakdown</h4>
+            ${sectionsHtml}
+        </div>
+
+        ${strengthsHtml}
+        ${fixesHtml}
+    </div>`;
+}
+
+function tryParseResumeAnalysis(content) {
+    // Check if the content is a JSON string containing resume analysis data
+    if (!content || typeof content !== 'string') return null;
+    try {
+        const parsed = JSON.parse(content);
+        if (parsed && typeof parsed === 'object' && 'overall_score' in parsed && 'sections' in parsed) {
+            return parsed;
+        }
+    } catch (e) {
+        // Not JSON — that's fine
+    }
+    return null;
 }

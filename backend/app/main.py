@@ -406,7 +406,8 @@ async def send_message(
     return QueryResponse(
         answer=result["answer"],
         sources=result.get("sources"),
-        search_type_used=result["search_type_used"]
+        search_type_used=result["search_type_used"],
+        resume_analysis=result.get("resume_analysis")
     )
 
 @app.post("/chat/sessions/{session_id}/attach")

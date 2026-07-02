@@ -1,5 +1,7 @@
 import json
 import os
+import time
+import hashlib
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -41,8 +43,55 @@ VALID_INTENTS = {
     "FACTUAL_LOOKUP", "SUMMARIZE", "GENERATE_NOTES",
     "COMPARE", "WEB_SEARCH", "CASUAL_CHAT", "CONVERSATION_RECALL",
     "CODE_REQUEST", "META_QUESTION", "FACTUAL_LOOKUP_WEB_FALLBACK",
+    "ATS_RESUME",
 }
 VALID_RETRIEVAL_MODES = {"rag", "full_document", "web", "none"}
+
+# ─────────────────────────────────────────────
+# SIMPLE IN-MEMORY QUERY CACHE (5-min TTL)
+# ─────────────────────────────────────────────
+_query_cache: Dict[str, Dict[str, Any]] = {}
+CACHE_TTL_SECONDS = 300  # 5 minutes
+CACHE_MAX_SIZE = 50
+
+
+def _cache_key(question: str, user_id: str, search_type: str, filename: Optional[str]) -> str:
+    raw = f"{user_id}|{search_type}|{filename or ''}|{question.strip().lower()}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
+def _cache_get(key: str) -> Optional[Dict[str, Any]]:
+    entry = _query_cache.get(key)
+    if entry and (time.time() - entry["ts"]) < CACHE_TTL_SECONDS:
+        print("⚡ Cache hit — returning cached result")
+        return entry["data"]
+    if entry:
+        del _query_cache[key]
+    return None
+
+
+def _cache_set(key: str, data: Dict[str, Any]):
+    # Evict oldest entries if cache is full
+    if len(_query_cache) >= CACHE_MAX_SIZE:
+        oldest_key = min(_query_cache, key=lambda k: _query_cache[k]["ts"])
+        del _query_cache[oldest_key]
+    _query_cache[key] = {"ts": time.time(), "data": data}
+
+
+# ─────────────────────────────────────────────
+# ATS RESUME SCORING PATTERNS
+# ─────────────────────────────────────────────
+import re as _re_ats
+
+_ATS_TRIGGERS = [
+    r'(score|rate|grade|rank|evaluate|assess|review|analyse|analyze)\s+(my\s+)?resume',
+    r'resume\s+(score|rating|grade|analysis|review|evaluation|assessment)',
+    r'ats\s+(score|check|analysis|scan|review|test)',
+    r'how\s+(good|strong|well|bad)\s+(is|does)\s+(my\s+)?resume',
+    r'(check|test|scan)\s+(my\s+)?resume',
+    r'(my\s+)?resume.*(score|rating|rank|ats)',
+    r'(can you|please)\s+(score|rate|review|analyze|analyse|assess|evaluate)\s+(my\s+)?resume',
+]
 
 
 def route_query(
@@ -205,6 +254,10 @@ def _fallback_route(question: str, filename: Optional[str], search_type: str) ->
 
     if search_type == "open":
         return {"intent": "WEB_SEARCH", "retrieval_mode": "web", "rewritten_query": question}
+
+    # ATS Resume scoring detection
+    if filename and any(re.search(p, q) for p in _ATS_TRIGGERS):
+        return {"intent": "ATS_RESUME", "retrieval_mode": "full_document", "rewritten_query": "resume ATS analysis scoring"}
 
     words = re.findall(r'\b[a-zA-Z0-9]+\b', q)
     short = " ".join(words[:10]) if len(words) > 10 else " ".join(words)
@@ -488,6 +541,127 @@ Answer:"""
         fallback_msg="I had trouble processing the document. Please try again.",
         error_prefix="Full document answer error"
     )
+
+
+def analyze_resume(
+    full_text: str,
+    filename: str,
+    conversation_context: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    ATS Resume Analyzer — sends full document to Groq with a structured prompt
+    that returns JSON scores for each resume section.
+    """
+    context_section = ""
+    if conversation_context:
+        context_section = f"Previous conversation:\n{conversation_context[-500:]}\n\n"
+
+    prompt = f"""{context_section}You are an expert ATS (Applicant Tracking System) resume analyzer.
+
+Analyze the following resume thoroughly and provide a detailed ATS score.
+
+RESUME TEXT:
+---
+{full_text[:12000]}
+---
+
+You MUST return ONLY valid JSON in this exact format (no markdown, no pre-text, no post-text):
+{{
+  "overall_score": <number 1-10>,
+  "summary": "<2-3 sentence overall assessment>",
+  "sections": [
+    {{
+      "name": "Contact Information",
+      "score": <number 1-10>,
+      "feedback": "<specific feedback>",
+      "improvements": ["<improvement 1>", "<improvement 2>"]
+    }},
+    {{
+      "name": "Professional Summary",
+      "score": <number 1-10>,
+      "feedback": "<specific feedback>",
+      "improvements": ["<improvement 1>", "<improvement 2>"]
+    }},
+    {{
+      "name": "Work Experience",
+      "score": <number 1-10>,
+      "feedback": "<specific feedback>",
+      "improvements": ["<improvement 1>", "<improvement 2>"]
+    }},
+    {{
+      "name": "Skills & Keywords",
+      "score": <number 1-10>,
+      "feedback": "<specific feedback>",
+      "improvements": ["<improvement 1>", "<improvement 2>"]
+    }},
+    {{
+      "name": "Education",
+      "score": <number 1-10>,
+      "feedback": "<specific feedback>",
+      "improvements": ["<improvement 1>", "<improvement 2>"]
+    }},
+    {{
+      "name": "Formatting & ATS Compatibility",
+      "score": <number 1-10>,
+      "feedback": "<specific feedback>",
+      "improvements": ["<improvement 1>", "<improvement 2>"]
+    }}
+  ],
+  "top_strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+  "critical_fixes": ["<fix 1>", "<fix 2>", "<fix 3>"]
+}}
+
+SCORING GUIDE:
+- 9-10: Exceptional, ATS-optimized, very competitive
+- 7-8: Good, minor improvements needed
+- 5-6: Average, significant improvements recommended
+- 3-4: Below average, major revision needed
+- 1-2: Poor, complete rewrite recommended
+
+Be honest, specific, and constructive. Base scores on ATS best practices:
+- Keyword optimization for job matching
+- Clean formatting (no tables, images, headers/footers that ATS can't parse)
+- Quantified achievements with metrics
+- Action verbs and impact statements
+- Proper section headings ATS systems look for
+- Appropriate length and detail level
+"""
+
+    try:
+        completion = groq_client.chat.completions.create(
+            model=Config.LLM_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert ATS resume analyzer. Return ONLY valid JSON. No markdown, no explanations, just the JSON object.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=1500,
+        )
+        raw = completion.choices[0].message.content.strip()
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(raw)
+
+        # Validate structure
+        if "overall_score" not in parsed or "sections" not in parsed:
+            raise ValueError("Missing required fields")
+
+        print(f"📊 ATS Resume Score: {parsed['overall_score']}/10")
+        return parsed
+
+    except Exception as e:
+        print(f"ATS analysis error: {e}")
+        # Return a safe fallback
+        return {
+            "overall_score": 0,
+            "summary": "Unable to analyze the resume. Please try again.",
+            "sections": [],
+            "top_strengths": [],
+            "critical_fixes": ["Could not parse resume content"],
+            "error": True,
+        }
 
 
 def generate_answer(
@@ -801,6 +975,28 @@ async def hybrid_search(
             "rewritten_query": question,
         }
 
+    # ── Pre-router: ATS Resume scoring bypass ──
+    if filename and any(_re.search(p, _q) for p in _ATS_TRIGGERS):
+        print("📊 Pre-router ATS bypass → ATS_RESUME")
+        full_text = fetch_full_document(user_id, filename)
+        if full_text:
+            ats_data = analyze_resume(full_text, filename, conversation_context)
+            return {
+                "answer": json.dumps(ats_data),
+                "sources": [{"type": "PDF Document", "title": filename[:40], "content": "ATS Resume Analysis", "url": ""}],
+                "search_type_used": "PDF Document",
+                "closed_source_count": 1,
+                "open_source_count": 0,
+                "rewritten_query": "ATS resume analysis",
+                "resume_analysis": ats_data,
+            }
+
+    # ── Cache lookup ──
+    cache_key = _cache_key(question, user_id, search_type, filename)
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
+
     # ── Step 1: Route ──
     route = route_query(
         question=question,
@@ -834,6 +1030,21 @@ async def hybrid_search(
     if retrieval_mode == "full_document" and filename:
         full_text = fetch_full_document(user_id, filename)
         if full_text:
+            # ATS Resume intent — use structured analyzer
+            if intent == "ATS_RESUME":
+                ats_data = analyze_resume(full_text, filename, conversation_context)
+                result = {
+                    "answer": json.dumps(ats_data),
+                    "sources": [{"type": "PDF Document", "title": filename[:40], "content": "ATS Resume Analysis", "url": ""}],
+                    "search_type_used": "PDF Document",
+                    "closed_source_count": 1,
+                    "open_source_count": 0,
+                    "rewritten_query": rewritten_query,
+                    "resume_analysis": ats_data,
+                }
+                _cache_set(cache_key, result)
+                return result
+
             answer = generate_full_document_answer(
                 question=question,
                 full_text=full_text,
@@ -841,7 +1052,7 @@ async def hybrid_search(
                 intent=intent,
                 conversation_context=conversation_context,
             )
-            return {
+            result = {
                 "answer": answer,
                 "sources": [{"type": "PDF Document", "title": filename[:40], "content": full_text[:200], "url": ""}],
                 "search_type_used": "PDF Document",
@@ -849,6 +1060,8 @@ async def hybrid_search(
                 "open_source_count": 0,
                 "rewritten_query": rewritten_query,
             }
+            _cache_set(cache_key, result)
+            return result
         print("Full document fetch failed — falling back to RAG")
         retrieval_mode = "rag"
 
@@ -901,7 +1114,14 @@ async def hybrid_search(
 
     if len(all_sources) > 1:
         all_sources = _dedupe_sources(all_sources)
-        all_sources = rerank_with_cohere(rewritten_query, all_sources, top_n=5)
+        # Skip Cohere rerank when all results are from the same source type
+        # Saves ~500-1500ms on single-source queries
+        source_types = set(s.get("source_type") for s in all_sources)
+        if len(source_types) > 1:
+            all_sources = rerank_with_cohere(rewritten_query, all_sources, top_n=5)
+        else:
+            print("⏩ Skipping Cohere rerank (single source type)")
+            all_sources = all_sources[:5]
 
     # ── Step 4: Generate answer ──
     if retrieval_mode == "none":
@@ -925,7 +1145,7 @@ async def hybrid_search(
 
     mode_used = "PDF Document" if closed_results else ("Web Search" if open_results else "No results")
 
-    return {
+    result = {
         "answer": answer,
         "sources": response_sources,
         "search_type_used": mode_used,
@@ -933,3 +1153,7 @@ async def hybrid_search(
         "open_source_count": len(open_results),
         "rewritten_query": rewritten_query,
     }
+
+    # Cache the result
+    _cache_set(cache_key, result)
+    return result

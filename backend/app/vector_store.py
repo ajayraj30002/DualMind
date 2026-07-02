@@ -17,7 +17,7 @@ print("Small model loaded successfully", flush=True)
 
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
-KEYWORD_CANDIDATE_LIMIT = int(os.getenv("KEYWORD_CANDIDATE_LIMIT", "300"))
+KEYWORD_CANDIDATE_LIMIT = int(os.getenv("KEYWORD_CANDIDATE_LIMIT", "100"))
 KEYWORD_TOP_K_MULTIPLIER = int(os.getenv("KEYWORD_TOP_K_MULTIPLIER", "2"))
 TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
 
@@ -55,7 +55,7 @@ def _dedupe_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
-    """Process PDF, chunk it, generate embeddings locally, and store in Supabase."""
+    """Process PDF, chunk it, batch-generate embeddings locally, and batch-store in Supabase."""
     print(f"Processing PDF: {filename}", flush=True)
 
     try:
@@ -77,8 +77,8 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         return 0
 
     chunks = []
-    chunk_size = 500
-    overlap = 100
+    chunk_size = 800
+    overlap = 150
 
     for i in range(0, len(text), chunk_size - overlap):
         chunk = text[i:i + chunk_size]
@@ -91,26 +91,36 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         return 0
 
     successful = 0
-    for i, chunk in enumerate(chunks):
-        print(f"  Chunk {i + 1}/{len(chunks)}: {len(chunk)} chars", flush=True)
-        embedding = get_embedding(chunk)
-        if embedding:
-            try:
-                supabase.table("document_chunks").insert(
-                    {
-                        "user_id": user_id,
-                        "filename": filename,
-                        "chunk_text": chunk,
-                        "chunk_index": i,
-                        "embedding": embedding,
-                    }
-                ).execute()
-                successful += 1
-                print("    Stored in Supabase", flush=True)
-            except Exception as e:
-                print(f"    Supabase error: {e}", flush=True)
-        else:
-            print("    Embedding failed", flush=True)
+    batch_size = 10
+
+    for i in range(0, len(chunks), batch_size):
+        batch_chunks = chunks[i:i + batch_size]
+        print(f"  Processing batch {i // batch_size + 1} (chunks {i + 1} to {min(i + batch_size, len(chunks))}/{len(chunks)})", flush=True)
+
+        # Batch-encode embeddings
+        processed_texts = [t.replace("\n", " ").strip() for t in batch_chunks]
+
+        try:
+            embeddings = embedding_model.encode(processed_texts).tolist()
+            records = []
+            for j, (chunk, emb) in enumerate(zip(batch_chunks, embeddings)):
+                if emb:
+                    records.append(
+                        {
+                            "user_id": user_id,
+                            "filename": filename,
+                            "chunk_text": chunk,
+                            "chunk_index": i + j,
+                            "embedding": [float(val) for val in emb],
+                        }
+                    )
+
+            if records:
+                supabase.table("document_chunks").insert(records).execute()
+                successful += len(records)
+                print(f"    Stored {len(records)} chunks in Supabase", flush=True)
+        except Exception as e:
+            print(f"    Batch processing/Supabase error: {e}", flush=True)
 
     if successful > 0:
         try:
@@ -279,34 +289,43 @@ def search_similar_chunks(
 ) -> List[Dict[str, Any]]:
     """Hybrid PDF retrieval: semantic search plus capped keyword matching.
     
-    Runs semantic and keyword searches in parallel using ThreadPoolExecutor
-    for faster retrieval (~200-400ms saved per query).
+    When a specific filename is provided, uses semantic-only search (faster).
+    Otherwise runs semantic and keyword searches in parallel.
     """
     print(f"\n🔍 Hybrid search for: '{question[:50]}'", flush=True)
     
-    keyword_top_k = max(top_k, top_k * KEYWORD_TOP_K_MULTIPLIER)
-    
-    # Run both searches concurrently — they are completely independent
     semantic_results = []
     keyword_results = []
     
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        semantic_future = executor.submit(
-            search_semantic_chunks, question, user_id, top_k=top_k, filename=filename
-        )
-        keyword_future = executor.submit(
-            search_keyword_chunks, question, user_id, top_k=keyword_top_k, filename=filename
-        )
-        
+    # When querying a specific file, semantic search alone is sufficient
+    # This saves ~500-1000ms by skipping keyword fetch + BM25 scoring
+    if filename:
+        print(f"  📎 Single-doc mode (semantic only) for: {filename}", flush=True)
         try:
-            semantic_results = semantic_future.result(timeout=8)
+            semantic_results = search_semantic_chunks(question, user_id, top_k=top_k, filename=filename)
         except Exception as e:
             print(f"Semantic search failed: {e}", flush=True)
+    else:
+        keyword_top_k = max(top_k, top_k * KEYWORD_TOP_K_MULTIPLIER)
         
-        try:
-            keyword_results = keyword_future.result(timeout=8)
-        except Exception as e:
-            print(f"Keyword search failed: {e}", flush=True)
+        # Run both searches concurrently — they are completely independent
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            semantic_future = executor.submit(
+                search_semantic_chunks, question, user_id, top_k=top_k, filename=filename
+            )
+            keyword_future = executor.submit(
+                search_keyword_chunks, question, user_id, top_k=keyword_top_k, filename=filename
+            )
+            
+            try:
+                semantic_results = semantic_future.result(timeout=8)
+            except Exception as e:
+                print(f"Semantic search failed: {e}", flush=True)
+            
+            try:
+                keyword_results = keyword_future.result(timeout=8)
+            except Exception as e:
+                print(f"Keyword search failed: {e}", flush=True)
 
     combined = _dedupe_results(semantic_results + keyword_results)
     

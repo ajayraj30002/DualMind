@@ -54,6 +54,7 @@ class QueryResponse(BaseModel):
     answer: str
     sources: Optional[List[dict]] = None
     search_type_used: str
+    resume_analysis: Optional[dict] = None
 
 class UploadResponse(BaseModel):
     message: str
