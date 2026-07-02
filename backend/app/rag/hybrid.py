@@ -567,42 +567,42 @@ RESUME TEXT:
 
 You MUST return ONLY valid JSON in this exact format (no markdown, no pre-text, no post-text):
 {{
-  "overall_score": <number 1-10>,
+  "overall_score": <number 1-10, can be decimal e.g. 7.5>,
   "summary": "<2-3 sentence overall assessment>",
   "sections": [
     {{
       "name": "Contact Information",
-      "score": <number 1-10>,
+      "score": <number 1-10, can be decimal>,
       "feedback": "<specific feedback>",
       "improvements": ["<improvement 1>", "<improvement 2>"]
     }},
     {{
       "name": "Professional Summary",
-      "score": <number 1-10>,
+      "score": <number 1-10, can be decimal>,
       "feedback": "<specific feedback>",
       "improvements": ["<improvement 1>", "<improvement 2>"]
     }},
     {{
       "name": "Work Experience",
-      "score": <number 1-10>,
+      "score": <number 1-10, can be decimal>,
       "feedback": "<specific feedback>",
       "improvements": ["<improvement 1>", "<improvement 2>"]
     }},
     {{
       "name": "Skills & Keywords",
-      "score": <number 1-10>,
+      "score": <number 1-10, can be decimal>,
       "feedback": "<specific feedback>",
       "improvements": ["<improvement 1>", "<improvement 2>"]
     }},
     {{
       "name": "Education",
-      "score": <number 1-10>,
+      "score": <number 1-10, can be decimal>,
       "feedback": "<specific feedback>",
       "improvements": ["<improvement 1>", "<improvement 2>"]
     }},
     {{
       "name": "Formatting & ATS Compatibility",
-      "score": <number 1-10>,
+      "score": <number 1-10, can be decimal>,
       "feedback": "<specific feedback>",
       "improvements": ["<improvement 1>", "<improvement 2>"]
     }}
@@ -611,14 +611,15 @@ You MUST return ONLY valid JSON in this exact format (no markdown, no pre-text, 
   "critical_fixes": ["<fix 1>", "<fix 2>", "<fix 3>"]
 }}
 
-SCORING GUIDE:
-- 9-10: Exceptional, ATS-optimized, very competitive
-- 7-8: Good, minor improvements needed
-- 5-6: Average, significant improvements recommended
-- 3-4: Below average, major revision needed
-- 1-2: Poor, complete rewrite recommended
+SCORING GUIDE (Use a generous, constructive evaluation metric):
+- 9-10: Exceptional, highly competitive (e.g., 9.5)
+- 7.0-8.9: Strong, good potential with some improvements needed (e.g., 7.5 or 8.2)
+- 5.0-6.9: Average, needs structural or content enhancements
+- 3.0-4.9: Below average, requires significant work
+- 1.0-2.9: Poor, complete rewrite recommended
 
-Be honest, specific, and constructive. Base scores on ATS best practices:
+Note: Be generous and constructive with scoring. A typical resume with decent formatting and experience should score around 7.0 - 8.5 rather than being harshly penalized. Provide a decimal score (like 7.5 or 8.2) for a more precise metric.
+Base scores on ATS best practices:
 - Keyword optimization for job matching
 - Clean formatting (no tables, images, headers/footers that ATS can't parse)
 - Quantified achievements with metrics
