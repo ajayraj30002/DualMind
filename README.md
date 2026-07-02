@@ -31,11 +31,15 @@ powered by an LLM-driven agentic router that autonomously classifies intent and 
 
 <br/>
 
-<!-- DEMO GIF PLACEHOLDER — replace path once recorded -->
-<!-- <div align="center">
-  <img src="assets/demo.gif" alt="DualMind Demo" width="720" />
+<!-- DEMO VIDEO -->
+<div align="center">
+  <h3>🎬 DualMind in Action</h3>
+  <p><i>Watch a 2.5-minute demo showing login, conversation, code generation, document chat, and web search.</i></p>
+  
+  <!-- NOTE: If this file is too large for GitHub (over 100MB), you will need to compress it or upload it via the GitHub website editor -->
+  <video src="assets/DualMind-Demo.mp4" width="720" controls></video>
 </div>
-<br/> -->
+<br/>
 
 ## <img src="https://img.shields.io/badge/―-Features-f97316?style=flat-square" height="22" />
 

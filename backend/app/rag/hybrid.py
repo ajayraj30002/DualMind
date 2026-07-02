@@ -51,8 +51,8 @@ VALID_RETRIEVAL_MODES = {"rag", "full_document", "web", "none"}
 # SIMPLE IN-MEMORY QUERY CACHE (5-min TTL)
 # ─────────────────────────────────────────────
 _query_cache: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL_SECONDS = 300  # 5 minutes
-CACHE_MAX_SIZE = 50
+CACHE_TTL_SECONDS = 120  # 2 minutes
+CACHE_MAX_SIZE = 20
 
 
 def _cache_key(question: str, user_id: str, search_type: str, filename: Optional[str]) -> str:

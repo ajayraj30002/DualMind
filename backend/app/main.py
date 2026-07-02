@@ -476,6 +476,11 @@ async def upload_pdf(file: UploadFile = File(...), current_user: dict = Depends(
         shutil.copyfileobj(file.file, buffer)
     
     chunk_count = process_and_store_pdf(file_path, current_user["user_id"], file.filename)
+    # Clean up — chunks are stored in Supabase, original PDF no longer needed
+    try:
+        os.remove(file_path)
+    except OSError:
+        pass
     return UploadResponse(
         message="File uploaded and processed successfully",
         filename=file.filename,
