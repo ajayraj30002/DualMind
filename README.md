@@ -28,6 +28,11 @@ powered by an LLM-driven agentic router that autonomously classifies intent and 
 <br/>
 
 ---
+## Demo Video
+
+<p align="center">
+  <video src="assets/dualmind-demo.mp4" controls width="100%" preload="metadata"></video>
+</p>
 
 
 
