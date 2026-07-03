@@ -159,8 +159,8 @@ def search_semantic_chunks(
 ) -> List[Dict[str, Any]]:
     """Search for similar chunks using Supabase vector similarity.
     
-    When filename is specified, passes it to the RPC for SQL-level filtering.
-    Falls back to a direct table query if the RPC doesn't support match_filename.
+    When filename is specified, fetches extra results from the RPC and filters
+    by filename in Python to ensure we get results from the target document.
     """
     print(f"Semantic search for: {question[:50]}...", flush=True)
 
@@ -170,24 +170,18 @@ def search_semantic_chunks(
         return []
 
     try:
-        # Build RPC params — include filename filter if specified
-        rpc_params = {
-            "query_embedding": question_embedding,
-            "match_user_id": user_id,
-            "match_count": top_k * 3 if filename else top_k,
-        }
-        if filename:
-            rpc_params["match_filename"] = filename
+        # When filtering by filename, fetch many more results since the RPC
+        # searches ALL documents globally — we filter to the target file in Python
+        fetch_count = top_k * 10 if filename else top_k
 
-        try:
-            response = supabase.rpc("match_documents", rpc_params).execute()
-        except Exception as rpc_err:
-            # If RPC fails (e.g., match_filename param not yet added to Supabase),
-            # fall back to calling without the filename param
-            print(f"RPC with filename filter failed ({rpc_err}), retrying without filter", flush=True)
-            rpc_params.pop("match_filename", None)
-            rpc_params["match_count"] = top_k * 10  # Fetch more to compensate for Python-side filtering
-            response = supabase.rpc("match_documents", rpc_params).execute()
+        response = supabase.rpc(
+            "match_documents",
+            {
+                "query_embedding": question_embedding,
+                "match_user_id": user_id,
+                "match_count": fetch_count,
+            },
+        ).execute()
 
         results = []
         if response.data:
@@ -204,15 +198,14 @@ def search_semantic_chunks(
                         "type": "closed_domain",
                     }
                 )
-            print(f"Semantic results: {len(results)}", flush=True)
+            print(f"Semantic results (before filename filter): {len(results)}", flush=True)
         else:
             print("No semantic results found", flush=True)
 
-        # Python-side filename filter (safety net — should be mostly a no-op
-        # once the Supabase RPC is updated to accept match_filename)
+        # Filter to target file
         results = _filter_by_filename(results, filename)
-        if filename and len(results) == 0 and response.data:
-            print(f"⚠️ All {len(response.data)} results filtered out for '{filename}' — RPC may need match_filename param", flush=True)
+        if filename:
+            print(f"Semantic results (after filename filter for '{filename}'): {len(results)}", flush=True)
         return results[:top_k]
     except Exception as e:
         print(f"Semantic search error: {e}", flush=True)
