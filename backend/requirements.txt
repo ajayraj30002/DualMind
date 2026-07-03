@@ -14,4 +14,5 @@ email-validator==2.1.0
 sentence-transformers==2.2.2
 huggingface-hub==0.20.3
 numpy==1.26.3
-torch==2.1.0
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.1.0+cpu
