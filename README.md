@@ -29,7 +29,7 @@ powered by an LLM-driven agentic router that autonomously classifies intent and 
 
 ## 🎥 DualMind Demo
 
-<video src="./assets/dualmind-demo.mp4" controls="controls" width="100%"></video>
+[▶️ **Click here to watch the DualMind Demo Video**](https://github.com/ajayraj30002/DualMind/blob/main/assets/dualmind-demo.mp4)
 
 <br/>
 
