@@ -308,35 +308,28 @@ def search_similar_chunks(
     semantic_results = []
     keyword_results = []
     
-    # When querying a specific file, semantic search alone is sufficient
-    # This saves ~500-1000ms by skipping keyword fetch + BM25 scoring
-    if filename:
-        print(f"  📎 Single-doc mode (semantic only) for: {filename}", flush=True)
+    keyword_top_k = max(top_k, top_k * KEYWORD_TOP_K_MULTIPLIER)
+    
+    # Run both searches concurrently — they are completely independent.
+    # Keyword search is especially critical for single-document mode because it 
+    # explicitly filters by filename at the database level, bypassing RPC limits.
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        semantic_future = executor.submit(
+            search_semantic_chunks, question, user_id, top_k=top_k, filename=filename
+        )
+        keyword_future = executor.submit(
+            search_keyword_chunks, question, user_id, top_k=keyword_top_k, filename=filename
+        )
+        
         try:
-            semantic_results = search_semantic_chunks(question, user_id, top_k=top_k, filename=filename)
+            semantic_results = semantic_future.result(timeout=8)
         except Exception as e:
             print(f"Semantic search failed: {e}", flush=True)
-    else:
-        keyword_top_k = max(top_k, top_k * KEYWORD_TOP_K_MULTIPLIER)
         
-        # Run both searches concurrently — they are completely independent
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            semantic_future = executor.submit(
-                search_semantic_chunks, question, user_id, top_k=top_k, filename=filename
-            )
-            keyword_future = executor.submit(
-                search_keyword_chunks, question, user_id, top_k=keyword_top_k, filename=filename
-            )
-            
-            try:
-                semantic_results = semantic_future.result(timeout=8)
-            except Exception as e:
-                print(f"Semantic search failed: {e}", flush=True)
-            
-            try:
-                keyword_results = keyword_future.result(timeout=8)
-            except Exception as e:
-                print(f"Keyword search failed: {e}", flush=True)
+        try:
+            keyword_results = keyword_future.result(timeout=8)
+        except Exception as e:
+            print(f"Keyword search failed: {e}", flush=True)
 
     combined = _dedupe_results(semantic_results + keyword_results)
     
