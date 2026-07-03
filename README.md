@@ -34,11 +34,6 @@ https://github.com/user-attachments/assets/9d080bfc-b7ff-47a1-b57a-bdd5bf26b63a
 <br/>
 
 ---
-## Demo Video
-
-<p align="center">
-  <video src="assets/dualmind-demo.mp4" controls width="100%" preload="metadata"></video>
-</p>
 
 
 
