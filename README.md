@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/dualmind_logo.png" alt="DualMind Logo" width="160" />
+<img src="assets/dualmind_logo.png" alt="DualMind Logo" width="160" /> 
 
 # DualMind
 
