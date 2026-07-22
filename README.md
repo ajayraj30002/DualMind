@@ -3,7 +3,7 @@
 <img src="assets/dualmind_logo.png" alt="DualMind Logo" width="160" /> 
 
 # DualMind
-
+ 
 **Agentic Hybrid RAG System — PDF & Web Search — Multi-Intent Routing**
 
 An intelligent conversational AI that combines document-based retrieval with real-time web search,<br/>
