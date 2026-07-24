@@ -2,7 +2,7 @@
 
 <img src="assets/dualmind_logo.png" alt="DualMind Logo" width="160" /> 
 
-# DualMind
+# DualMind 
  
 **Agentic Hybrid RAG System — PDF & Web Search — Multi-Intent Routing**
 
