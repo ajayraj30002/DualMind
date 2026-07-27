@@ -331,16 +331,39 @@ def search_similar_chunks(
         except Exception as e:
             print(f"Keyword search failed: {e}", flush=True)
 
-    combined = _dedupe_results(semantic_results + keyword_results)
-    
-    # Ensure all results have a unified score field
-    for result in combined:
-        if "score" not in result:
-            result["score"] = result.get("similarity", result.get("keyword_score", 0.3))
-        if "similarity" not in result:
-            result["similarity"] = result.get("score", 0.3)
-    
-    # Sort by score (higher is better)
+    # Reciprocal Rank Fusion (RRF)
+    k = 60
+    rrf_scores = {}
+    chunk_data = {}
+
+    def get_chunk_key(res):
+        return (
+            res.get("filename", ""),
+            res.get("chunk_index", ""),
+            res.get("content", "")[:160],
+        )
+
+    for rank, res in enumerate(semantic_results):
+        key = get_chunk_key(res)
+        if key not in chunk_data:
+            chunk_data[key] = res
+        rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+
+    for rank, res in enumerate(keyword_results):
+        key = get_chunk_key(res)
+        if key not in chunk_data:
+            chunk_data[key] = res
+        rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+
+    combined = []
+    for key, score in rrf_scores.items():
+        res = chunk_data[key].copy()
+        res["score"] = score
+        if "similarity" not in res:
+            res["similarity"] = score
+        combined.append(res)
+
+    # Sort by RRF score (higher is better)
     combined.sort(key=lambda x: x.get("score", 0), reverse=True)
     
     print(f"📄 Combined PDF results: {len(combined[:top_k])}", flush=True)
