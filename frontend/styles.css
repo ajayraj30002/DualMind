@@ -2541,7 +2541,7 @@ html, body {
 
 /* Thread actions, compact header and source/model controls */
 .rail-brand-btn { overflow: hidden; padding: 5px; }
-.rail-brand-btn img { width: 100%; height: 100%; object-fit: contain; border-radius: 9px; }
+.rail-brand-btn img { width: 100%; height: 100%; object-fit: contain; border-radius: 9px; mix-blend-mode: screen; }
 .brand-brain-logo { width: 27px; height: 27px; object-fit: contain; border-radius: 50%; mix-blend-mode: screen; }
 .drawer-header-actions { display: flex; align-items: center; gap: 8px; }
 .drawer-new-thread-btn {
@@ -2589,7 +2589,7 @@ html, body {
 .active-thread-title { max-width: min(56vw, 620px); color: #e1e3e8; font-size: .92rem; font-weight: 600; }
 .nav-right-cluster { gap: 18px; }
 .topbar-brand { display: inline-flex; align-items: center; gap: 8px; color: #f4f2ef; font-size: .92rem; font-weight: 700; letter-spacing: -.035em; }
-.topbar-brand img { display: block; width: 32px; height: 32px; object-fit: contain; }
+.topbar-brand img { display: block; width: 32px; height: 32px; object-fit: contain; mix-blend-mode: screen; }
 .top-tool-pill { border-color: #2a2e37; border-radius: 9px; }
 .welcome-brand-logo { display: block; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: screen; filter: drop-shadow(0 0 20px rgba(242,138,66,.24)); }
 .orb-visual-wrap { width: 126px; height: 126px; margin-bottom: 15px; border-radius: 50%; overflow: hidden; }

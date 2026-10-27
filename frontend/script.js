@@ -833,7 +833,7 @@ function renderSessionList(sessions) {
             <span class="session-title">${escapeHtml(s.title || 'Untitled')}</span>
             <div class="session-actions">
                 <button class="session-menu-trigger" type="button" aria-label="Chat options" aria-haspopup="true" aria-expanded="false" title="Chat options">
-                    <i class="fas fa-ellipsis"></i>
+                    <i class="fas fa-ellipsis-vertical"></i>
                 </button>
                 <div class="session-context-menu hidden" role="menu">
                     <button type="button" class="session-menu-option" data-action="pin" role="menuitem"><i class="fas fa-thumbtack"></i><span>${isPinned ? 'Unpin' : 'Pin'}</span></button>
