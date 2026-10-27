@@ -108,29 +108,29 @@
                         <span class="brand-name">DualMind</span>
                     </div>
                     
-                    <h1 class="auth-hero-title">Enterprise Hybrid Intelligence</h1>
-                    <p class="auth-hero-desc">Autonomously route queries across private PDF document repositories and real-time web intelligence with zero hallucination.</p>
+                    <h1 class="auth-hero-title">One clear answer.<br>Every source in reach.</h1>
+                    <p class="auth-hero-desc">DualMind brings your documents and the live web into one grounded conversation. Ask naturally; your assistant chooses the right way to find the answer.</p>
                     
                     <div class="auth-steps-stack">
                         <div class="auth-step-pill active" id="authStepPill1">
                             <span class="step-badge">1</span>
                             <div class="step-copy">
-                                <span class="step-title">Multi-Source Grounding</span>
-                                <span class="step-subtext">Supabase pgvector embeddings + BM25 keyword fusion</span>
+                            <span class="step-title">Ask across your documents</span>
+                            <span class="step-subtext">Upload PDFs and search by meaning and keyword</span>
                             </div>
                         </div>
                         <div class="auth-step-pill" id="authStepPill2">
                             <span class="step-badge">2</span>
                             <div class="step-copy">
-                                <span class="step-title">Precision Reranking</span>
-                                <span class="step-subtext">Cohere rerank-v3.5 cross-encoder verification</span>
+                            <span class="step-title">Find the strongest evidence</span>
+                            <span class="step-subtext">Relevant passages are reranked before answers</span>
                             </div>
                         </div>
                         <div class="auth-step-pill" id="authStepPill3">
                             <span class="step-badge">3</span>
                             <div class="step-copy">
-                                <span class="step-title">Autonomous Agentic Routing</span>
-                                <span class="step-subtext">Llama 3.3 70B multi-intent classification & web fallback</span>
+                            <span class="step-title">Go beyond the files</span>
+                            <span class="step-subtext">Live web search fills gaps with cited sources</span>
                             </div>
                         </div>
                     </div>
@@ -148,25 +148,13 @@
                 <!-- Sign In Form -->
                 <div id="loginForm" class="auth-form-block active">
                     <div class="form-title-group">
-                        <h2>Access Workspace</h2>
-                        <p>Enter your enterprise credentials to access DualMind.</p>
+                        <h2>Welcome back</h2>
+                        <p>Sign in to continue to your DualMind workspace.</p>
                     </div>
 
                     <div id="loginError" class="form-error hidden"></div>
 
-                    <!-- Social / SSO Authentication -->
-                    <div class="social-auth-row">
-                        <button type="button" class="social-pill-btn" onclick="document.getElementById('loginEmail').value='demo@dualmind.ai'; document.getElementById('loginPassword').value='demo1234';">
-                            <i class="fab fa-google"></i>
-                            <span>Google SSO</span>
-                        </button>
-                        <button type="button" class="social-pill-btn" onclick="document.getElementById('loginEmail').value='demo@dualmind.ai'; document.getElementById('loginPassword').value='demo1234';">
-                            <i class="fab fa-github"></i>
-                            <span>GitHub Org</span>
-                        </button>
-                    </div>
-
-                    <div class="or-divider"><span>Or continue with email</span></div>
+                    <div class="auth-security-note"><i class="fas fa-shield-halved"></i><span>Your conversations stay in your private workspace.</span></div>
 
                     <div class="form-field-group">
                         <label for="loginEmail">Work Email</label>
