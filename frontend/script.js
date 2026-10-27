@@ -33,51 +33,40 @@ let promptModal, promptTitle, promptMessage, promptInput, promptSaveBtn, promptC
 let confirmResolveFn = null;
 let promptResolveFn = null;
 
-// Clean Welcome Hero HTML
+// Clean Welcome Hero HTML matching ChatGPT Reference Layout
 function getWelcomeHtml(userName = 'Explorer') {
     return `
-    <div class="welcome" id="welcomeHero">
-        <div class="hero-orb-center">
-            <div class="orb-core"></div>
-            <div class="orb-halo"></div>
+    <div class="welcome-stage" id="welcomeHero">
+        <div class="orb-visual-wrap">
+            <canvas id="heroOrbCanvas"></canvas>
         </div>
 
-        <h2 class="welcome-greeting" id="welcomeGreeting">${getTimeGreeting(userName)}</h2>
-        <h1 class="welcome-headline">What's on <span class="gradient-orange-text">your mind?</span></h1>
+        <h2 class="welcome-greeting-text" id="welcomeGreeting">${getTimeGreeting(userName)}</h2>
+        <h1 class="welcome-headline-text">What's on <span class="gradient-orange-text">your mind?</span></h1>
         
-        <div class="starter-section-title">GET STARTED WITH AN EXAMPLE BELOW</div>
-        <div class="starter-grid">
-            <button class="starter-card" data-prompt="Summarize the core takeaways, methodology, and conclusions from the attached PDF document.">
-                <div class="starter-card-body">
-                    <span class="starter-card-title">Summarize document</span>
-                    <span class="starter-card-desc">Extract key points, conclusions, and data from uploaded PDFs</span>
-                </div>
-                <div class="starter-card-icon"><i class="fas fa-file-pdf"></i></div>
-            </button>
+        <div class="starter-section-wrap">
+            <div class="starter-section-heading">GET STARTED WITH AN EXAMPLE BELOW</div>
+            <div class="starter-cards-grid">
+                <button class="starter-tall-card" data-prompt="Write a to-do list for a personal project">
+                    <span class="card-prompt-label">Write a to-do list for a personal project</span>
+                    <div class="card-bottom-icon"><i class="fas fa-user"></i></div>
+                </button>
 
-            <button class="starter-card" data-prompt="Search the web for the latest developments, benchmarks, and news on AI reasoning models.">
-                <div class="starter-card-body">
-                    <span class="starter-card-title">Live web search</span>
-                    <span class="starter-card-desc">Real-time web intelligence with verified source citations</span>
-                </div>
-                <div class="starter-card-icon"><i class="fas fa-globe"></i></div>
-            </button>
+                <button class="starter-tall-card" data-prompt="Generate an email to reply to a job offer">
+                    <span class="card-prompt-label">Generate an email to reply to a job offer</span>
+                    <div class="card-bottom-icon"><i class="fas fa-envelope"></i></div>
+                </button>
 
-            <button class="starter-card" data-prompt="Analyze this resume with comprehensive ATS scoring, section feedback, and actionable improvements.">
-                <div class="starter-card-body">
-                    <span class="starter-card-title">ATS Resume Review</span>
-                    <span class="starter-card-desc">Evaluate score, formatting, keyword density, and fixes</span>
-                </div>
-                <div class="starter-card-icon"><i class="fas fa-file-contract"></i></div>
-            </button>
+                <button class="starter-tall-card" data-prompt="Summarize this article in one paragraph">
+                    <span class="card-prompt-label">Summarize this article in one paragraph</span>
+                    <div class="card-bottom-icon"><i class="fas fa-comment-dots"></i></div>
+                </button>
 
-            <button class="starter-card" data-prompt="Compare the claims in my attached document against current public industry consensus found online.">
-                <div class="starter-card-body">
-                    <span class="starter-card-title">Hybrid cross-check</span>
-                    <span class="starter-card-desc">Cross-reference document facts with external web search</span>
-                </div>
-                <div class="starter-card-icon"><i class="fas fa-link"></i></div>
-            </button>
+                <button class="starter-tall-card" data-prompt="How does AI work in a technical capacity">
+                    <span class="card-prompt-label">How does AI work in a technical capacity</span>
+                    <div class="card-bottom-icon"><i class="fas fa-code"></i></div>
+                </button>
+            </div>
         </div>
     </div>
     `;
@@ -1054,7 +1043,7 @@ function tryParseResumeAnalysis(content) {
 
 // Starter chips click handler
 function bindStarterChips() {
-    document.querySelectorAll('.starter-card').forEach(card => {
+    document.querySelectorAll('.starter-tall-card, .starter-card').forEach(card => {
         card.addEventListener('click', () => {
             const prompt = card.dataset.prompt;
             if (prompt && messageInput) {
@@ -1065,6 +1054,10 @@ function bindStarterChips() {
             }
         });
     });
+    // Re-initialize 3D Glowing Orb on canvas if present
+    if (typeof GlowingOrb !== 'undefined' && document.getElementById('heroOrbCanvas')) {
+        window.dualMindOrb = new GlowingOrb('heroOrbCanvas');
+    }
 }
 
 // ============================================================================
@@ -1416,8 +1409,9 @@ document.addEventListener('DOMContentLoaded', () => {
     fileBadge = document.getElementById('fileBadge');
     modeBtns = document.querySelectorAll('.mode-pill');
     loadingOverlay = document.getElementById('loadingOverlay');
-    sidebar = document.getElementById('sidebar');
-    sidebarToggle = document.getElementById('sidebarToggle');
+    // Sidebar / Drawer
+    sidebar = document.getElementById('sessionDrawer') || document.getElementById('sidebar');
+    sidebarToggle = document.getElementById('sidebarToggle') || document.getElementById('drawerToggleBtn');
     scrollBottomBtn = document.getElementById('scrollBottomBtn');
     sessionSearchInput = document.getElementById('sessionSearchInput');
     clearSearchBtn = document.getElementById('clearSearchBtn');
@@ -1480,6 +1474,18 @@ function setupEventListeners() {
     });
 
     newChatBtn?.addEventListener('click', createNewSession);
+    document.getElementById('newThreadTopBtn')?.addEventListener('click', createNewSession);
+    document.getElementById('railNewThreadBtn')?.addEventListener('click', createNewSession);
+    
+    document.getElementById('railHomeBtn')?.addEventListener('click', () => {
+        clearMessages();
+        const displayName = user?.email?.split('@')[0] || 'Jason';
+        if (messagesDiv) {
+            messagesDiv.innerHTML = getWelcomeHtml(displayName);
+            bindStarterChips();
+        }
+    });
+
     renameBtn?.addEventListener('click', renameSession);
     chatTitleSpan?.addEventListener('click', renameSession);
     logoutBtn?.addEventListener('click', async () => {
@@ -1489,6 +1495,7 @@ function setupEventListeners() {
 
     // File attachments
     attachBtn?.addEventListener('click', () => fileInput?.click());
+    document.getElementById('railDocumentsBtn')?.addEventListener('click', () => fileInput?.click());
     fileInput?.addEventListener('change', onFileSelect);
     document.getElementById('removeFileBtn')?.addEventListener('click', () => {
         pendingFile = null;
@@ -1497,13 +1504,74 @@ function setupEventListeners() {
         showToast('Attachment removed', 'info');
     });
 
-    // Sidebar
-    sidebarToggle?.addEventListener('click', toggleSidebar);
-    document.getElementById('mobileToggleBtn')?.addEventListener('click', () => {
-        sidebar?.classList.toggle('mobile-open');
+    // Drawer / Rail Navigation
+    document.getElementById('railHistoryBtn')?.addEventListener('click', toggleSidebar);
+    document.getElementById('drawerToggleBtn')?.addEventListener('click', toggleSidebar);
+    document.getElementById('closeDrawerBtn')?.addEventListener('click', () => {
+        const drawer = document.getElementById('sessionDrawer') || sidebar;
+        drawer?.classList.add('collapsed');
+    });
+
+    // Model Selector Dropdown (ChatGPT 4o style)
+    const modelPill = document.getElementById('modelSelectorPill');
+    const modelMenu = document.getElementById('modelDropdownMenu');
+    modelPill?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        modelMenu?.classList.toggle('hidden');
+    });
+
+    document.getElementById('optModeHybrid')?.addEventListener('click', () => {
+        currentMode = 'hybrid';
+        const label = document.getElementById('currentModelLabel');
+        if (label) label.innerText = 'DualMind 4.0';
+        document.querySelector('#optModeHybrid .check-mark')?.classList.remove('hidden');
+        document.querySelector('#optModeOpen .check-mark')?.classList.add('hidden');
+        modelMenu?.classList.add('hidden');
+        showToast('Mode: Hybrid Intelligence', 'info', 1600);
+    });
+
+    document.getElementById('optModeOpen')?.addEventListener('click', () => {
+        currentMode = 'open';
+        const label = document.getElementById('currentModelLabel');
+        if (label) label.innerText = 'Web Search';
+        document.querySelector('#optModeOpen .check-mark')?.classList.remove('hidden');
+        document.querySelector('#optModeHybrid .check-mark')?.classList.add('hidden');
+        modelMenu?.classList.add('hidden');
+        showToast('Mode: Live Web Intelligence', 'info', 1600);
+    });
+
+    document.getElementById('railModeToggleBtn')?.addEventListener('click', () => {
+        currentMode = currentMode === 'hybrid' ? 'open' : 'hybrid';
+        const label = document.getElementById('currentModelLabel');
+        if (label) label.innerText = currentMode === 'hybrid' ? 'DualMind 4.0' : 'Web Search';
+        showToast(`Mode: ${currentMode === 'hybrid' ? 'Hybrid' : 'Web Search'}`, 'info', 1600);
+    });
+
+    // User Avatar Popup Menu
+    const userAvatarBtn = document.getElementById('railUserAvatarBtn');
+    const userMenu = document.getElementById('userPopupMenu');
+    userAvatarBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        userMenu?.classList.toggle('hidden');
+    });
+
+    // Close menus on outside click
+    document.addEventListener('click', (e) => {
+        if (modelMenu && !modelMenu.contains(e.target) && e.target !== modelPill) {
+            modelMenu.classList.add('hidden');
+        }
+        if (userMenu && !userMenu.contains(e.target) && !userAvatarBtn?.contains(e.target)) {
+            userMenu.classList.add('hidden');
+        }
     });
 
     // Search
+    document.getElementById('searchThreadTopBtn')?.addEventListener('click', () => {
+        const drawer = document.getElementById('sessionDrawer') || sidebar;
+        drawer?.classList.remove('collapsed');
+        sessionSearchInput?.focus();
+    });
+
     sessionSearchInput?.addEventListener('input', () => {
         const query = sessionSearchInput.value.trim();
         clearSearchBtn?.classList.toggle('hidden', !query);
@@ -1516,19 +1584,9 @@ function setupEventListeners() {
         renderSessionList(allSessions);
     });
 
-    // Mode Selector
-    modeBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            modeBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentMode = btn.dataset.mode;
-            const modeName = currentMode === 'hybrid' ? 'Hybrid (Document + Web)' : 'Web Search';
-            showToast(`Mode: ${modeName}`, 'info', 1600);
-        });
-    });
-
     // Actions
     document.getElementById('exportChatBtn')?.addEventListener('click', exportConversation);
+    document.getElementById('railExportBtn')?.addEventListener('click', exportConversation);
     document.getElementById('clearChatHeaderBtn')?.addEventListener('click', async () => {
         const confirmed = await showConfirmDialog(
             'Clear conversation view?',
@@ -1559,7 +1617,8 @@ function setupEventListeners() {
         } else if (e.key === 'Escape') {
             closeConfirmDialog(false);
             closePromptDialog(null);
-            sidebar?.classList.remove('mobile-open');
+            modelMenu?.classList.add('hidden');
+            userMenu?.classList.add('hidden');
         }
     });
 }

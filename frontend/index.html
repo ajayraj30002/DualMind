@@ -10,15 +10,15 @@
         BACKEND_URL: '${BACKEND_URL}' 
     };
     </script>
-    <!-- Fonts -->
+    <!-- Modern Typography: Plus Jakarta Sans & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
-    <!-- Font Awesome Icons -->
+    <!-- Font Awesome 6.5.1 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <!-- Stylesheet -->
+    <!-- Enterprise Design System Stylesheet -->
     <link rel="stylesheet" href="styles.css">
     
     <!-- Markdown & Syntax Highlighting -->
@@ -26,18 +26,18 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 </head>
-<body>
+<body class="dark-theme">
 
-<!-- Ambient Glow Layer -->
+<!-- Ambient Background Glow Layer -->
 <div class="ambient-glow-layer"></div>
 
-<!-- Toast Notifications -->
+<!-- Toast Notifications Container -->
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
 <!-- Loading Overlay -->
 <div id="loadingOverlay" class="loading-overlay hidden">
-    <div class="loading-spinner">
-        <div class="spinner"></div>
+    <div class="loading-spinner-card">
+        <div class="spinner-ring"></div>
         <p>Connecting to DualMind...</p>
     </div>
 </div>
@@ -80,148 +80,182 @@
 </div>
 
 <!-- ========================================================================= -->
-<!-- AUTHENTICATION VIEW (SPLIT-LAYOUT INSPIRED BY MODERN SAAS DESIGN) -->
+<!-- AUTHENTICATION VIEW: MAC WINDOW FRAME & SPLIT HERO LAYOUT (OnlyPipe Style) -->
 <!-- ========================================================================= -->
 <div id="loginPage" class="login-page">
-    <div class="auth-split-container">
-        <!-- Left Side: Visual Brand Experience (OnlyPipe Inspiration with DualMind Orange/Amber Aura) -->
-        <div class="auth-hero-panel">
-            <div class="hero-orb-wrap">
-                <div class="hero-orb"></div>
+    <div class="mac-window-frame">
+        <!-- Mac Window Titlebar -->
+        <div class="mac-titlebar">
+            <div class="mac-traffic-lights">
+                <span class="mac-dot dot-close"></span>
+                <span class="mac-dot dot-minimize"></span>
+                <span class="mac-dot dot-maximize"></span>
             </div>
-            <div class="hero-brand">
-                <div class="hero-logo-row">
-                    <i class="fas fa-brain hero-brain-icon"></i>
-                    <span>DualMind</span>
-                </div>
-                <h2>Dual Intelligence Across Documents & Web</h2>
-                <p>Ground your questions on private PDFs and the live web simultaneously with hybrid vector search.</p>
+            <div class="mac-url-pill">
+                <i class="fas fa-lock"></i>
+                <span>https://dualmind.ai/workspace</span>
             </div>
-            <div class="hero-feature-steps">
-                <div class="feature-step active">
-                    <span class="step-num">1</span>
-                    <div class="step-text">
-                        <strong>Upload & Index PDFs</strong>
-                        <span>Dense semantic chunking with pgvector</span>
-                    </div>
-                </div>
-                <div class="feature-step">
-                    <span class="step-num">2</span>
-                    <div class="step-text">
-                        <strong>Live Web Intelligence</strong>
-                        <span>Real-time search verification and citations</span>
-                    </div>
-                </div>
-                <div class="feature-step">
-                    <span class="step-num">3</span>
-                    <div class="step-text">
-                        <strong>Hybrid Reciprocal Fusion</strong>
-                        <span>BM25 lexical + dense embeddings ranking</span>
-                    </div>
-                </div>
-            </div>
+            <div class="mac-actions-dummy"></div>
         </div>
 
-        <!-- Right Side: Forms (Sign In, Create Account, OTP) -->
-        <div class="auth-form-panel">
-            <!-- Form Tabs -->
-            <div class="auth-tabs-row" id="authTabsRow">
-                <button type="button" class="auth-tab-btn active" id="tabSignIn">Sign In</button>
-                <button type="button" class="auth-tab-btn" id="tabSignUp">Create Account</button>
-            </div>
-
-            <!-- Sign In Form -->
-            <div id="loginForm" class="auth-form active">
-                <div class="auth-form-header">
-                    <h3>Welcome back</h3>
-                    <p>Enter your details to access your workspace.</p>
-                </div>
-
-                <div id="loginError" class="form-error hidden"></div>
-                
-                <div class="form-group">
-                    <label for="loginEmail">Email</label>
-                    <div class="input-wrap">
-                        <i class="fas fa-envelope field-icon"></i>
-                        <input type="email" id="loginEmail" placeholder="name@company.com" class="auth-input" autocomplete="email">
+        <div class="auth-split-grid">
+            <!-- Left Panel: Nebula Mesh Aura & Step Pillars -->
+            <div class="auth-hero-card">
+                <div class="auth-nebula-mesh"></div>
+                <div class="auth-hero-content">
+                    <div class="auth-brand-row">
+                        <span class="brand-glyph">⊙</span>
+                        <span class="brand-name">DualMind</span>
+                    </div>
+                    
+                    <h1 class="auth-hero-title">Get Started with Us</h1>
+                    <p class="auth-hero-desc">Complete these easy steps to register your account and unlock dual document and web intelligence.</p>
+                    
+                    <div class="auth-steps-stack">
+                        <div class="auth-step-pill active" id="authStepPill1">
+                            <span class="step-badge">1</span>
+                            <span class="step-title">Sign up your account</span>
+                        </div>
+                        <div class="auth-step-pill" id="authStepPill2">
+                            <span class="step-badge">2</span>
+                            <span class="step-title">Set up your workspace</span>
+                        </div>
+                        <div class="auth-step-pill" id="authStepPill3">
+                            <span class="step-badge">3</span>
+                            <span class="step-title">Set up your profile</span>
+                        </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="form-group">
-                    <label for="loginPassword">Password</label>
-                    <div class="input-wrap">
-                        <i class="fas fa-lock field-icon"></i>
-                        <input type="password" id="loginPassword" placeholder="••••••••••••" class="auth-input" autocomplete="current-password">
-                        <button type="button" class="password-toggle" data-target="loginPassword" title="Toggle password">
-                            <i class="fas fa-eye"></i>
+            <!-- Right Panel: Minimalist Dark Form -->
+            <div class="auth-form-card">
+                <!-- Form Tabs -->
+                <div class="auth-tabs-row" id="authTabsRow">
+                    <button type="button" class="auth-tab-btn active" id="tabSignIn">Sign In</button>
+                    <button type="button" class="auth-tab-btn" id="tabSignUp">Create Account</button>
+                </div>
+
+                <!-- Sign In Form -->
+                <div id="loginForm" class="auth-form-block active">
+                    <div class="form-title-group">
+                        <h2>Welcome back</h2>
+                        <p>Enter your credentials to access your workspace.</p>
+                    </div>
+
+                    <div id="loginError" class="form-error hidden"></div>
+
+                    <!-- Social Login Buttons Row -->
+                    <div class="social-auth-row">
+                        <button type="button" class="social-pill-btn" onclick="document.getElementById('loginEmail').value='demo@dualmind.ai'; document.getElementById('loginPassword').value='demo1234';">
+                            <i class="fab fa-google"></i>
+                            <span>Google</span>
+                        </button>
+                        <button type="button" class="social-pill-btn" onclick="document.getElementById('loginEmail').value='demo@dualmind.ai'; document.getElementById('loginPassword').value='demo1234';">
+                            <i class="fab fa-github"></i>
+                            <span>Github</span>
                         </button>
                     </div>
-                </div>
 
-                <button type="button" id="loginBtn" class="auth-submit-btn">Sign In</button>
-                <p class="auth-switch-text">New to DualMind? <a href="#" id="showRegister">Create an account</a></p>
-            </div>
+                    <div class="or-divider"><span>Or</span></div>
 
-            <!-- Create Account Form -->
-            <div id="registerForm" class="auth-form">
-                <div class="auth-form-header">
-                    <h3>Create an account</h3>
-                    <p>Get started with DualMind assistant in seconds.</p>
-                </div>
-
-                <div id="registerError" class="form-error hidden"></div>
-                <div id="registerSuccess" class="form-success hidden"></div>
-
-                <div class="form-group">
-                    <label for="registerName">Full Name</label>
-                    <div class="input-wrap">
-                        <i class="fas fa-user field-icon"></i>
-                        <input type="text" id="registerName" placeholder="Ajay Raj" class="auth-input">
+                    <div class="form-field-group">
+                        <label for="loginEmail">Email</label>
+                        <input type="email" id="loginEmail" placeholder="eg. johnfrans@gmail.com" class="sleek-input" autocomplete="email">
                     </div>
-                </div>
 
-                <div class="form-group">
-                    <label for="registerEmail">Email</label>
-                    <div class="input-wrap">
-                        <i class="fas fa-envelope field-icon"></i>
-                        <input type="email" id="registerEmail" placeholder="name@company.com" class="auth-input">
+                    <div class="form-field-group">
+                        <label for="loginPassword">Password</label>
+                        <div class="password-input-wrap">
+                            <input type="password" id="loginPassword" placeholder="Enter your password" class="sleek-input" autocomplete="current-password">
+                            <button type="button" class="password-toggle" data-target="loginPassword" title="Toggle password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
+
+                    <button type="button" id="loginBtn" class="primary-cta-btn">Sign In</button>
+                    
+                    <p class="auth-footer-text">
+                        Don't have an account? <a href="#" id="showRegister">Sign up</a>
+                    </p>
                 </div>
 
-                <div class="form-group">
-                    <label for="registerPassword">Password</label>
-                    <div class="input-wrap">
-                        <i class="fas fa-lock field-icon"></i>
-                        <input type="password" id="registerPassword" placeholder="Min 6 characters" class="auth-input">
-                        <button type="button" class="password-toggle" data-target="registerPassword" title="Toggle password">
-                            <i class="fas fa-eye"></i>
+                <!-- Create Account Form -->
+                <div id="registerForm" class="auth-form-block">
+                    <div class="form-title-group">
+                        <h2>Sign Up Account</h2>
+                        <p>Enter your personal data to create your account.</p>
+                    </div>
+
+                    <div id="registerError" class="form-error hidden"></div>
+                    <div id="registerSuccess" class="form-success hidden"></div>
+
+                    <!-- Social Login Buttons Row -->
+                    <div class="social-auth-row">
+                        <button type="button" class="social-pill-btn">
+                            <i class="fab fa-google"></i>
+                            <span>Google</span>
+                        </button>
+                        <button type="button" class="social-pill-btn">
+                            <i class="fab fa-github"></i>
+                            <span>Github</span>
                         </button>
                     </div>
+
+                    <div class="or-divider"><span>Or</span></div>
+
+                    <div class="form-row-2col">
+                        <div class="form-field-group">
+                            <label for="registerName">Full Name</label>
+                            <input type="text" id="registerName" placeholder="eg. John Francisco" class="sleek-input">
+                        </div>
+                    </div>
+
+                    <div class="form-field-group">
+                        <label for="registerEmail">Email</label>
+                        <input type="email" id="registerEmail" placeholder="eg. johnfrans@gmail.com" class="sleek-input">
+                    </div>
+
+                    <div class="form-field-group">
+                        <label for="registerPassword">Password</label>
+                        <div class="password-input-wrap">
+                            <input type="password" id="registerPassword" placeholder="Enter your password" class="sleek-input">
+                            <button type="button" class="password-toggle" data-target="registerPassword" title="Toggle password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <span class="field-hint">Must be at least 6 characters.</span>
+                    </div>
+
+                    <button type="button" id="registerBtn" class="primary-cta-btn">Sign Up</button>
+                    
+                    <p class="auth-footer-text">
+                        Already have an account? <a href="#" id="showLogin">Log in</a>
+                    </p>
                 </div>
 
-                <button type="button" id="registerBtn" class="auth-submit-btn">Create Account</button>
-                <p class="auth-switch-text">Already have an account? <a href="#" id="showLogin">Sign in</a></p>
-            </div>
+                <!-- OTP Verification Form -->
+                <div id="otpForm" class="auth-form-block">
+                    <div class="form-title-group">
+                        <div class="otp-badge-icon"><i class="fas fa-shield-halved"></i></div>
+                        <h2>Verify Your Email</h2>
+                        <p>Enter the 6-digit verification code sent to <strong id="otpEmailDisplay">email@domain.com</strong></p>
+                    </div>
 
-            <!-- OTP Verification Form -->
-            <div id="otpForm" class="auth-form">
-                <div class="auth-form-header">
-                    <div class="otp-badge"><i class="fas fa-shield-alt"></i></div>
-                    <h3>Verify Your Email</h3>
-                    <p>Enter the 6-digit verification code sent to <strong id="otpEmailDisplay">email@domain.com</strong></p>
-                </div>
+                    <div id="otpError" class="form-error hidden"></div>
+                    <div id="otpSuccess" class="form-success hidden"></div>
 
-                <div id="otpError" class="form-error hidden"></div>
-                <div id="otpSuccess" class="form-success hidden"></div>
+                    <div class="form-field-group otp-group">
+                        <input type="text" id="otpInput" class="otp-box-input" placeholder="000000" maxlength="6" autofocus>
+                    </div>
 
-                <div class="otp-input-wrap">
-                    <input type="text" id="otpInput" class="otp-single-input" placeholder="000000" maxlength="6" autofocus>
-                </div>
-
-                <button type="button" id="verifyOtpBtn" class="auth-submit-btn">Verify & Enter Workspace</button>
-                <div class="otp-links">
-                    <a href="#" id="resendOtpBtn">Didn't receive code? Resend</a>
-                    <a href="#" id="backToSignin" class="back-link">← Back to sign in</a>
+                    <button type="button" id="verifyOtpBtn" class="primary-cta-btn">Verify & Enter Workspace</button>
+                    
+                    <div class="otp-sub-links">
+                        <a href="#" id="resendOtpBtn">Didn't receive code? Resend</a>
+                        <a href="#" id="backToSignin" class="back-link">← Back to sign in</a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -229,182 +263,252 @@
 </div>
 
 <!-- ========================================================================= -->
-<!-- MAIN APPLICATION WORKSPACE -->
+<!-- MAIN APPLICATION WORKSPACE: ICON RAIL + CHATGPT-STYLE WORKSPACE -->
 <!-- ========================================================================= -->
 <div id="chatPage" class="chat-page hidden">
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar (Ctrl+B)">
-            <i class="fas fa-chevron-left"></i>
-        </button>
-        
-        <div class="sidebar-header">
-            <div class="logo-area">
-                <div class="brand-brain-box">
-                    <i class="fas fa-brain"></i>
+    <!-- Left Icon Rail (64px wide) -->
+    <aside class="icon-rail" id="iconRail">
+        <div class="rail-top">
+            <button class="rail-brand-btn" id="railBrandBtn" title="DualMind Assistant">
+                <i class="fas fa-brain"></i>
+            </button>
+        </div>
+
+        <nav class="rail-middle">
+            <button class="rail-item active" id="railHomeBtn" title="Home">
+                <i class="fas fa-house"></i>
+            </button>
+            <button class="rail-item" id="railNewThreadBtn" title="New conversation (Ctrl+K)">
+                <i class="fas fa-pen-to-square"></i>
+            </button>
+            <button class="rail-item" id="railHistoryBtn" title="Chat Threads (History)">
+                <i class="fas fa-clock-rotate-left"></i>
+            </button>
+            <button class="rail-item" id="railDocumentsBtn" title="Knowledge Base Documents">
+                <i class="fas fa-folder-open"></i>
+            </button>
+            <button class="rail-item" id="railModeToggleBtn" title="Mode: Hybrid / Web">
+                <i class="fas fa-network-wired"></i>
+            </button>
+            <button class="rail-item" id="railDatabaseBtn" title="Vector DB Status">
+                <i class="fas fa-database"></i>
+            </button>
+        </nav>
+
+        <div class="rail-bottom">
+            <button class="rail-item" id="railExportBtn" title="Export Thread">
+                <i class="fas fa-arrow-up-right-from-square"></i>
+            </button>
+            <button class="rail-item" id="railSettingsBtn" title="Settings">
+                <i class="fas fa-gear"></i>
+            </button>
+            <!-- User Avatar & Popover -->
+            <div class="rail-user-wrap">
+                <button class="rail-user-avatar" id="railUserAvatarBtn" title="Account Menu">
+                    <span id="userAvatarLetter">U</span>
+                </button>
+                <div class="user-popup-menu hidden" id="userPopupMenu">
+                    <div class="user-info-row">
+                        <strong id="userEmailSidebar">user@dualmind.ai</strong>
+                        <span class="user-status-pill">Active Session</span>
+                    </div>
+                    <button type="button" class="popup-item" id="logoutSidebarBtn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Sign Out</span>
+                    </button>
                 </div>
-                <span class="dualmind-sidebar-text">DualMind</span>
             </div>
-            <button id="newChatBtn" class="new-chat-btn" title="New conversation (Ctrl+K)">
-                <i class="fas fa-plus"></i>
-                <span>New thread</span>
-            </button>
-        </div>
-
-        <!-- Search conversations -->
-        <div class="search-box-wrap">
-            <i class="fas fa-search search-icon"></i>
-            <input type="text" id="sessionSearchInput" placeholder="Search conversations..." autocomplete="off">
-            <button id="clearSearchBtn" class="clear-search-btn hidden" title="Clear">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <div id="sessionList" class="session-list"></div>
-
-        <div class="sidebar-footer">
-            <div class="user-row">
-                <div class="user-avatar-initial" id="userAvatarLetter">U</div>
-                <span id="userEmailSidebar">User</span>
-            </div>
-            <button id="logoutSidebarBtn" class="logout-sidebar" title="Sign out">
-                <i class="fas fa-sign-out-alt"></i>
-            </button>
         </div>
     </aside>
-    
-    <!-- Main Chat Area -->
-    <main class="main-chat">
-        <!-- Top App Bar -->
-        <header class="chat-header">
-            <div class="title-area">
-                <button class="mobile-toggle-btn" id="mobileToggleBtn" title="Toggle sidebar">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <h3 id="chatTitle" title="Click to rename">New conversation</h3>
-                <button id="renameChatBtn" class="rename-icon-btn" title="Rename conversation">
-                    <i class="fas fa-pen"></i>
+
+    <!-- Slide-out Conversation Drawer -->
+    <div class="session-drawer" id="sessionDrawer">
+        <div class="drawer-header">
+            <div class="drawer-title-row">
+                <h3>Conversations</h3>
+                <button class="drawer-close-btn" id="closeDrawerBtn" title="Close drawer">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="header-right">
-                <button id="exportChatBtn" class="header-tool-btn" title="Export conversation as Markdown">
-                    <i class="fas fa-arrow-down-to-bracket"></i>
+            <div class="drawer-search-wrap">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="sessionSearchInput" placeholder="Search conversations..." autocomplete="off">
+                <button id="clearSearchBtn" class="clear-search-btn hidden" title="Clear">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div id="sessionList" class="session-list"></div>
+    </div>
+
+    <!-- Main Workspace Container -->
+    <main class="main-workspace" id="mainWorkspace">
+        <!-- Top Navigation Bar -->
+        <header class="top-nav-bar">
+            <div class="nav-left-cluster">
+                <button class="drawer-toggle-btn" id="drawerToggleBtn" title="Toggle history (Ctrl+B)">
+                    <i class="fas fa-bars"></i>
+                </button>
+
+                <!-- Model Selector Pill (ChatGPT 4o Style) -->
+                <div class="model-picker-wrap">
+                    <button class="model-pill-btn" id="modelSelectorPill" title="Select AI Model & Mode">
+                        <i class="fas fa-sparkles model-icon"></i>
+                        <span id="currentModelLabel">DualMind 4.0</span>
+                        <i class="fas fa-chevron-down model-chevron"></i>
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <div class="model-picker-dropdown hidden" id="modelDropdownMenu">
+                        <div class="picker-item active" data-mode="hybrid" id="optModeHybrid">
+                            <div class="picker-item-body">
+                                <strong>Hybrid Intelligence</strong>
+                                <span>PDF pgvector + real-time web search</span>
+                            </div>
+                            <i class="fas fa-check check-mark"></i>
+                        </div>
+                        <div class="picker-item" data-mode="open" id="optModeOpen">
+                            <div class="picker-item-body">
+                                <strong>Live Web Intelligence</strong>
+                                <span>Real-time web search with verified citations</span>
+                            </div>
+                            <i class="fas fa-check check-mark hidden"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Title & Inline Rename -->
+                <div class="active-thread-title-wrap">
+                    <span id="chatTitle" class="active-thread-title">New conversation</span>
+                    <button id="renameChatBtn" class="thread-rename-btn" title="Rename conversation">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="nav-right-cluster">
+                <button id="searchThreadTopBtn" class="top-tool-pill" title="Search conversation">
+                    <i class="fas fa-magnifying-glass"></i>
+                    <span>Search thread</span>
+                </button>
+                <button id="exportChatBtn" class="top-tool-pill" title="Export conversation as Markdown">
+                    <i class="fas fa-arrow-up-right-from-square"></i>
                     <span>Export</span>
                 </button>
-                <button id="clearChatHeaderBtn" class="header-tool-btn" title="Clear messages">
+                <button id="clearChatHeaderBtn" class="top-tool-pill" title="Clear message view">
                     <i class="fas fa-eraser"></i>
                     <span>Clear</span>
                 </button>
-                <div class="logo-header">
-                    <i class="fas fa-brain"></i>
-                    <span>DualMind</span>
-                </div>
+                <button id="newChatBtn" class="top-cta-pill" title="New conversation (Ctrl+K)">
+                    <i class="fas fa-plus"></i>
+                    <span>New Thread</span>
+                </button>
             </div>
         </header>
-        
-        <!-- Messages Stream / Hero Container -->
+
+        <!-- Messages Stream & Center Stage -->
         <div id="messagesContainer" class="messages-container">
-            <!-- Welcome Hero State (ChatGPT / Perplexity Inspiration) -->
-            <div class="welcome" id="welcomeHero">
-                <!-- Glowing Amber Orb -->
-                <div class="hero-orb-center">
-                    <div class="orb-core"></div>
-                    <div class="orb-halo"></div>
+            <!-- Welcome Hero State (ChatGPT / Perplexity Aesthetic) -->
+            <div class="welcome-stage" id="welcomeHero">
+                <!-- 3D Glowing Orb Canvas -->
+                <div class="orb-visual-wrap">
+                    <canvas id="heroOrbCanvas"></canvas>
                 </div>
 
-                <!-- Dynamic Greeting & Headline -->
-                <h2 class="welcome-greeting" id="welcomeGreeting">Good day, Explorer</h2>
-                <h1 class="welcome-headline">What's on <span class="gradient-orange-text">your mind?</span></h1>
-                
-                <!-- Example Prompt Cards Grid -->
-                <div class="starter-section-title">GET STARTED WITH AN EXAMPLE BELOW</div>
-                <div class="starter-grid">
-                    <button class="starter-card" data-prompt="Summarize the core takeaways, methodology, and conclusions from the attached PDF document.">
-                        <div class="starter-card-body">
-                            <span class="starter-card-title">Summarize document</span>
-                            <span class="starter-card-desc">Extract key points, conclusions, and data from uploaded PDFs</span>
-                        </div>
-                        <div class="starter-card-icon"><i class="fas fa-file-pdf"></i></div>
-                    </button>
+                <!-- Dynamic Personalized Greeting -->
+                <h2 class="welcome-greeting-text" id="welcomeGreeting">Good afternoon, Jason</h2>
+                <h1 class="welcome-headline-text">What's on <span class="gradient-orange-text">your mind?</span></h1>
 
-                    <button class="starter-card" data-prompt="Search the web for the latest developments, benchmarks, and news on AI reasoning models.">
-                        <div class="starter-card-body">
-                            <span class="starter-card-title">Live web search</span>
-                            <span class="starter-card-desc">Real-time web intelligence with verified source citations</span>
-                        </div>
-                        <div class="starter-card-icon"><i class="fas fa-globe"></i></div>
-                    </button>
+                <!-- Example Cards Section ("GET STARTED WITH AN EXAMPLE BELOW") -->
+                <div class="starter-section-wrap">
+                    <div class="starter-section-heading">GET STARTED WITH AN EXAMPLE BELOW</div>
+                    <div class="starter-cards-grid">
+                        <button class="starter-tall-card" data-prompt="Write a to-do list for a personal project">
+                            <span class="card-prompt-label">Write a to-do list for a personal project</span>
+                            <div class="card-bottom-icon">
+                                <i class="fas fa-user"></i>
+                            </div>
+                        </button>
 
-                    <button class="starter-card" data-prompt="Analyze this resume with comprehensive ATS scoring, section feedback, and actionable improvements.">
-                        <div class="starter-card-body">
-                            <span class="starter-card-title">ATS Resume Review</span>
-                            <span class="starter-card-desc">Evaluate score, formatting, keyword density, and fixes</span>
-                        </div>
-                        <div class="starter-card-icon"><i class="fas fa-file-contract"></i></div>
-                    </button>
+                        <button class="starter-tall-card" data-prompt="Generate an email to reply to a job offer">
+                            <span class="card-prompt-label">Generate an email to reply to a job offer</span>
+                            <div class="card-bottom-icon">
+                                <i class="fas fa-envelope"></i>
+                            </div>
+                        </button>
 
-                    <button class="starter-card" data-prompt="Compare the claims in my attached document against current public industry consensus found online.">
-                        <div class="starter-card-body">
-                            <span class="starter-card-title">Hybrid cross-check</span>
-                            <span class="starter-card-desc">Cross-reference document facts with external web search</span>
-                        </div>
-                        <div class="starter-card-icon"><i class="fas fa-link"></i></div>
-                    </button>
+                        <button class="starter-tall-card" data-prompt="Summarize this article in one paragraph">
+                            <span class="card-prompt-label">Summarize this article in one paragraph</span>
+                            <div class="card-bottom-icon">
+                                <i class="fas fa-comment-dots"></i>
+                            </div>
+                        </button>
+
+                        <button class="starter-tall-card" data-prompt="How does AI work in a technical capacity">
+                            <span class="card-prompt-label">How does AI work in a technical capacity</span>
+                            <div class="card-bottom-icon">
+                                <i class="fas fa-code"></i>
+                            </div>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <button id="scrollBottomBtn" class="scroll-bottom-btn hidden" title="Scroll to bottom">
+        <!-- Scroll to Bottom Button -->
+        <button id="scrollBottomBtn" class="scroll-bottom-floating hidden" title="Scroll to bottom">
             <i class="fas fa-arrow-down"></i>
         </button>
 
-        <!-- Command Input Dock (Floating Elevated Card) -->
-        <div class="input-area">
-            <div class="input-card">
-                <!-- Mode Pills Inside Top of Input Card -->
-                <div class="dock-header">
-                    <div class="mode-selector">
-                        <button class="mode-pill active" data-mode="hybrid">
-                            <i class="fas fa-link"></i>
-                            <span>Hybrid Mode</span>
-                        </button>
-                        <button class="mode-pill" data-mode="open">
-                            <i class="fas fa-globe"></i>
-                            <span>Web Search</span>
-                        </button>
-                    </div>
-                </div>
-                
+        <!-- Floating Command Dock (Pinned at bottom of workspace) -->
+        <div class="bottom-dock-wrapper" id="bottomDockWrapper">
+            <div class="floating-command-dock">
                 <!-- Attached File Badge -->
-                <div id="fileBadge" class="file-badge hidden">
-                    <div class="file-badge-text">
+                <div id="fileBadge" class="file-attachment-badge hidden">
+                    <div class="badge-content">
                         <i class="fas fa-file-pdf"></i>
                         <span id="fileBadgeName">document.pdf</span>
                     </div>
-                    <button type="button" id="removeFileBtn" class="file-remove-btn" title="Remove attachment">
+                    <button type="button" id="removeFileBtn" class="badge-remove-btn" title="Remove attachment">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
 
-                <!-- Textarea & Send Button -->
-                <div class="input-main-row">
-                    <textarea id="messageInput" placeholder="Ask DualMind anything or attach a PDF..." rows="1"></textarea>
-                    <button id="sendMsgBtn" class="send-button" title="Send message (Enter)">
-                        <i class="fas fa-arrow-up"></i>
-                    </button>
+                <!-- Main Input Area -->
+                <div class="dock-input-row">
+                    <i class="fas fa-sparkles dock-sparkle-icon"></i>
+                    <textarea id="messageInput" placeholder="Ask AI a question or make a request..." rows="1"></textarea>
                 </div>
-                
-                <!-- Bottom Toolbar inside Input Card -->
-                <div class="input-footer">
-                    <div class="footer-left">
-                        <button type="button" id="attachPdfBtn" class="toolbar-btn">
+
+                <!-- Dock Bottom Controls -->
+                <div class="dock-controls-bar">
+                    <div class="controls-left">
+                        <button type="button" id="attachPdfBtn" class="dock-pill-btn">
                             <i class="fas fa-paperclip"></i>
-                            <span>Attach PDF</span>
+                            <span>Attach</span>
                         </button>
                         <input type="file" id="pdfFileInput" accept=".pdf" hidden>
+
+                        <div class="writing-style-wrap">
+                            <button type="button" class="dock-pill-btn" id="writingStyleBtn">
+                                <span id="currentWritingStyle">Writing Styles</span>
+                                <i class="fas fa-chevron-down pill-chevron-small"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="footer-right">
-                        <span class="hint-text">Press <strong>Enter</strong> to send &bull; <strong>Shift+Enter</strong> for new line</span>
+
+                    <div class="controls-right">
+                        <!-- Citation Toggle Switch -->
+                        <label class="citation-switch-label" title="Enable verified citations">
+                            <input type="checkbox" id="citationToggle" checked>
+                            <span class="citation-toggle-track"></span>
+                            <span class="citation-text">Citation</span>
+                        </label>
+
+                        <!-- Circular Send Button -->
+                        <button type="button" id="sendMsgBtn" class="send-action-circle" title="Send message (Enter)">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -412,6 +516,10 @@
     </main>
 </div>
 
+<!-- 3D Orb Renderer Engine -->
+<script src="orb.js"></script>
+
+<!-- Application Controller -->
 <script src="script.js"></script>
 </body>
 </html>
