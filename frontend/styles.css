@@ -2317,23 +2317,178 @@ html, body {
     }
 }
 
-/* Finish the brand and primary utility surfaces with clearer hierarchy. */
-.brand-logo-mark {
-    width: 44px; height: 44px; flex: 0 0 44px; display: inline-flex;
-    align-items: center; justify-content: center; overflow: hidden;
-    border: 1px solid rgba(255,173,104,.22); border-radius: 50%;
-    background: radial-gradient(circle at 50% 42%, #18191e 0%, #090a0d 72%);
-    box-shadow: 0 0 22px rgba(242,138,66,.12), inset 0 1px rgba(255,255,255,.06);
+/* ============================================================================
+   BRAND IDENTITY: DYNAMICALLY POPPED-OUT LOGO & HIGH-IMPACT TYPOGRAPHY
+   ============================================================================ */
+
+/* Auth Hero Brand Row */
+.auth-brand-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: auto;
+    padding-bottom: 50px;
+    cursor: default;
 }
-.brand-brain-logo { width: 37px; height: 37px; object-fit: contain; border-radius: 50%; mix-blend-mode: screen; }
-.brand-lockup-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
-.auth-brand-row { align-items: center; gap: 13px; padding-bottom: 56px; }
-.auth-brand-row .brand-name { font-size: 1.38rem; font-weight: 800; letter-spacing: -.045em; color: #fff; }
-.brand-tagline { color: rgba(255,255,255,.62); font-size: .72rem; font-weight: 500; letter-spacing: .015em; }
-.topbar-brand { gap: 10px; }
-.topbar-brand .brand-logo-mark { width: 38px; height: 38px; flex-basis: 38px; }
-.topbar-brand .brand-logo-mark img { width: 33px; height: 33px; }
-.topbar-brand-name { color: #f7f4f1; font-size: 1rem; font-weight: 750; letter-spacing: -.045em; }
+
+/* Dynamically popped out logo emblem - NO black background */
+.auth-brand-row .brand-logo-mark {
+    width: 74px;
+    height: 74px;
+    flex: 0 0 74px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-radius: 50%;
+    /* Transparent luminous gradient aura - eliminates dark black background */
+    background: radial-gradient(circle at 50% 50%, rgba(255, 173, 104, 0.28) 0%, rgba(180, 120, 255, 0.14) 48%, rgba(255, 255, 255, 0.05) 72%, transparent 100%);
+    border: 1.5px solid rgba(255, 185, 125, 0.55);
+    box-shadow: 
+        0 0 38px rgba(242, 138, 66, 0.48),
+        0 14px 32px rgba(0, 0, 0, 0.35),
+        inset 0 1px 2px rgba(255, 255, 255, 0.5),
+        inset 0 0 24px rgba(242, 138, 66, 0.28);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    animation: brandLogoPopFloat 4.2s ease-in-out infinite alternate;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.25, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+/* Pulsing ambient glow ring behind emblem */
+.auth-brand-row .brand-logo-mark::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 160, 80, 0.4) 0%, rgba(180, 120, 255, 0.18) 50%, transparent 70%);
+    filter: blur(10px);
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.88;
+    animation: brandRingBreathe 4.2s ease-in-out infinite alternate;
+}
+
+/* Glowing Brain Logo Image */
+.auth-brand-row .brand-brain-logo {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    border-radius: 0;
+    mix-blend-mode: normal;
+    filter: drop-shadow(0 0 16px rgba(255, 173, 104, 0.95)) drop-shadow(0 0 32px rgba(242, 138, 66, 0.7));
+    transform: translateZ(0);
+    transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+/* Interactive Hover State: Pops out further */
+.auth-brand-row:hover .brand-logo-mark {
+    transform: translateY(-4px) scale(1.07);
+    border-color: rgba(255, 205, 160, 0.8);
+    box-shadow: 
+        0 0 54px rgba(255, 173, 104, 0.7),
+        0 18px 40px rgba(0, 0, 0, 0.45),
+        inset 0 1px 3px rgba(255, 255, 255, 0.6),
+        inset 0 0 28px rgba(242, 138, 66, 0.38);
+}
+
+.auth-brand-row:hover .brand-brain-logo {
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 20px rgba(255, 190, 130, 1)) drop-shadow(0 0 42px rgba(242, 138, 66, 0.9));
+}
+
+@keyframes brandLogoPopFloat {
+    0% {
+        transform: translateY(0px) scale(1);
+        box-shadow: 
+            0 0 32px rgba(242, 138, 66, 0.4),
+            0 10px 24px rgba(0, 0, 0, 0.3),
+            inset 0 1px 2px rgba(255, 255, 255, 0.4);
+    }
+    100% {
+        transform: translateY(-5px) scale(1.04);
+        box-shadow: 
+            0 0 52px rgba(255, 173, 104, 0.65),
+            0 18px 36px rgba(0, 0, 0, 0.38),
+            inset 0 1px 3px rgba(255, 255, 255, 0.55),
+            inset 0 0 26px rgba(242, 138, 66, 0.35);
+    }
+}
+
+@keyframes brandRingBreathe {
+    0% { opacity: 0.7; transform: scale(0.96); }
+    100% { opacity: 1; transform: scale(1.08); }
+}
+
+/* Brand Lockup Copy */
+.brand-lockup-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+/* Commanding, prominent Brand Name */
+.auth-brand-row .brand-name {
+    font-size: 2.45rem;
+    font-weight: 850;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+    color: #ffffff;
+    background: linear-gradient(110deg, #ffffff 32%, #ffd5b2 74%, #ff9e58 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 20px rgba(242, 138, 66, 0.3));
+}
+
+/* Subtitle Tagline */
+.auth-brand-row .brand-tagline {
+    font-size: 0.96rem;
+    font-weight: 500;
+    color: rgba(246, 240, 252, 0.85);
+    letter-spacing: 0.015em;
+    margin-top: 2px;
+}
+
+/* Topbar Brand in Chat Page */
+.topbar-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    color: #f4f2ef;
+    font-size: 1.08rem;
+    font-weight: 750;
+    letter-spacing: -.035em;
+}
+
+.topbar-brand .brand-logo-mark {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 173, 104, 0.22) 0%, rgba(180, 120, 255, 0.08) 50%, transparent 80%);
+    border: 1px solid rgba(255, 173, 104, 0.35);
+    box-shadow: 0 0 16px rgba(242, 138, 66, 0.28);
+}
+
+.topbar-brand .brand-logo-mark img {
+    width: 29px;
+    height: 29px;
+    object-fit: contain;
+    border-radius: 0;
+    mix-blend-mode: normal;
+    filter: drop-shadow(0 0 8px rgba(255, 173, 104, 0.7));
+}
+
+.topbar-brand-name {
+    color: #ffffff;
+    font-size: 1.08rem;
+    font-weight: 800;
+    letter-spacing: -.035em;
+}
 .drawer-toggle-btn {
     width: 36px; height: 36px; flex: 0 0 36px; display: inline-flex;
     align-items: center; justify-content: center; color: #aeb4bf;
@@ -2465,10 +2620,7 @@ html, body {
     background: radial-gradient(ellipse at 78% 20%, rgba(192,151,255,.26), transparent 44%),
                 radial-gradient(ellipse at 12% 86%, rgba(255,158,91,.22), transparent 45%);
     filter: blur(54px);
-}
-.auth-brand-row { margin-bottom: auto; padding-bottom: 62px; }
 .brand-brain-glyph { color: #ffad68; filter: drop-shadow(0 0 12px rgba(255,173,104,.38)); }
-.brand-name { font-size: 1.08rem; letter-spacing: -.025em; }
 .auth-hero-title { max-width: 470px; font-size: clamp(2.4rem, 4vw, 3.25rem); line-height: 1.08; letter-spacing: -.055em; }
 .auth-hero-desc { max-width: 420px; margin-bottom: 38px; color: rgba(247,241,250,.72); font-size: .96rem; line-height: 1.7; }
 .auth-steps-stack { gap: 9px; }
@@ -2607,9 +2759,8 @@ html, body {
 }
 
 /* Thread actions, compact header and source/model controls */
-.rail-brand-btn { overflow: hidden; padding: 5px; }
-.rail-brand-btn img { width: 100%; height: 100%; object-fit: contain; border-radius: 9px; mix-blend-mode: screen; }
-.brand-brain-logo { width: 27px; height: 27px; object-fit: contain; border-radius: 50%; mix-blend-mode: screen; }
+.rail-brand-btn { overflow: hidden; padding: 6px; }
+.rail-brand-btn img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: normal; filter: drop-shadow(0 0 10px rgba(255, 173, 104, 0.65)); }
 .drawer-header-actions { display: flex; align-items: center; gap: 8px; }
 .drawer-new-thread-btn {
     display: inline-flex; align-items: center; gap: 8px; min-height: 34px;
@@ -2654,12 +2805,9 @@ html, body {
 .nav-left-cluster { min-width: 0; flex: 1; }
 .active-thread-title-wrap { margin-left: 0; }
 .active-thread-title { max-width: min(56vw, 620px); color: #e1e3e8; font-size: .92rem; font-weight: 600; }
-.nav-right-cluster { gap: 18px; }
-.topbar-brand { display: inline-flex; align-items: center; gap: 8px; color: #f4f2ef; font-size: .92rem; font-weight: 700; letter-spacing: -.035em; }
-.topbar-brand img { display: block; width: 32px; height: 32px; object-fit: contain; mix-blend-mode: screen; }
 .top-tool-pill { border-color: #2a2e37; border-radius: 9px; }
-.welcome-brand-logo { display: block; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: screen; filter: drop-shadow(0 0 20px rgba(242,138,66,.24)); }
-.orb-visual-wrap { width: 126px; height: 126px; margin-bottom: 15px; border-radius: 50%; overflow: hidden; }
+.welcome-brand-logo { display: block; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: normal; filter: drop-shadow(0 0 28px rgba(242,138,66,.48)) drop-shadow(0 0 10px rgba(255,173,104,.8)); }
+.orb-visual-wrap { width: 130px; height: 130px; margin-bottom: 15px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(255,173,104,.18) 0%, transparent 70%); }
 .dock-controls-bar { gap: 9px; }
 .controls-left { gap: 8px; }
 .writing-style-wrap, .mode-picker-wrap, .composer-model-wrap { position: relative; }
