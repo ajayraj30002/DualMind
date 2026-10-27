@@ -33,8 +33,8 @@ let promptModal, promptTitle, promptMessage, promptInput, promptSaveBtn, promptC
 let confirmResolveFn = null;
 let promptResolveFn = null;
 
-// Clean Welcome Hero HTML matching ChatGPT Reference Layout
-function getWelcomeHtml(userName = 'Explorer') {
+// DualMind Enterprise Stage HTML
+function getWelcomeHtml(userName = 'Analyst') {
     return `
     <div class="welcome-stage" id="welcomeHero">
         <div class="orb-visual-wrap">
@@ -42,29 +42,29 @@ function getWelcomeHtml(userName = 'Explorer') {
         </div>
 
         <h2 class="welcome-greeting-text" id="welcomeGreeting">${getTimeGreeting(userName)}</h2>
-        <h1 class="welcome-headline-text">What's on <span class="gradient-orange-text">your mind?</span></h1>
+        <h1 class="welcome-headline-text">What would you like to <span class="gradient-orange-text">synthesize today?</span></h1>
         
         <div class="starter-section-wrap">
-            <div class="starter-section-heading">GET STARTED WITH AN EXAMPLE BELOW</div>
+            <div class="starter-section-heading">AGENTIC RETRIEVAL CAPABILITIES</div>
             <div class="starter-cards-grid">
-                <button class="starter-tall-card" data-prompt="Write a to-do list for a personal project">
-                    <span class="card-prompt-label">Write a to-do list for a personal project</span>
-                    <div class="card-bottom-icon"><i class="fas fa-user"></i></div>
+                <button class="starter-tall-card" data-prompt="Synthesize the core takeaways, methodology, and empirical conclusions from the attached PDF document.">
+                    <span class="card-prompt-label">Synthesize document findings & methodology</span>
+                    <div class="card-bottom-icon"><i class="fas fa-file-lines"></i></div>
                 </button>
 
-                <button class="starter-tall-card" data-prompt="Generate an email to reply to a job offer">
-                    <span class="card-prompt-label">Generate an email to reply to a job offer</span>
-                    <div class="card-bottom-icon"><i class="fas fa-envelope"></i></div>
+                <button class="starter-tall-card" data-prompt="Cross-examine the claims in my attached document against current public industry consensus found online.">
+                    <span class="card-prompt-label">Cross-examine claims with live web intelligence</span>
+                    <div class="card-bottom-icon"><i class="fas fa-network-wired"></i></div>
                 </button>
 
-                <button class="starter-tall-card" data-prompt="Summarize this article in one paragraph">
-                    <span class="card-prompt-label">Summarize this article in one paragraph</span>
-                    <div class="card-bottom-icon"><i class="fas fa-comment-dots"></i></div>
+                <button class="starter-tall-card" data-prompt="Perform an in-depth ATS resume audit with score breakdown, keyword density, and actionable fixes.">
+                    <span class="card-prompt-label">Perform comprehensive ATS resume audit</span>
+                    <div class="card-bottom-icon"><i class="fas fa-file-shield"></i></div>
                 </button>
 
-                <button class="starter-tall-card" data-prompt="How does AI work in a technical capacity">
-                    <span class="card-prompt-label">How does AI work in a technical capacity</span>
-                    <div class="card-bottom-icon"><i class="fas fa-code"></i></div>
+                <button class="starter-tall-card" data-prompt="Explain the architecture of hybrid reciprocal rank fusion (RRF) and provide a Python implementation.">
+                    <span class="card-prompt-label">Explain hybrid RRF architecture with code</span>
+                    <div class="card-bottom-icon"><i class="fas fa-terminal"></i></div>
                 </button>
             </div>
         </div>
