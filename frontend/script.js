@@ -23,7 +23,7 @@ let allSessions = [];
 
 // DOM References
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
-let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
+let newChatBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileBadge;
 let modeBtns, loadingOverlay, sidebar, sidebarToggle, scrollBottomBtn;
 let sessionSearchInput, clearSearchBtn;
 
@@ -33,16 +33,116 @@ let promptModal, promptTitle, promptMessage, promptInput, promptSaveBtn, promptC
 let confirmResolveFn = null;
 let promptResolveFn = null;
 
+function getUserDisplayName() {
+    if (!user || !user.email) return 'Analyst';
+    const raw = user.email.split('@')[0].replace(/[0-9_.-]/g, ' ').trim();
+    if (!raw) return 'Analyst';
+    const firstWord = raw.split(/\s+/)[0];
+    return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+}
+
+function getDynamicCatchUpMessage(userName = 'Analyst') {
+    const hour = new Date().getHours();
+    let timeGreeting = '';
+    let headlinePre = '';
+    let headlineHighlight = '';
+
+    if (hour >= 5 && hour < 12) {
+        // Morning: High energy, fresh start, productive
+        const morningGreetings = [
+            `Good morning, ${userName}`,
+            `Rise and shine, ${userName}`,
+            `Bright and early, ${userName}`,
+            `Ready to tackle the day, ${userName}?`
+        ];
+        const morningHeadlines = [
+            { pre: 'What would you like to ', highlight: 'synthesize today?' },
+            { pre: 'What intelligence shall we ', highlight: 'uncover this morning?' },
+            { pre: 'Ready to turn complex documents into ', highlight: 'clear answers?' },
+            { pre: 'What questions are on your ', highlight: 'agenda today?' }
+        ];
+        timeGreeting = morningGreetings[Math.floor(Math.random() * morningGreetings.length)];
+        const h = morningHeadlines[Math.floor(Math.random() * morningHeadlines.length)];
+        headlinePre = h.pre;
+        headlineHighlight = h.highlight;
+    } else if (hour >= 12 && hour < 17) {
+        // Afternoon: Flow state, execution, deep dive
+        const afternoonGreetings = [
+            `Good afternoon, ${userName}`,
+            `Midday momentum, ${userName}`,
+            `Keeping up the pace, ${userName}`,
+            `Welcome back, ${userName}`
+        ];
+        const afternoonHeadlines = [
+            { pre: 'What would you like to ', highlight: 'synthesize today?' },
+            { pre: 'Where shall we direct your ', highlight: 'focus this afternoon?' },
+            { pre: 'What files or live web data shall we ', highlight: 'cross-examine?' },
+            { pre: 'Ready to dig into your next ', highlight: 'deep inquiry?' }
+        ];
+        timeGreeting = afternoonGreetings[Math.floor(Math.random() * afternoonGreetings.length)];
+        const h = afternoonHeadlines[Math.floor(Math.random() * afternoonHeadlines.length)];
+        headlinePre = h.pre;
+        headlineHighlight = h.highlight;
+    } else if (hour >= 17 && hour < 21) {
+        // Evening: Winding down, review, synthesis, clarity
+        const eveningGreetings = [
+            `Good evening, ${userName}`,
+            `Winding down the day, ${userName}`,
+            `Evening synthesis, ${userName}`,
+            `Wrapping up discoveries, ${userName}`
+        ];
+        const eveningHeadlines = [
+            { pre: "Let's review and synthesize your ", highlight: 'findings tonight.' },
+            { pre: 'What final insights would you like to ', highlight: 'uncover today?' },
+            { pre: 'What questions shall we ', highlight: 'clarify this evening?' },
+            { pre: 'Connecting the dots on ', highlight: "today's research." }
+        ];
+        timeGreeting = eveningGreetings[Math.floor(Math.random() * eveningGreetings.length)];
+        const h = eveningHeadlines[Math.floor(Math.random() * eveningHeadlines.length)];
+        headlinePre = h.pre;
+        headlineHighlight = h.highlight;
+    } else {
+        // Late Night / Midnight (21:00 - 05:00): Quiet, deep work, curiosity
+        const nightGreetings = [
+            `Quiet hours, ${userName}`,
+            `Late night deep work, ${userName}`,
+            `Burning the midnight oil, ${userName}?`,
+            `Midnight inspiration, ${userName}`
+        ];
+        const nightHeadlines = [
+            { pre: 'Deep focus hours. What are we ', highlight: 'investigating tonight?' },
+            { pre: 'Uninterrupted thinking. What shall we ', highlight: 'synthesize tonight?' },
+            { pre: 'Midnight breakthroughs start with the ', highlight: 'right question.' },
+            { pre: 'What would you like to ', highlight: 'explore tonight?' }
+        ];
+        timeGreeting = nightGreetings[Math.floor(Math.random() * nightGreetings.length)];
+        const h = nightHeadlines[Math.floor(Math.random() * nightHeadlines.length)];
+        headlinePre = h.pre;
+        headlineHighlight = h.highlight;
+    }
+
+    return {
+        greeting: timeGreeting,
+        headlineHtml: `${headlinePre}<span class="gradient-orange-text">${headlineHighlight}</span>`
+    };
+}
+
+function getTimeGreeting(name) {
+    return getDynamicCatchUpMessage(name).greeting;
+}
+
 // DualMind Enterprise Stage HTML
-function getWelcomeHtml(userName = 'Analyst') {
+function getWelcomeHtml(userName = null) {
+    const displayName = userName || getUserDisplayName();
+    const catchUp = getDynamicCatchUpMessage(displayName);
     return `
     <div class="welcome-stage" id="welcomeHero">
         <div class="orb-visual-wrap">
-            <canvas id="heroOrbCanvas"></canvas>
+            <img class="welcome-brand-logo" src="dualmind_logo.png" alt="DualMind brain logo">
         </div>
 
-        <h2 class="welcome-greeting-text" id="welcomeGreeting">${getTimeGreeting(userName)}</h2>
-        <h1 class="welcome-headline-text">What would you like to <span class="gradient-orange-text">synthesize today?</span></h1>
+        <h2 class="welcome-greeting-text" id="welcomeGreeting">${catchUp.greeting}</h2>
+        <h1 class="welcome-headline-text">${catchUp.headlineHtml}</h1>
         
         <div class="starter-section-wrap">
             <div class="starter-section-heading">AGENTIC RETRIEVAL CAPABILITIES</div>
@@ -70,15 +170,6 @@ function getWelcomeHtml(userName = 'Analyst') {
         </div>
     </div>
     `;
-}
-
-function getTimeGreeting(name) {
-    const hour = new Date().getHours();
-    let timeOfDay = 'day';
-    if (hour < 12) timeOfDay = 'morning';
-    else if (hour < 17) timeOfDay = 'afternoon';
-    else timeOfDay = 'evening';
-    return `Good ${timeOfDay}, ${name}`;
 }
 
 // ============================================================================
@@ -538,9 +629,32 @@ function bindAssistantActions(messageEl, rawText) {
 // ============================================================================
 async function sendMessage() {
     const text = messageInput?.value.trim();
-    if (!text || !currentSessionId) return;
+    if (!text) return;
     const hasFile = !!pendingFile;
     const uploadedFilename = hasFile ? pendingFile.name : null;
+
+    // Auto-create chat session on the fly if starting a new chat
+    if (!currentSessionId) {
+        try {
+            const sessRes = await fetch(`${API_URL}/chat/sessions`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+            if (sessRes.status === 401) { doLogout(); return; }
+            const sessData = await sessRes.json();
+            if (sessRes.ok && sessData.session) {
+                currentSessionId = sessData.session.id;
+                currentSessionDocuments = [];
+                if (chatTitleSpan) chatTitleSpan.innerText = sessData.session.title || 'New conversation';
+            } else {
+                showToast('Failed to start chat session', 'error');
+                return;
+            }
+        } catch (e) {
+            showToast('Unable to reach server', 'error');
+            return;
+        }
+    }
 
     messageInput.value = '';
     messageInput.style.height = 'auto';
@@ -603,6 +717,24 @@ async function loadSession(sessionId) {
     currentSessionId = sessionId;
 
     try {
+        if (token === 'demo_token') {
+            const sessionInfo = allSessions.find(s => s.id === sessionId);
+            if (sessionInfo && chatTitleSpan) chatTitleSpan.innerText = sessionInfo.title;
+            if (messagesDiv) {
+                messagesDiv.innerHTML = '';
+                if (sessionId === 'sess_1') {
+                    await addMessageToChat('user', 'What are the key career highlights and biography of Virat Kohli?', 'virat_kohli_bio.pdf');
+                    await addMessageToChat('assistant', `## Career Highlights\n\n- **Made his Test debut in 2011**\n- **Became the captain of the Indian team in 2014**\n- **Plays for Royal Challengers Bengaluru in the Indian Premier League**\n\n## Personal Life and Education\n\nThere is no information available about **Virat Kohli**'s 12th grade details in the provided context. However, it is mentioned that **Ajay Raj** has 12th grade details, but this is not relevant to **Virat Kohli**.\n\n## Biography\n\n**Virat Kohli** is a renowned Indian cricketer, known for his exceptional skills on the field. His biography can be summarized as follows:\n\n- Born on 5 November 1988 in Delhi\n- Developed an interest in cricket at a young age\n- Joined the West Delhi Cricket Academy at nine\n- Made his Test debut in 2011 and became the captain of the Indian team in 2014`, null, 'hybrid');
+                } else {
+                    await addMessageToChat('user', 'Explain reciprocal rank fusion (RRF) in hybrid RAG architecture.');
+                    await addMessageToChat('assistant', `### Reciprocal Rank Fusion (RRF)\n\n**RRF** combines search scores from dense vector search (semantic similarity) and sparse keyword search (BM25):\n\n$$\\text{RRF Score}(d) = \\sum_{m \\in M} \\frac{1}{k + r_m(d)}$$\n\nWhere:\n- $k$ is a ranking constant (usually 60)\n- $r_m(d)$ is the document rank in model $m$\n\nThis ensures balanced, multi-source retrieval with zero single-model bias.`, null, 'hybrid');
+                }
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+            renderSessionList(allSessions);
+            return;
+        }
+
         await loadSessionDocuments(sessionId);
         const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -643,7 +775,16 @@ function toggleSidebar() {
     }
 }
 
-async function loadSessions() {
+function getPinnedSessionIds() {
+    try { return new Set(JSON.parse(localStorage.getItem('dualmind_pinned_sessions') || '[]').map(String)); }
+    catch { return new Set(); }
+}
+
+function savePinnedSessionIds(pinned) {
+    localStorage.setItem('dualmind_pinned_sessions', JSON.stringify([...pinned]));
+}
+
+async function loadSessions(shouldSelectFirst = false) {
     if (!sessionListDiv) return;
     sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem;">Loading...</div>';
     try {
@@ -653,11 +794,12 @@ async function loadSessions() {
         if (res.ok && data.sessions && data.sessions.length > 0) {
             allSessions = data.sessions;
             renderSessionList(allSessions);
-            if (!currentSessionId && allSessions[0]) await loadSession(allSessions[0].id);
+            if (shouldSelectFirst && !currentSessionId && allSessions[0]) {
+                await loadSession(allSessions[0].id);
+            }
         } else {
             allSessions = [];
             sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem;">No conversations yet</div>';
-            if (!currentSessionId) await createNewSession();
         }
     } catch (err) {
         sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #ef4444; font-size: 0.8rem;">Failed to load</div>';
@@ -669,9 +811,11 @@ function renderSessionList(sessions) {
     sessionListDiv.innerHTML = '';
 
     const filterQuery = sessionSearchInput?.value.toLowerCase().trim() || '';
+    const pinned = getPinnedSessionIds();
     const filtered = filterQuery
         ? sessions.filter(s => (s.title || '').toLowerCase().includes(filterQuery))
         : sessions;
+    filtered.sort((a, b) => Number(pinned.has(String(b.id))) - Number(pinned.has(String(a.id))));
 
     if (filtered.length === 0) {
         sessionListDiv.innerHTML = `<div style="padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem;">No matching chats</div>`;
@@ -681,34 +825,59 @@ function renderSessionList(sessions) {
     filtered.forEach(s => {
         const div = document.createElement('div');
         const isActive = currentSessionId === s.id;
+        const isPinned = pinned.has(String(s.id));
         div.className = `session-item ${isActive ? 'active' : ''}`;
         div.dataset.id = s.id;
         div.innerHTML = `
+            ${isPinned ? '<i class="fas fa-thumbtack session-pin-indicator" title="Pinned on this device"></i>' : ''}
             <span class="session-title">${escapeHtml(s.title || 'Untitled')}</span>
             <div class="session-actions">
-                <button class="rename-session-btn" data-id="${s.id}" data-title="${escapeHtml(s.title || '')}" title="Rename">
-                    <i class="fas fa-pen"></i>
+                <button class="session-menu-trigger" type="button" aria-label="Chat options" aria-haspopup="true" aria-expanded="false" title="Chat options">
+                    <i class="fas fa-ellipsis"></i>
                 </button>
-                <button class="delete-session" data-id="${s.id}" title="Delete">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
+                <div class="session-context-menu hidden" role="menu">
+                    <button type="button" class="session-menu-option" data-action="pin" role="menuitem"><i class="fas fa-thumbtack"></i><span>${isPinned ? 'Unpin' : 'Pin'}</span></button>
+                    <button type="button" class="session-menu-option" data-action="rename" role="menuitem"><i class="fas fa-pen"></i><span>Rename</span></button>
+                    <div class="session-menu-divider"></div>
+                    <button type="button" class="session-menu-option danger" data-action="delete" role="menuitem"><i class="fas fa-trash-can"></i><span>Delete</span></button>
+                </div>
             </div>
         `;
 
         div.addEventListener('click', (e) => {
-            if (!e.target.closest('.delete-session') && !e.target.closest('.rename-session-btn')) {
-                loadSession(s.id);
+            if (e.target.closest('.session-actions')) return;
+            loadSession(s.id);
+        });
+
+        const menuTrigger = div.querySelector('.session-menu-trigger');
+        const contextMenu = div.querySelector('.session-context-menu');
+        menuTrigger?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const willOpen = contextMenu.classList.contains('hidden');
+            document.querySelectorAll('.session-context-menu').forEach(menu => menu.classList.add('hidden'));
+            document.querySelectorAll('.session-menu-trigger').forEach(trigger => trigger.setAttribute('aria-expanded', 'false'));
+            contextMenu.classList.toggle('hidden', !willOpen);
+            menuTrigger.setAttribute('aria-expanded', String(willOpen));
+        });
+
+        contextMenu?.addEventListener('click', async (e) => {
+            const option = e.target.closest('[data-action]');
+            if (!option) return;
+            e.stopPropagation();
+            contextMenu.classList.add('hidden');
+            menuTrigger?.setAttribute('aria-expanded', 'false');
+            if (option.dataset.action === 'pin') {
+                const updatedPins = getPinnedSessionIds();
+                if (updatedPins.has(String(s.id))) updatedPins.delete(String(s.id));
+                else updatedPins.add(String(s.id));
+                savePinnedSessionIds(updatedPins);
+                renderSessionList(allSessions);
+                showToast(updatedPins.has(String(s.id)) ? 'Thread pinned on this device' : 'Thread unpinned', 'info', 1400);
+            } else if (option.dataset.action === 'rename') {
+                await renameSessionFromSidebar(s.id, s.title || 'Conversation');
+            } else if (option.dataset.action === 'delete') {
+                await deleteSessionFromSidebar(s.id);
             }
-        });
-
-        div.querySelector('.delete-session')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deleteSessionFromSidebar(s.id);
-        });
-
-        div.querySelector('.rename-session-btn')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            renameSessionFromSidebar(s.id, s.title || 'Conversation');
         });
 
         sessionListDiv.appendChild(div);
@@ -732,6 +901,7 @@ async function renameSessionFromSidebar(sessionId, currentTitle) {
     } catch (err) {
         showToast('Failed to rename', 'error');
     }
+
 }
 
 // IN-APP DELETE CONFIRMATION POPUP
@@ -747,17 +917,12 @@ async function deleteSessionFromSidebar(sessionId) {
         await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
             method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
         });
+        const pinned = getPinnedSessionIds();
+        pinned.delete(String(sessionId));
+        savePinnedSessionIds(pinned);
         showToast('Conversation deleted', 'info');
         if (currentSessionId === sessionId) {
-            currentSessionId = null;
-            currentSessionDocuments = [];
-            const sessionsRes = await fetch(`${API_URL}/chat/sessions`, { headers: { 'Authorization': `Bearer ${token}` } });
-            const sessionsData = await sessionsRes.json();
-            if (sessionsData.sessions && sessionsData.sessions.length > 0) {
-                await loadSession(sessionsData.sessions[0].id);
-            } else {
-                await createNewSession();
-            }
+            startNewChat();
         }
         await loadSessions();
     } catch (err) {
@@ -765,24 +930,20 @@ async function deleteSessionFromSidebar(sessionId) {
     }
 }
 
+function startNewChat() {
+    currentSessionId = null;
+    currentSessionDocuments = [];
+    if (chatTitleSpan) chatTitleSpan.innerText = 'New conversation';
+    if (fileBadge) fileBadge.classList.add('hidden');
+    if (fileInput) fileInput.value = '';
+    pendingFile = null;
+    clearMessages();
+    renderSessionList(allSessions);
+    showToast('New thread started', 'info', 1400);
+}
+
 async function createNewSession() {
-    try {
-        const res = await fetch(`${API_URL}/chat/sessions`, {
-            method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-        });
-        if (res.status === 401) { doLogout(); return; }
-        const data = await res.json();
-        if (res.ok && data.session) {
-            currentSessionId = data.session.id;
-            currentSessionDocuments = [];
-            if (chatTitleSpan) chatTitleSpan.innerText = 'New conversation';
-            clearMessages();
-            await loadSessions();
-            showToast('New thread started', 'info', 1800);
-        }
-    } catch (err) {
-        console.error('Failed to create session:', err);
-    }
+    startNewChat();
 }
 
 async function loadSessionDocuments(sessionId) {
@@ -801,7 +962,7 @@ async function loadSessionDocuments(sessionId) {
 
 function clearMessages() {
     if (!messagesDiv) return;
-    const displayName = user?.email?.split('@')[0] || 'Explorer';
+    const displayName = getUserDisplayName();
     messagesDiv.innerHTML = getWelcomeHtml(displayName);
     bindStarterChips();
 }
@@ -1191,14 +1352,10 @@ function checkAuth() {
             { id: 'sess_1', title: 'Career Highlights & Biography' },
             { id: 'sess_2', title: 'Machine Learning Research' }
         ];
-        currentSessionId = 'sess_1';
+        currentSessionId = null;
         renderSessionList(allSessions);
-        if (chatTitleSpan) chatTitleSpan.innerText = 'Career Highlights & Biography';
-        setTimeout(() => {
-            addMessageToChat('user', 'What are the key career highlights and biography of Virat Kohli?', 'virat_kohli_bio.pdf');
-            addMessageToChat('assistant', `## Career Highlights\n\n- **Made his Test debut in 2011**\n- **Became the captain of the Indian team in 2014**\n- **Plays for Royal Challengers Bengaluru in the Indian Premier League**\n\n## Personal Life and Education\n\nThere is no information available about **Virat Kohli**'s 12th grade details in the provided context. However, it is mentioned that **Ajay Raj** has 12th grade details, but this is not relevant to **Virat Kohli**.\n\n## Biography\n\n**Virat Kohli** is a renowned Indian cricketer, known for his exceptional skills on the field. His biography can be summarized as follows:\n\n- Born on 5 November 1988 in Delhi\n- Developed an interest in cricket at a young age\n- Joined the West Delhi Cricket Academy at nine\n- Made his Test debut in 2011 and became the captain of the Indian team in 2014`, null, 'hybrid');
-            if (messagesDiv) messagesDiv.scrollTop = 0;
-        }, 100);
+        if (chatTitleSpan) chatTitleSpan.innerText = 'New conversation';
+        clearMessages();
         return;
     }
 
@@ -1225,12 +1382,15 @@ function showChatUI() {
     
     const emailSidebar = document.getElementById('userEmailSidebar');
     const avatarLetter = document.getElementById('userAvatarLetter');
-    const name = user?.email?.split('@')[0] || 'User';
+    const name = getUserDisplayName();
     if (emailSidebar) emailSidebar.innerText = name;
     if (avatarLetter) avatarLetter.innerText = name.charAt(0).toUpperCase();
 
-    const greetingEl = document.getElementById('welcomeGreeting');
-    if (greetingEl) greetingEl.textContent = getTimeGreeting(name);
+    // Application opens with a fresh new chat by default
+    currentSessionId = null;
+    currentSessionDocuments = [];
+    if (chatTitleSpan) chatTitleSpan.innerText = 'New conversation';
+    clearMessages();
 }
 
 function toggleForms(showRegister) {
@@ -1401,7 +1561,6 @@ document.addEventListener('DOMContentLoaded', () => {
     messageInput = document.getElementById('messageInput');
     sendBtn = document.getElementById('sendMsgBtn');
     newChatBtn = document.getElementById('newChatBtn');
-    renameBtn = document.getElementById('renameChatBtn');
     logoutBtn = document.getElementById('logoutSidebarBtn');
     chatTitleSpan = document.getElementById('chatTitle');
     attachBtn = document.getElementById('attachPdfBtn');
@@ -1411,7 +1570,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadingOverlay = document.getElementById('loadingOverlay');
     // Sidebar / Drawer
     sidebar = document.getElementById('sessionDrawer') || document.getElementById('sidebar');
-    sidebarToggle = document.getElementById('sidebarToggle') || document.getElementById('drawerToggleBtn');
+    sidebarToggle = document.getElementById('sidebarToggle');
     scrollBottomBtn = document.getElementById('scrollBottomBtn');
     sessionSearchInput = document.getElementById('sessionSearchInput');
     clearSearchBtn = document.getElementById('clearSearchBtn');
@@ -1473,21 +1632,10 @@ function setupEventListeners() {
         messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
     });
 
-    newChatBtn?.addEventListener('click', createNewSession);
-    document.getElementById('newThreadTopBtn')?.addEventListener('click', createNewSession);
-    document.getElementById('railNewThreadBtn')?.addEventListener('click', createNewSession);
-    
-    document.getElementById('railHomeBtn')?.addEventListener('click', () => {
-        clearMessages();
-        const displayName = user?.email?.split('@')[0] || 'Jason';
-        if (messagesDiv) {
-            messagesDiv.innerHTML = getWelcomeHtml(displayName);
-            bindStarterChips();
-        }
-    });
+    newChatBtn?.addEventListener('click', startNewChat);
+    document.getElementById('railNewThreadBtn')?.addEventListener('click', startNewChat);
+    document.getElementById('railHomeBtn')?.addEventListener('click', startNewChat);
 
-    renameBtn?.addEventListener('click', renameSession);
-    chatTitleSpan?.addEventListener('click', renameSession);
     logoutBtn?.addEventListener('click', async () => {
         const confirmed = await showConfirmDialog('Sign out?', 'Are you sure you want to sign out of DualMind?', 'Sign Out', false);
         if (confirmed) doLogout();
@@ -1506,46 +1654,53 @@ function setupEventListeners() {
 
     // Drawer / Rail Navigation
     document.getElementById('railHistoryBtn')?.addEventListener('click', toggleSidebar);
-    document.getElementById('drawerToggleBtn')?.addEventListener('click', toggleSidebar);
     document.getElementById('closeDrawerBtn')?.addEventListener('click', () => {
         const drawer = document.getElementById('sessionDrawer') || sidebar;
         drawer?.classList.add('collapsed');
     });
 
-    // Model Selector Dropdown (ChatGPT 4o style)
-    const modelPill = document.getElementById('modelSelectorPill');
-    const modelMenu = document.getElementById('modelDropdownMenu');
-    modelPill?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        modelMenu?.classList.toggle('hidden');
+    // Search strategy and model pickers live beside the message composer.
+    const searchModeButton = document.getElementById('writingStyleBtn');
+    const searchModeMenu = document.getElementById('searchModeMenu');
+    const modelButton = document.getElementById('composerModelBtn');
+    const modelMenu = document.getElementById('composerModelMenu');
+    searchModeButton?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const opening = searchModeMenu?.classList.contains('hidden');
+        searchModeMenu?.classList.toggle('hidden', !opening);
+        searchModeButton.setAttribute('aria-expanded', String(Boolean(opening)));
     });
-
-    document.getElementById('optModeHybrid')?.addEventListener('click', () => {
-        currentMode = 'hybrid';
-        const label = document.getElementById('currentModelLabel');
-        if (label) label.innerText = 'DualMind 4.0';
-        document.querySelector('#optModeHybrid .check-mark')?.classList.remove('hidden');
-        document.querySelector('#optModeOpen .check-mark')?.classList.add('hidden');
-        modelMenu?.classList.add('hidden');
-        showToast('Mode: Hybrid Intelligence', 'info', 1600);
+    searchModeMenu?.querySelectorAll('[data-search-mode]').forEach(option => option.addEventListener('click', () => {
+        currentMode = option.dataset.searchMode;
+        searchModeMenu.querySelectorAll('[data-search-mode]').forEach(item => {
+            const selected = item === option;
+            item.classList.toggle('selected', selected);
+            item.setAttribute('aria-checked', String(selected));
+        });
+        document.getElementById('currentWritingStyle').textContent = currentMode === 'hybrid' ? 'Hybrid search' : 'Live web';
+        searchModeMenu.classList.add('hidden');
+        searchModeButton.setAttribute('aria-expanded', 'false');
+    }));
+    modelButton?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const opening = modelMenu?.classList.contains('hidden');
+        modelMenu?.classList.toggle('hidden', !opening);
+        modelButton.setAttribute('aria-expanded', String(Boolean(opening)));
     });
-
-    document.getElementById('optModeOpen')?.addEventListener('click', () => {
-        currentMode = 'open';
-        const label = document.getElementById('currentModelLabel');
-        if (label) label.innerText = 'Web Search';
-        document.querySelector('#optModeOpen .check-mark')?.classList.remove('hidden');
-        document.querySelector('#optModeHybrid .check-mark')?.classList.add('hidden');
-        modelMenu?.classList.add('hidden');
-        showToast('Mode: Live Web Intelligence', 'info', 1600);
-    });
-
-    document.getElementById('railModeToggleBtn')?.addEventListener('click', () => {
-        currentMode = currentMode === 'hybrid' ? 'open' : 'hybrid';
-        const label = document.getElementById('currentModelLabel');
-        if (label) label.innerText = currentMode === 'hybrid' ? 'DualMind 4.0' : 'Web Search';
-        showToast(`Mode: ${currentMode === 'hybrid' ? 'Hybrid' : 'Web Search'}`, 'info', 1600);
-    });
+    modelMenu?.querySelectorAll('[data-model]').forEach(option => option.addEventListener('click', () => {
+        document.getElementById('selectedModelLabel').textContent = option.dataset.model;
+        localStorage.setItem('dualmind_model_preference', option.dataset.model);
+        modelMenu.querySelectorAll('[data-model]').forEach(item => {
+            const selected = item === option;
+            item.classList.toggle('selected', selected);
+            item.setAttribute('aria-checked', String(selected));
+        });
+        modelMenu.classList.add('hidden');
+        modelButton.setAttribute('aria-expanded', 'false');
+    }));
+    const savedModel = localStorage.getItem('dualmind_model_preference');
+    const savedOption = savedModel && [...(modelMenu?.querySelectorAll('[data-model]') || [])].find(option => option.dataset.model === savedModel);
+    if (savedOption) savedOption.click();
 
     // User Avatar Popup Menu
     const userAvatarBtn = document.getElementById('railUserAvatarBtn');
@@ -1557,21 +1712,24 @@ function setupEventListeners() {
 
     // Close menus on outside click
     document.addEventListener('click', (e) => {
-        if (modelMenu && !modelMenu.contains(e.target) && e.target !== modelPill) {
-            modelMenu.classList.add('hidden');
+        if (!e.target.closest('.session-actions')) {
+            document.querySelectorAll('.session-context-menu').forEach(menu => menu.classList.add('hidden'));
+            document.querySelectorAll('.session-menu-trigger').forEach(trigger => trigger.setAttribute('aria-expanded', 'false'));
+        }
+        if (!e.target.closest('.mode-picker-wrap')) {
+            searchModeMenu?.classList.add('hidden');
+            searchModeButton?.setAttribute('aria-expanded', 'false');
+        }
+        if (!e.target.closest('.composer-model-wrap')) {
+            modelMenu?.classList.add('hidden');
+            modelButton?.setAttribute('aria-expanded', 'false');
         }
         if (userMenu && !userMenu.contains(e.target) && !userAvatarBtn?.contains(e.target)) {
             userMenu.classList.add('hidden');
         }
     });
 
-    // Search
-    document.getElementById('searchThreadTopBtn')?.addEventListener('click', () => {
-        const drawer = document.getElementById('sessionDrawer') || sidebar;
-        drawer?.classList.remove('collapsed');
-        sessionSearchInput?.focus();
-    });
-
+    // Session search
     sessionSearchInput?.addEventListener('input', () => {
         const query = sessionSearchInput.value.trim();
         clearSearchBtn?.classList.toggle('hidden', !query);
@@ -1586,20 +1744,6 @@ function setupEventListeners() {
 
     // Actions
     document.getElementById('exportChatBtn')?.addEventListener('click', exportConversation);
-    document.getElementById('railExportBtn')?.addEventListener('click', exportConversation);
-    document.getElementById('clearChatHeaderBtn')?.addEventListener('click', async () => {
-        const confirmed = await showConfirmDialog(
-            'Clear conversation view?',
-            'This will clear the current message view. Your session history remains saved.',
-            'Clear View',
-            false
-        );
-        if (confirmed) {
-            clearMessages();
-            showToast('Conversation view cleared', 'info');
-        }
-    });
-
     // Scroll
     scrollBottomBtn?.addEventListener('click', () => {
         if (messagesDiv) messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
@@ -1618,6 +1762,8 @@ function setupEventListeners() {
             closeConfirmDialog(false);
             closePromptDialog(null);
             modelMenu?.classList.add('hidden');
+            searchModeMenu?.classList.add('hidden');
+            document.querySelectorAll('.session-context-menu').forEach(menu => menu.classList.add('hidden'));
             userMenu?.classList.add('hidden');
         }
     });

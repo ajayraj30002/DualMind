@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <!-- Enterprise Design System Stylesheet -->
-    <link rel="stylesheet" href="styles.css?v=2.2.1">
+    <link rel="stylesheet" href="styles.css?v=2.3.0">
     
     <!-- Markdown & Syntax Highlighting -->
     <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.min.js"></script>
@@ -104,7 +104,7 @@
                 <div class="auth-nebula-mesh"></div>
                 <div class="auth-hero-content">
                     <div class="auth-brand-row">
-                        <i class="fas fa-brain brand-brain-glyph"></i>
+                        <img class="brand-brain-logo" src="dualmind_logo.png" alt="">
                         <span class="brand-name">DualMind</span>
                     </div>
                     
@@ -251,7 +251,7 @@
     <aside class="icon-rail" id="iconRail">
         <div class="rail-top">
             <button class="rail-brand-btn" id="railBrandBtn" title="DualMind Hybrid Engine">
-                <i class="fas fa-brain"></i>
+                <img src="dualmind_logo.png" alt="DualMind brain logo">
             </button>
         </div>
 
@@ -259,7 +259,7 @@
             <button class="rail-item active" id="railHomeBtn" title="Home Stage">
                 <i class="fas fa-house"></i>
             </button>
-            <button class="rail-item" id="railNewThreadBtn" title="New Session (Ctrl+K)">
+            <button class="rail-item" id="railNewThreadBtn" title="New Thread (Ctrl+K)">
                 <i class="fas fa-plus"></i>
             </button>
             <button class="rail-item" id="railHistoryBtn" title="Session History (Threads)">
@@ -268,15 +268,9 @@
             <button class="rail-item" id="railDocumentsBtn" title="Attach PDF Document">
                 <i class="fas fa-file-pdf"></i>
             </button>
-            <button class="rail-item" id="railModeToggleBtn" title="Toggle Hybrid / Web Mode">
-                <i class="fas fa-network-wired"></i>
-            </button>
         </nav>
 
         <div class="rail-bottom">
-            <button class="rail-item" id="railExportBtn" title="Export Session (Markdown)">
-                <i class="fas fa-arrow-up-right-from-square"></i>
-            </button>
             <button class="rail-item" id="railSettingsBtn" title="System Status">
                 <i class="fas fa-sliders"></i>
             </button>
@@ -304,9 +298,12 @@
         <div class="drawer-header">
             <div class="drawer-title-row">
                 <h3>Sessions</h3>
-                <button class="drawer-close-btn" id="closeDrawerBtn" title="Close drawer">
-                    <i class="fas fa-times"></i>
-                </button>
+                <div class="drawer-header-actions">
+                    <button class="drawer-new-thread-btn" id="newChatBtn" title="Start a new thread">
+                        <i class="fas fa-plus"></i><span>New Thread</span>
+                    </button>
+                    <button class="drawer-close-btn" id="closeDrawerBtn" title="Close drawer"><i class="fas fa-times"></i></button>
+                </div>
             </div>
             <div class="drawer-search-wrap">
                 <i class="fas fa-search search-icon"></i>
@@ -324,66 +321,20 @@
         <!-- Top Navigation Bar -->
         <header class="top-nav-bar">
             <div class="nav-left-cluster">
-                <button class="drawer-toggle-btn" id="drawerToggleBtn" title="Toggle history drawer (Ctrl+B)">
-                    <i class="fas fa-bars"></i>
-                </button>
-
-                <!-- Model Selector Pill (ChatGPT 4o Inspo) -->
-                <div class="model-picker-wrap">
-                    <button class="model-pill-btn" id="modelSelectorPill" title="Select DualMind Strategy">
-                        <i class="fas fa-bolt model-icon"></i>
-                        <span id="currentModelLabel">DualMind 4.0 (Hybrid RAG)</span>
-                        <i class="fas fa-chevron-down model-chevron"></i>
-                    </button>
-
-                    <!-- Dropdown Menu -->
-                    <div class="model-picker-dropdown hidden" id="modelDropdownMenu">
-                        <div class="picker-item active" data-mode="hybrid" id="optModeHybrid">
-                            <div class="picker-item-body">
-                                <strong>Agentic Hybrid RAG</strong>
-                                <span>PDF pgvector + Cohere Rerank + live web fallback</span>
-                            </div>
-                            <i class="fas fa-check check-mark"></i>
-                        </div>
-                        <div class="picker-item" data-mode="open" id="optModeOpen">
-                            <div class="picker-item-body">
-                                <strong>Live Web Intelligence</strong>
-                                <span>Tavily real-time search with verified citations</span>
-                            </div>
-                            <i class="fas fa-check check-mark hidden"></i>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Active Thread Title -->
                 <div class="active-thread-title-wrap">
                     <span id="chatTitle" class="active-thread-title">New conversation</span>
-                    <button id="renameChatBtn" class="thread-rename-btn" title="Rename session">
-                        <i class="fas fa-pen"></i>
-                    </button>
                 </div>
             </div>
 
             <div class="nav-right-cluster">
-                <div class="engine-status-pill">
-                    <span class="status-dot"></span>
-                    <span>Llama 3.3 70B</span>
+                <div class="topbar-brand" aria-label="DualMind">
+                    <img src="dualmind_logo.png" alt="">
+                    <span>DualMind</span>
                 </div>
-                <button id="searchThreadTopBtn" class="top-tool-pill" title="Search session history">
-                    <i class="fas fa-magnifying-glass"></i>
-                    <span>Search</span>
-                </button>
                 <button id="exportChatBtn" class="top-tool-pill" title="Export conversation as Markdown">
                     <i class="fas fa-arrow-up-right-from-square"></i>
                     <span>Export</span>
-                </button>
-                <button id="clearChatHeaderBtn" class="top-tool-pill" title="Clear current view">
-                    <i class="fas fa-eraser"></i>
-                    <span>Clear</span>
-                </button>
-                <button id="newChatBtn" class="top-cta-pill" title="New conversation (Ctrl+K)">
-                    <i class="fas fa-plus"></i>
-                    <span>New Thread</span>
                 </button>
             </div>
         </header>
@@ -392,9 +343,8 @@
         <div id="messagesContainer" class="messages-container">
             <!-- Welcome Hero State -->
             <div class="welcome-stage" id="welcomeHero">
-                <!-- 3D Glowing Orb Canvas -->
                 <div class="orb-visual-wrap">
-                    <canvas id="heroOrbCanvas"></canvas>
+                    <img class="welcome-brand-logo" src="dualmind_logo.png" alt="DualMind brain logo">
                 </div>
 
                 <!-- Dynamic Greeting & Headline -->
@@ -471,22 +421,30 @@
                         </button>
                         <input type="file" id="pdfFileInput" accept=".pdf" hidden>
 
-                        <div class="writing-style-wrap">
-                            <button type="button" class="dock-pill-btn" id="writingStyleBtn">
-                                <span id="currentWritingStyle">Agentic Hybrid</span>
-                                <i class="fas fa-chevron-down pill-chevron-small"></i>
+                        <div class="writing-style-wrap mode-picker-wrap">
+                            <button type="button" class="dock-pill-btn" id="writingStyleBtn" aria-haspopup="true" aria-expanded="false">
+                                <i class="fas fa-diagram-project"></i><span id="currentWritingStyle">Hybrid search</span><i class="fas fa-chevron-down pill-chevron-small"></i>
                             </button>
+                            <div class="composer-menu hidden" id="searchModeMenu" role="menu">
+                                <button type="button" class="composer-menu-option selected" data-search-mode="hybrid" role="menuitemradio" aria-checked="true"><span><strong>Hybrid search</strong><small>Search your PDFs, with live web fallback</small></span><i class="fas fa-check"></i></button>
+                                <button type="button" class="composer-menu-option" data-search-mode="open" role="menuitemradio" aria-checked="false"><span><strong>Live web</strong><small>Search current information on the web</small></span><i class="fas fa-check"></i></button>
+                            </div>
+                        </div>
+                        <div class="model-picker-wrap composer-model-wrap">
+                            <button type="button" class="dock-pill-btn model-select-btn" id="composerModelBtn" aria-haspopup="true" aria-expanded="false">
+                                <i class="fas fa-microchip"></i><span id="selectedModelLabel">Llama 3.3 70B</span><i class="fas fa-chevron-down pill-chevron-small"></i>
+                            </button>
+                            <div class="composer-menu model-menu hidden" id="composerModelMenu" role="menu">
+                                <div class="composer-menu-heading">Choose a model</div>
+                                <button type="button" class="composer-menu-option selected" data-model="Llama 3.3 70B" role="menuitemradio" aria-checked="true"><span><strong>Llama 3.3 70B</strong><small>Balanced reasoning · Current default</small></span><i class="fas fa-check"></i></button>
+                                <button type="button" class="composer-menu-option" data-model="Llama 3.1 8B" role="menuitemradio" aria-checked="false"><span><strong>Llama 3.1 8B</strong><small>Faster responses</small></span><i class="fas fa-check"></i></button>
+                                <button type="button" class="composer-menu-option" data-model="Auto" role="menuitemradio" aria-checked="false"><span><strong>Auto</strong><small>Let DualMind choose</small></span><i class="fas fa-check"></i></button>
+                                <div class="composer-menu-note">Model selection is a UI preference for now.</div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="controls-right">
-                        <!-- Citation Toggle Switch -->
-                        <label class="citation-switch-label" title="Enable verified citations from documents & Tavily web">
-                            <input type="checkbox" id="citationToggle" checked>
-                            <span class="citation-toggle-track"></span>
-                            <span class="citation-text">Verified Citations</span>
-                        </label>
-
                         <!-- Circular Send Button -->
                         <button type="button" id="sendMsgBtn" class="send-action-circle" title="Send message (Enter)">
                             <i class="fas fa-arrow-up"></i>
@@ -499,9 +457,9 @@
 </div>
 
 <!-- 3D Glowing Orb Engine -->
-<script src="orb.js?v=2.2.1"></script>
+<script src="orb.js?v=2.3.0"></script>
 
 <!-- Application Controller -->
-<script src="script.js?v=2.2.1"></script>
+<script src="script.js?v=2.3.0"></script>
 </body>
 </html>

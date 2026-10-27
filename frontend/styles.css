@@ -1083,8 +1083,10 @@ html, body {
     color: #fff;
     font-weight: 600;
 }
+.session-title,
 .session-title-text {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1092,7 +1094,9 @@ html, body {
 }
 .session-actions { display: none; gap: 6px; }
 .session-item:hover .session-actions { display: flex; }
-.session-action-btn {
+.session-action-btn,
+.rename-session-btn,
+.delete-session {
     background: none;
     border: none;
     color: var(--text-muted);
@@ -1101,8 +1105,10 @@ html, body {
     padding: 2px 4px;
     transition: color 0.15s;
 }
-.session-action-btn:hover { color: #fff; }
-.session-action-btn.delete-btn:hover { color: #ef4444; }
+.session-action-btn:hover,
+.rename-session-btn:hover { color: #fff; }
+.session-action-btn.delete-btn:hover,
+.delete-session:hover { color: #ef4444; }
 
 /* ────────────────────────────────────────────────────────────────────────────
    MAIN WORKSPACE & TOP NAV BAR
@@ -2531,4 +2537,108 @@ html, body {
 }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
+
+/* Thread actions, compact header and source/model controls */
+.rail-brand-btn { overflow: hidden; padding: 5px; }
+.rail-brand-btn img { width: 100%; height: 100%; object-fit: contain; border-radius: 9px; }
+.brand-brain-logo { width: 27px; height: 27px; object-fit: contain; border-radius: 50%; mix-blend-mode: screen; }
+.drawer-header-actions { display: flex; align-items: center; gap: 8px; }
+.drawer-new-thread-btn {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 34px;
+    padding: 0 11px; color: #21150d; background: linear-gradient(105deg,#ffb06e,#f28a42);
+    border: 0; border-radius: 9px; font: 600 .77rem var(--font-sans); cursor: pointer;
+    transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+}
+.drawer-new-thread-btn:hover { filter: brightness(1.07); transform: translateY(-1px); box-shadow: 0 5px 16px rgba(206,101,49,.2); }
+.drawer-close-btn { width: 30px; height: 30px; }
+.session-item { padding: 8px 8px 8px 11px; min-height: 42px; gap: 7px; }
+.session-title { padding-right: 0; }
+.session-actions { position: relative; align-items: center; justify-content: flex-end; flex: 0 0 30px; }
+.session-menu-trigger {
+    width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 7px; color: #a8adb7; background: transparent; cursor: pointer;
+    opacity: 0; transform: scale(.88); transition: opacity .16s ease, transform .16s ease, background .16s ease, color .16s ease;
+}
+.session-item:hover .session-menu-trigger, .session-item:focus-within .session-menu-trigger,
+.session-menu-trigger[aria-expanded="true"] { opacity: 1; transform: scale(1); }
+.session-menu-trigger:hover, .session-menu-trigger[aria-expanded="true"] { color: #fff; background: #2a2e37; }
+.session-context-menu {
+    position: absolute; z-index: 400; top: calc(100% + 4px); right: 0; width: 180px;
+    padding: 5px; background: #191c23; border: 1px solid rgba(255,255,255,.11);
+    border-radius: 11px; box-shadow: 0 14px 34px rgba(0,0,0,.48), 0 2px 8px rgba(0,0,0,.24);
+    transform-origin: top right;
+}
+.session-context-menu:not(.hidden) { animation: chatMenuEnter .16s cubic-bezier(.2,.75,.25,1); }
+@keyframes chatMenuEnter { from { opacity: 0; transform: translateY(-5px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.session-menu-option {
+    width: 100%; min-height: 36px; display: flex; align-items: center; gap: 11px; padding: 0 10px;
+    color: #d3d6dc; background: transparent; border: 0; border-radius: 7px; text-align: left;
+    font: 500 .79rem var(--font-sans); cursor: pointer; transition: background .14s ease, color .14s ease;
+}
+.session-menu-option > i { width: 15px; color: #a9afba; font-size: .8rem; }
+.session-menu-option:hover { color: #fff; background: #292d36; }
+.session-menu-option.danger { color: #ff8a83; }
+.session-menu-option.danger > i { color: #ff8a83; }
+.session-menu-option.danger:hover { background: rgba(218,77,74,.13); }
+.session-menu-divider { height: 1px; margin: 4px 6px; background: rgba(255,255,255,.09); }
+.session-pin-indicator { flex: 0 0 auto; margin-right: 1px; color: #ffad68; font-size: .68rem; }
+.top-nav-bar { justify-content: space-between; }
+.nav-left-cluster { min-width: 0; flex: 1; }
+.active-thread-title-wrap { margin-left: 0; }
+.active-thread-title { max-width: min(56vw, 620px); color: #e1e3e8; font-size: .92rem; font-weight: 600; }
+.nav-right-cluster { gap: 18px; }
+.topbar-brand { display: inline-flex; align-items: center; gap: 8px; color: #f4f2ef; font-size: .92rem; font-weight: 700; letter-spacing: -.035em; }
+.topbar-brand img { display: block; width: 32px; height: 32px; object-fit: contain; }
+.top-tool-pill { border-color: #2a2e37; border-radius: 9px; }
+.welcome-brand-logo { display: block; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: screen; filter: drop-shadow(0 0 20px rgba(242,138,66,.24)); }
+.orb-visual-wrap { width: 126px; height: 126px; margin-bottom: 15px; border-radius: 50%; overflow: hidden; }
+.dock-controls-bar { gap: 9px; }
+.controls-left { gap: 8px; }
+.writing-style-wrap, .mode-picker-wrap, .composer-model-wrap { position: relative; }
+.model-select-btn { color: #d4d7de; }
+.model-select-btn > i:first-child { color: #ffad68; }
+.composer-menu {
+    position: absolute; z-index: 450; bottom: calc(100% + 10px); left: 0; width: 290px;
+    padding: 6px; background: #191c23; border: 1px solid rgba(255,255,255,.1); border-radius: 13px;
+    box-shadow: 0 18px 46px rgba(0,0,0,.5); transform-origin: bottom left;
+}
+.composer-menu:not(.hidden) { animation: composerMenuEnter .17s cubic-bezier(.2,.75,.25,1); }
+@keyframes composerMenuEnter { from { opacity: 0; transform: translateY(5px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.composer-menu-heading { padding: 8px 10px 7px; color: #9299a6; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.composer-menu-option {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px; color: #d5d8df; background: transparent; border: 0; border-radius: 9px;
+    text-align: left; cursor: pointer; transition: background .14s ease;
+}
+.composer-menu-option:hover, .composer-menu-option.selected { background: #242832; }
+.composer-menu-option > span { display: flex; flex-direction: column; gap: 3px; }
+.composer-menu-option strong { color: #f2f3f6; font-size: .79rem; font-weight: 600; }
+.composer-menu-option small { color: #999fac; font-size: .68rem; line-height: 1.35; }
+.composer-menu-option > i { opacity: 0; color: #ffad68; font-size: .78rem; }
+.composer-menu-option.selected > i { opacity: 1; }
+.composer-menu-note { padding: 8px 10px 5px; color: #808794; border-top: 1px solid rgba(255,255,255,.07); font-size: .66rem; }
+.user-popup-menu {
+    width: 254px; padding: 14px; border: 1px solid #2b3039; border-radius: 14px;
+    background: #171a21; box-shadow: 0 18px 48px rgba(0,0,0,.5); animation: chatMenuEnter .16s ease;
+}
+.user-info-row { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 2px 3px 13px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.user-info-row strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: #f0f1f4; font-size: .84rem; }
+.user-status-pill { color: #65d69a; font-size: .74rem; }
+.user-status-pill i { margin-right: 5px; }
+.popup-item { width: 100%; margin-top: 10px; border-radius: 8px; }
+.popup-item:hover { background: rgba(228,83,77,.11); }
+
+@media (max-width: 680px) {
+    .icon-rail { display: flex; width: 54px; flex: 0 0 54px; }
+    .active-thread-title { max-width: 46vw; }
+    .nav-right-cluster { gap: 8px; }
+    .topbar-brand { gap: 4px; font-size: .82rem; }
+    .topbar-brand img { width: 28px; height: 28px; }
+    .top-tool-pill span { display: none; }
+    .drawer-new-thread-btn { padding: 0 9px; }
+    .dock-controls-bar { align-items: flex-end; }
+    .controls-left { flex-wrap: wrap; }
+    .composer-menu { width: min(290px, calc(100vw - 36px)); }
+    .session-menu-trigger { opacity: 1; transform: none; }
 }
