@@ -13,7 +13,7 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -28,6 +28,9 @@
 </head>
 <body>
 
+<!-- Ambient Glow Layer -->
+<div class="ambient-glow-layer"></div>
+
 <!-- Toast Notifications -->
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
@@ -40,79 +43,193 @@
 </div>
 
 <!-- ========================================================================= -->
-<!-- LOGIN / AUTHENTICATION PAGE -->
+<!-- IN-APP CUSTOM CONFIRMATION MODAL (Replaces ugly browser confirm dialog) -->
 <!-- ========================================================================= -->
-<div id="loginPage" class="login-page">
-    <div class="login-card">
-        <div class="login-icon"><i class="fas fa-brain"></i></div>
-        <h1>DualMind</h1>
-        <p class="login-sub">AI Assistant with Document Search & Web Intelligence</p>
-        
-        <!-- Login Form -->
-        <div id="loginForm" class="login-form active">
-            <div id="loginError" class="form-error hidden"></div>
-            <div class="input-wrap">
-                <i class="fas fa-envelope field-icon"></i>
-                <input type="email" id="loginEmail" placeholder="Email" class="login-input" autocomplete="email">
-            </div>
-            <div class="input-wrap">
-                <i class="fas fa-lock field-icon"></i>
-                <input type="password" id="loginPassword" placeholder="Password" class="login-input" autocomplete="current-password">
-                <button type="button" class="password-toggle" data-target="loginPassword" title="Toggle password">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </div>
-            <button id="loginBtn" class="login-btn">Sign In</button>
-            <p class="login-switch">New user? <a href="#" id="showRegister">Create account</a></p>
+<div id="customConfirmModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card">
+        <div class="modal-icon-wrap danger" id="confirmModalIcon">
+            <i class="fas fa-trash-alt"></i>
         </div>
-        
-        <!-- Register Form -->
-        <div id="registerForm" class="login-form">
-            <div id="registerError" class="form-error hidden"></div>
-            <div id="registerSuccess" class="form-success hidden"></div>
-            <div class="input-wrap">
-                <i class="fas fa-user field-icon"></i>
-                <input type="text" id="registerName" placeholder="Full name" class="login-input">
-            </div>
-            <div class="input-wrap">
-                <i class="fas fa-envelope field-icon"></i>
-                <input type="email" id="registerEmail" placeholder="Email" class="login-input">
-            </div>
-            <div class="input-wrap">
-                <i class="fas fa-lock field-icon"></i>
-                <input type="password" id="registerPassword" placeholder="Password (min 6 characters)" class="login-input">
-                <button type="button" class="password-toggle" data-target="registerPassword" title="Toggle password">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </div>
-            <button id="registerBtn" class="login-btn">Create Account</button>
-            <p class="login-switch">Already have an account? <a href="#" id="showLogin">Sign in</a></p>
-        </div>
-        
-        <!-- OTP Verification Form -->
-        <div id="otpForm" class="login-form">
-            <div class="login-icon" style="margin-bottom: 0.5rem;"><i class="fas fa-envelope-open-text" style="font-size: 2.5rem;"></i></div>
-            <h2>Verify Your Email</h2>
-            <p style="color: #999; font-size: 0.85rem; margin-bottom: 1.2rem;">We sent a 6-digit code to <span id="otpEmailDisplay" style="color: #f97316; font-weight: 500;"></span></p>
-            <div id="otpError" class="form-error hidden"></div>
-            <div id="otpSuccess" class="form-success hidden"></div>
-            
-            <div class="otp-input-container">
-                <input type="text" id="otpInput" class="login-input" placeholder="000000" maxlength="6" style="text-align: center; font-size: 1.6rem; letter-spacing: 6px; font-weight: 600;">
-            </div>
-            <button id="verifyOtpBtn" class="login-btn">Verify Email</button>
-            <p class="login-switch" style="margin-top: 1rem;">
-                Didn't receive code? <a href="#" id="resendOtpBtn">Resend code</a>
-            </p>
-            <p class="login-switch" style="margin-top: 0.5rem;">
-                <a href="#" id="backToSignin" style="color: #777; font-size: 0.78rem;">← Back to sign in</a>
-            </p>
+        <h3 id="confirmModalTitle">Delete conversation?</h3>
+        <p id="confirmModalMessage">This action cannot be undone. All messages and context will be permanently removed.</p>
+        <div class="app-modal-actions">
+            <button type="button" class="modal-btn-cancel" id="confirmModalCancelBtn">Cancel</button>
+            <button type="button" class="modal-btn-danger" id="confirmModalActionBtn">Delete</button>
         </div>
     </div>
 </div>
 
 <!-- ========================================================================= -->
-<!-- CHAT PAGE WORKSPACE -->
+<!-- IN-APP CUSTOM PROMPT MODAL (Replaces ugly browser prompt dialog) -->
+<!-- ========================================================================= -->
+<div id="customPromptModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card">
+        <div class="modal-icon-wrap brand">
+            <i class="fas fa-pen"></i>
+        </div>
+        <h3 id="promptModalTitle">Rename conversation</h3>
+        <p id="promptModalMessage">Enter a new title for this conversation:</p>
+        <div class="prompt-input-wrap">
+            <input type="text" id="promptModalInput" class="app-modal-input" placeholder="Conversation title" maxlength="60">
+        </div>
+        <div class="app-modal-actions">
+            <button type="button" class="modal-btn-cancel" id="promptModalCancelBtn">Cancel</button>
+            <button type="button" class="modal-btn-primary" id="promptModalSaveBtn">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- AUTHENTICATION VIEW (SPLIT-LAYOUT INSPIRED BY MODERN SAAS DESIGN) -->
+<!-- ========================================================================= -->
+<div id="loginPage" class="login-page">
+    <div class="auth-split-container">
+        <!-- Left Side: Visual Brand Experience (OnlyPipe Inspiration with DualMind Orange/Amber Aura) -->
+        <div class="auth-hero-panel">
+            <div class="hero-orb-wrap">
+                <div class="hero-orb"></div>
+            </div>
+            <div class="hero-brand">
+                <div class="hero-logo-row">
+                    <i class="fas fa-brain hero-brain-icon"></i>
+                    <span>DualMind</span>
+                </div>
+                <h2>Dual Intelligence Across Documents & Web</h2>
+                <p>Ground your questions on private PDFs and the live web simultaneously with hybrid vector search.</p>
+            </div>
+            <div class="hero-feature-steps">
+                <div class="feature-step active">
+                    <span class="step-num">1</span>
+                    <div class="step-text">
+                        <strong>Upload & Index PDFs</strong>
+                        <span>Dense semantic chunking with pgvector</span>
+                    </div>
+                </div>
+                <div class="feature-step">
+                    <span class="step-num">2</span>
+                    <div class="step-text">
+                        <strong>Live Web Intelligence</strong>
+                        <span>Real-time search verification and citations</span>
+                    </div>
+                </div>
+                <div class="feature-step">
+                    <span class="step-num">3</span>
+                    <div class="step-text">
+                        <strong>Hybrid Reciprocal Fusion</strong>
+                        <span>BM25 lexical + dense embeddings ranking</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: Forms (Sign In, Create Account, OTP) -->
+        <div class="auth-form-panel">
+            <!-- Form Tabs -->
+            <div class="auth-tabs-row" id="authTabsRow">
+                <button type="button" class="auth-tab-btn active" id="tabSignIn">Sign In</button>
+                <button type="button" class="auth-tab-btn" id="tabSignUp">Create Account</button>
+            </div>
+
+            <!-- Sign In Form -->
+            <div id="loginForm" class="auth-form active">
+                <div class="auth-form-header">
+                    <h3>Welcome back</h3>
+                    <p>Enter your details to access your workspace.</p>
+                </div>
+
+                <div id="loginError" class="form-error hidden"></div>
+                
+                <div class="form-group">
+                    <label for="loginEmail">Email</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-envelope field-icon"></i>
+                        <input type="email" id="loginEmail" placeholder="name@company.com" class="auth-input" autocomplete="email">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-lock field-icon"></i>
+                        <input type="password" id="loginPassword" placeholder="••••••••••••" class="auth-input" autocomplete="current-password">
+                        <button type="button" class="password-toggle" data-target="loginPassword" title="Toggle password">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="button" id="loginBtn" class="auth-submit-btn">Sign In</button>
+                <p class="auth-switch-text">New to DualMind? <a href="#" id="showRegister">Create an account</a></p>
+            </div>
+
+            <!-- Create Account Form -->
+            <div id="registerForm" class="auth-form">
+                <div class="auth-form-header">
+                    <h3>Create an account</h3>
+                    <p>Get started with DualMind assistant in seconds.</p>
+                </div>
+
+                <div id="registerError" class="form-error hidden"></div>
+                <div id="registerSuccess" class="form-success hidden"></div>
+
+                <div class="form-group">
+                    <label for="registerName">Full Name</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-user field-icon"></i>
+                        <input type="text" id="registerName" placeholder="Ajay Raj" class="auth-input">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="registerEmail">Email</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-envelope field-icon"></i>
+                        <input type="email" id="registerEmail" placeholder="name@company.com" class="auth-input">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-lock field-icon"></i>
+                        <input type="password" id="registerPassword" placeholder="Min 6 characters" class="auth-input">
+                        <button type="button" class="password-toggle" data-target="registerPassword" title="Toggle password">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="button" id="registerBtn" class="auth-submit-btn">Create Account</button>
+                <p class="auth-switch-text">Already have an account? <a href="#" id="showLogin">Sign in</a></p>
+            </div>
+
+            <!-- OTP Verification Form -->
+            <div id="otpForm" class="auth-form">
+                <div class="auth-form-header">
+                    <div class="otp-badge"><i class="fas fa-shield-alt"></i></div>
+                    <h3>Verify Your Email</h3>
+                    <p>Enter the 6-digit verification code sent to <strong id="otpEmailDisplay">email@domain.com</strong></p>
+                </div>
+
+                <div id="otpError" class="form-error hidden"></div>
+                <div id="otpSuccess" class="form-success hidden"></div>
+
+                <div class="otp-input-wrap">
+                    <input type="text" id="otpInput" class="otp-single-input" placeholder="000000" maxlength="6" autofocus>
+                </div>
+
+                <button type="button" id="verifyOtpBtn" class="auth-submit-btn">Verify & Enter Workspace</button>
+                <div class="otp-links">
+                    <a href="#" id="resendOtpBtn">Didn't receive code? Resend</a>
+                    <a href="#" id="backToSignin" class="back-link">← Back to sign in</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MAIN APPLICATION WORKSPACE -->
 <!-- ========================================================================= -->
 <div id="chatPage" class="chat-page hidden">
     <!-- Sidebar -->
@@ -123,19 +240,21 @@
         
         <div class="sidebar-header">
             <div class="logo-area">
-                <i class="fas fa-brain"></i>
+                <div class="brand-brain-box">
+                    <i class="fas fa-brain"></i>
+                </div>
                 <span class="dualmind-sidebar-text">DualMind</span>
             </div>
             <button id="newChatBtn" class="new-chat-btn" title="New conversation (Ctrl+K)">
                 <i class="fas fa-plus"></i>
-                <span>New chat</span>
+                <span>New thread</span>
             </button>
         </div>
 
         <!-- Search conversations -->
         <div class="search-box-wrap">
             <i class="fas fa-search search-icon"></i>
-            <input type="text" id="sessionSearchInput" placeholder="Search chats..." autocomplete="off">
+            <input type="text" id="sessionSearchInput" placeholder="Search conversations..." autocomplete="off">
             <button id="clearSearchBtn" class="clear-search-btn hidden" title="Clear">
                 <i class="fas fa-times"></i>
             </button>
@@ -145,7 +264,7 @@
 
         <div class="sidebar-footer">
             <div class="user-row">
-                <i class="fas fa-user-circle"></i>
+                <div class="user-avatar-initial" id="userAvatarLetter">U</div>
                 <span id="userEmailSidebar">User</span>
             </div>
             <button id="logoutSidebarBtn" class="logout-sidebar" title="Sign out">
@@ -156,6 +275,7 @@
     
     <!-- Main Chat Area -->
     <main class="main-chat">
+        <!-- Top App Bar -->
         <header class="chat-header">
             <div class="title-area">
                 <button class="mobile-toggle-btn" id="mobileToggleBtn" title="Toggle sidebar">
@@ -167,11 +287,13 @@
                 </button>
             </div>
             <div class="header-right">
-                <button id="exportChatBtn" class="header-tool-btn" title="Export as Markdown">
+                <button id="exportChatBtn" class="header-tool-btn" title="Export conversation as Markdown">
                     <i class="fas fa-arrow-down-to-bracket"></i>
+                    <span>Export</span>
                 </button>
                 <button id="clearChatHeaderBtn" class="header-tool-btn" title="Clear messages">
                     <i class="fas fa-eraser"></i>
+                    <span>Clear</span>
                 </button>
                 <div class="logo-header">
                     <i class="fas fa-brain"></i>
@@ -180,30 +302,53 @@
             </div>
         </header>
         
+        <!-- Messages Stream / Hero Container -->
         <div id="messagesContainer" class="messages-container">
+            <!-- Welcome Hero State (ChatGPT / Perplexity Inspiration) -->
             <div class="welcome" id="welcomeHero">
-                <div class="welcome-icon">
-                    <i class="fas fa-brain"></i>
+                <!-- Glowing Amber Orb -->
+                <div class="hero-orb-center">
+                    <div class="orb-core"></div>
+                    <div class="orb-halo"></div>
                 </div>
-                <h3>Ready when you are</h3>
-                <p>Ask from your PDFs, the web, or both. Hybrid mode gives you the best of both worlds.</p>
+
+                <!-- Dynamic Greeting & Headline -->
+                <h2 class="welcome-greeting" id="welcomeGreeting">Good day, Explorer</h2>
+                <h1 class="welcome-headline">What's on <span class="gradient-orange-text">your mind?</span></h1>
                 
+                <!-- Example Prompt Cards Grid -->
+                <div class="starter-section-title">GET STARTED WITH AN EXAMPLE BELOW</div>
                 <div class="starter-grid">
-                    <button class="starter-chip" data-prompt="Summarize the core takeaways and findings from the uploaded document.">
-                        <i class="fas fa-file-pdf"></i>
-                        <span>Summarize document</span>
+                    <button class="starter-card" data-prompt="Summarize the core takeaways, methodology, and conclusions from the attached PDF document.">
+                        <div class="starter-card-body">
+                            <span class="starter-card-title">Summarize document</span>
+                            <span class="starter-card-desc">Extract key points, conclusions, and data from uploaded PDFs</span>
+                        </div>
+                        <div class="starter-card-icon"><i class="fas fa-file-pdf"></i></div>
                     </button>
-                    <button class="starter-chip" data-prompt="Search the web for the latest updates and developments on: ">
-                        <i class="fas fa-globe"></i>
-                        <span>Search the web</span>
+
+                    <button class="starter-card" data-prompt="Search the web for the latest developments, benchmarks, and news on AI reasoning models.">
+                        <div class="starter-card-body">
+                            <span class="starter-card-title">Live web search</span>
+                            <span class="starter-card-desc">Real-time web intelligence with verified source citations</span>
+                        </div>
+                        <div class="starter-card-icon"><i class="fas fa-globe"></i></div>
                     </button>
-                    <button class="starter-chip" data-prompt="Analyze this resume with ATS scoring, section feedback, and improvements.">
-                        <i class="fas fa-file-contract"></i>
-                        <span>ATS Resume Review</span>
+
+                    <button class="starter-card" data-prompt="Analyze this resume with comprehensive ATS scoring, section feedback, and actionable improvements.">
+                        <div class="starter-card-body">
+                            <span class="starter-card-title">ATS Resume Review</span>
+                            <span class="starter-card-desc">Evaluate score, formatting, keyword density, and fixes</span>
+                        </div>
+                        <div class="starter-card-icon"><i class="fas fa-file-contract"></i></div>
                     </button>
-                    <button class="starter-chip" data-prompt="Extract key metrics, dates, and important facts into a structured table.">
-                        <i class="fas fa-table"></i>
-                        <span>Tabulate key facts</span>
+
+                    <button class="starter-card" data-prompt="Compare the claims in my attached document against current public industry consensus found online.">
+                        <div class="starter-card-body">
+                            <span class="starter-card-title">Hybrid cross-check</span>
+                            <span class="starter-card-desc">Cross-reference document facts with external web search</span>
+                        </div>
+                        <div class="starter-card-icon"><i class="fas fa-link"></i></div>
                     </button>
                 </div>
             </div>
@@ -213,51 +358,53 @@
             <i class="fas fa-arrow-down"></i>
         </button>
 
+        <!-- Command Input Dock (Floating Elevated Card) -->
         <div class="input-area">
-            <div class="input-container">
-                <div class="mode-selector">
-                    <button class="mode-pill active" data-mode="hybrid">
-                        <i class="fas fa-link"></i>
-                        <span>Hybrid</span>
+            <div class="input-card">
+                <!-- Mode Pills Inside Top of Input Card -->
+                <div class="dock-header">
+                    <div class="mode-selector">
+                        <button class="mode-pill active" data-mode="hybrid">
+                            <i class="fas fa-link"></i>
+                            <span>Hybrid Mode</span>
+                        </button>
+                        <button class="mode-pill" data-mode="open">
+                            <i class="fas fa-globe"></i>
+                            <span>Web Search</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Attached File Badge -->
+                <div id="fileBadge" class="file-badge hidden">
+                    <div class="file-badge-text">
+                        <i class="fas fa-file-pdf"></i>
+                        <span id="fileBadgeName">document.pdf</span>
+                    </div>
+                    <button type="button" id="removeFileBtn" class="file-remove-btn" title="Remove attachment">
+                        <i class="fas fa-times"></i>
                     </button>
-                    <button class="mode-pill" data-mode="open">
-                        <i class="fas fa-globe"></i>
-                        <span>Web</span>
+                </div>
+
+                <!-- Textarea & Send Button -->
+                <div class="input-main-row">
+                    <textarea id="messageInput" placeholder="Ask DualMind anything or attach a PDF..." rows="1"></textarea>
+                    <button id="sendMsgBtn" class="send-button" title="Send message (Enter)">
+                        <i class="fas fa-arrow-up"></i>
                     </button>
                 </div>
                 
-                <div class="input-box">
-                    <!-- File attachment preview -->
-                    <div id="fileBadge" class="file-badge hidden">
-                        <div class="file-badge-text">
-                            <i class="fas fa-file-pdf"></i>
-                            <span id="fileBadgeName">document.pdf</span>
-                        </div>
-                        <button type="button" id="removeFileBtn" class="file-remove-btn" title="Remove attachment">
-                            <i class="fas fa-times"></i>
+                <!-- Bottom Toolbar inside Input Card -->
+                <div class="input-footer">
+                    <div class="footer-left">
+                        <button type="button" id="attachPdfBtn" class="toolbar-btn">
+                            <i class="fas fa-paperclip"></i>
+                            <span>Attach PDF</span>
                         </button>
+                        <input type="file" id="pdfFileInput" accept=".pdf" hidden>
                     </div>
-
-                    <div class="input-wrapper">
-                        <textarea id="messageInput" placeholder="Ask DualMind anything..." rows="1"></textarea>
-                        <button id="sendMsgBtn" class="send-button" title="Send message (Enter)">
-                            <i class="fas fa-arrow-up"></i>
-                        </button>
-                    </div>
-                    
-                    <div class="input-toolbar">
-                        <div class="toolbar-left">
-                            <button type="button" id="attachPdfBtn" class="toolbar-btn">
-                                <i class="fas fa-paperclip"></i>
-                                <span>Attach PDF</span>
-                            </button>
-                            <input type="file" id="pdfFileInput" accept=".pdf" hidden>
-                        </div>
-                        <div class="toolbar-right">
-                            <span class="hint-text">
-                                <i class="fas fa-keyboard"></i> Enter to send
-                            </span>
-                        </div>
+                    <div class="footer-right">
+                        <span class="hint-text">Press <strong>Enter</strong> to send &bull; <strong>Shift+Enter</strong> for new line</span>
                     </div>
                 </div>
             </div>

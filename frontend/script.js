@@ -1,6 +1,6 @@
 /**
  * DualMind - Frontend Application Controller
- * Clean, production-ready AI assistant logic without AI slop.
+ * Enterprise Grade UI/UX with Custom In-App Modal Dialogs (No Browser Alert/Confirm Popups)
  */
 
 // API Configuration
@@ -27,38 +27,196 @@ let newChatBtn, renameBtn, logoutBtn, chatTitleSpan, attachBtn, fileInput, fileB
 let modeBtns, loadingOverlay, sidebar, sidebarToggle, scrollBottomBtn;
 let sessionSearchInput, clearSearchBtn;
 
-// Clean Welcome Hero
-const WELCOME_HTML = `
+// Modal references
+let confirmModal, confirmTitle, confirmMessage, confirmActionBtn, confirmCancelBtn;
+let promptModal, promptTitle, promptMessage, promptInput, promptSaveBtn, promptCancelBtn;
+let confirmResolveFn = null;
+let promptResolveFn = null;
+
+// Clean Welcome Hero HTML
+function getWelcomeHtml(userName = 'Explorer') {
+    return `
     <div class="welcome" id="welcomeHero">
-        <div class="welcome-icon">
-            <i class="fas fa-brain"></i>
+        <div class="hero-orb-center">
+            <div class="orb-core"></div>
+            <div class="orb-halo"></div>
         </div>
-        <h3>Ready when you are</h3>
-        <p>Ask from your PDFs, the web, or both. Hybrid mode gives you the best of both worlds.</p>
+
+        <h2 class="welcome-greeting" id="welcomeGreeting">${getTimeGreeting(userName)}</h2>
+        <h1 class="welcome-headline">What's on <span class="gradient-orange-text">your mind?</span></h1>
         
+        <div class="starter-section-title">GET STARTED WITH AN EXAMPLE BELOW</div>
         <div class="starter-grid">
-            <button class="starter-chip" data-prompt="Summarize the core takeaways and findings from the uploaded document.">
-                <i class="fas fa-file-pdf"></i>
-                <span>Summarize document</span>
+            <button class="starter-card" data-prompt="Summarize the core takeaways, methodology, and conclusions from the attached PDF document.">
+                <div class="starter-card-body">
+                    <span class="starter-card-title">Summarize document</span>
+                    <span class="starter-card-desc">Extract key points, conclusions, and data from uploaded PDFs</span>
+                </div>
+                <div class="starter-card-icon"><i class="fas fa-file-pdf"></i></div>
             </button>
-            <button class="starter-chip" data-prompt="Search the web for the latest updates and developments on: ">
-                <i class="fas fa-globe"></i>
-                <span>Search the web</span>
+
+            <button class="starter-card" data-prompt="Search the web for the latest developments, benchmarks, and news on AI reasoning models.">
+                <div class="starter-card-body">
+                    <span class="starter-card-title">Live web search</span>
+                    <span class="starter-card-desc">Real-time web intelligence with verified source citations</span>
+                </div>
+                <div class="starter-card-icon"><i class="fas fa-globe"></i></div>
             </button>
-            <button class="starter-chip" data-prompt="Analyze this resume with ATS scoring, section feedback, and improvements.">
-                <i class="fas fa-file-contract"></i>
-                <span>ATS Resume Review</span>
+
+            <button class="starter-card" data-prompt="Analyze this resume with comprehensive ATS scoring, section feedback, and actionable improvements.">
+                <div class="starter-card-body">
+                    <span class="starter-card-title">ATS Resume Review</span>
+                    <span class="starter-card-desc">Evaluate score, formatting, keyword density, and fixes</span>
+                </div>
+                <div class="starter-card-icon"><i class="fas fa-file-contract"></i></div>
             </button>
-            <button class="starter-chip" data-prompt="Extract key metrics, dates, and important facts into a structured table.">
-                <i class="fas fa-table"></i>
-                <span>Tabulate key facts</span>
+
+            <button class="starter-card" data-prompt="Compare the claims in my attached document against current public industry consensus found online.">
+                <div class="starter-card-body">
+                    <span class="starter-card-title">Hybrid cross-check</span>
+                    <span class="starter-card-desc">Cross-reference document facts with external web search</span>
+                </div>
+                <div class="starter-card-icon"><i class="fas fa-link"></i></div>
             </button>
         </div>
     </div>
-`;
+    `;
+}
 
-// Toast Notification
-function showToast(message, type = 'info', duration = 2600) {
+function getTimeGreeting(name) {
+    const hour = new Date().getHours();
+    let timeOfDay = 'day';
+    if (hour < 12) timeOfDay = 'morning';
+    else if (hour < 17) timeOfDay = 'afternoon';
+    else timeOfDay = 'evening';
+    return `Good ${timeOfDay}, ${name}`;
+}
+
+// ============================================================================
+// CUSTOM IN-APP MODAL POPUPS (Replaces browser confirm() and prompt())
+// ============================================================================
+function showConfirmDialog(title, message, confirmText = 'Delete', isDanger = true) {
+    return new Promise((resolve) => {
+        if (!confirmModal) {
+            confirmModal = document.getElementById('customConfirmModal');
+            confirmTitle = document.getElementById('confirmModalTitle');
+            confirmMessage = document.getElementById('confirmModalMessage');
+            confirmActionBtn = document.getElementById('confirmModalActionBtn');
+            confirmCancelBtn = document.getElementById('confirmModalCancelBtn');
+        }
+
+        if (!confirmModal) {
+            resolve(window.confirm(message));
+            return;
+        }
+
+        confirmTitle.textContent = title;
+        confirmMessage.textContent = message;
+        confirmActionBtn.textContent = confirmText;
+        confirmActionBtn.className = isDanger ? 'modal-btn-danger' : 'modal-btn-primary';
+
+        confirmResolveFn = resolve;
+        confirmModal.classList.remove('hidden');
+    });
+}
+
+function closeConfirmDialog(result) {
+    if (confirmModal) confirmModal.classList.add('hidden');
+    if (confirmResolveFn) {
+        confirmResolveFn(result);
+        confirmResolveFn = null;
+    }
+}
+
+function showPromptDialog(title, message, defaultValue = '') {
+    return new Promise((resolve) => {
+        if (!promptModal) {
+            promptModal = document.getElementById('customPromptModal');
+            promptTitle = document.getElementById('promptModalTitle');
+            promptMessage = document.getElementById('promptModalMessage');
+            promptInput = document.getElementById('promptModalInput');
+            promptSaveBtn = document.getElementById('promptModalSaveBtn');
+            promptCancelBtn = document.getElementById('promptModalCancelBtn');
+        }
+
+        if (!promptModal) {
+            resolve(window.prompt(message, defaultValue));
+            return;
+        }
+
+        promptTitle.textContent = title;
+        promptMessage.textContent = message;
+        promptInput.value = defaultValue;
+
+        promptResolveFn = resolve;
+        promptModal.classList.remove('hidden');
+        promptInput.focus();
+        promptInput.select();
+    });
+}
+
+function closePromptDialog(result) {
+    if (promptModal) promptModal.classList.add('hidden');
+    if (promptResolveFn) {
+        promptResolveFn(result);
+        promptResolveFn = null;
+    }
+}
+
+function initCustomModals() {
+    confirmModal = document.getElementById('customConfirmModal');
+    confirmTitle = document.getElementById('confirmModalTitle');
+    confirmMessage = document.getElementById('confirmModalMessage');
+    confirmActionBtn = document.getElementById('confirmModalActionBtn');
+    confirmCancelBtn = document.getElementById('confirmModalCancelBtn');
+
+    confirmActionBtn?.addEventListener('click', () => closeConfirmDialog(true));
+    confirmCancelBtn?.addEventListener('click', () => closeConfirmDialog(false));
+    confirmModal?.addEventListener('click', (e) => {
+        if (e.target === confirmModal) closeConfirmDialog(false);
+    });
+
+    promptModal = document.getElementById('customPromptModal');
+    promptTitle = document.getElementById('promptModalTitle');
+    promptMessage = document.getElementById('promptModalMessage');
+    promptInput = document.getElementById('promptModalInput');
+    promptSaveBtn = document.getElementById('promptModalSaveBtn');
+    promptCancelBtn = document.getElementById('promptModalCancelBtn');
+
+    promptSaveBtn?.addEventListener('click', () => {
+        const val = promptInput?.value.trim();
+        closePromptDialog(val || null);
+    });
+    promptCancelBtn?.addEventListener('click', () => closePromptDialog(null));
+    promptInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const val = promptInput?.value.trim();
+            closePromptDialog(val || null);
+        } else if (e.key === 'Escape') {
+            closePromptDialog(null);
+        }
+    });
+    promptModal?.addEventListener('click', (e) => {
+        if (e.target === promptModal) closePromptDialog(null);
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (confirmModal && !confirmModal.classList.contains('hidden')) {
+                closeConfirmDialog(false);
+            }
+            if (promptModal && !promptModal.classList.contains('hidden')) {
+                closePromptDialog(null);
+            }
+        }
+    });
+}
+
+// ============================================================================
+// TOAST NOTIFICATIONS
+// ============================================================================
+function showToast(message, type = 'info', duration = 2800) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
 
@@ -79,7 +237,7 @@ function showToast(message, type = 'info', duration = 2600) {
     }, duration);
 }
 
-// Casual conversation detection
+// Conversation detection
 function isCasualConversation(content) {
     if (!content) return false;
     const hasMarkdown = content.includes('##') || content.includes('**') ||
@@ -97,7 +255,7 @@ function isCasualConversation(content) {
     return casualPatterns.some(pattern => pattern.test(content.toLowerCase().trim()));
 }
 
-// Markdown and Code formatting
+// Code Copy Buttons
 function addCopyButtonsToCodeBlocks() {
     document.querySelectorAll('.md-body pre').forEach(pre => {
         if (pre.parentElement.classList.contains('code-wrapper')) return;
@@ -131,6 +289,7 @@ function addCopyButtonsToCodeBlocks() {
                 await navigator.clipboard.writeText(code.textContent || '');
                 copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
                 copyBtn.classList.add('copied');
+                showToast('Code copied to clipboard', 'success', 2000);
                 setTimeout(() => {
                     copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
                     copyBtn.classList.remove('copied');
@@ -337,6 +496,7 @@ function bindAssistantActions(messageEl, rawText) {
                 await navigator.clipboard.writeText(rawText);
                 copyBtn.innerHTML = '<i class="fas fa-check"></i> <span>Copied</span>';
                 copyBtn.classList.add('active');
+                showToast('Response copied to clipboard', 'success', 2000);
                 setTimeout(() => {
                     copyBtn.innerHTML = '<i class="fas fa-copy"></i> <span>Copy</span>';
                     copyBtn.classList.remove('active');
@@ -372,12 +532,14 @@ function bindAssistantActions(messageEl, rawText) {
         upBtn.onclick = () => {
             upBtn.classList.toggle('active');
             if (downBtn) downBtn.classList.remove('active');
+            showToast('Feedback noted', 'info', 1800);
         };
     }
     if (downBtn) {
         downBtn.onclick = () => {
             downBtn.classList.toggle('active');
             if (upBtn) upBtn.classList.remove('active');
+            showToast('Feedback noted', 'info', 1800);
         };
     }
 }
@@ -445,7 +607,7 @@ async function sendMessage() {
 }
 
 // ============================================================================
-// SESSION MANAGEMENT
+// SESSION MANAGEMENT (With In-App Modals)
 // ============================================================================
 async function loadSession(sessionId) {
     if (sessionId === currentSessionId) return;
@@ -466,7 +628,8 @@ async function loadSession(sessionId) {
 
         if (messagesDiv) {
             if (!data.messages || data.messages.length === 0) {
-                messagesDiv.innerHTML = WELCOME_HTML;
+                const displayName = user?.email?.split('@')[0] || 'Explorer';
+                messagesDiv.innerHTML = getWelcomeHtml(displayName);
                 bindStarterChips();
             } else {
                 messagesDiv.innerHTML = '';
@@ -493,7 +656,7 @@ function toggleSidebar() {
 
 async function loadSessions() {
     if (!sessionListDiv) return;
-    sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666; font-size: 0.8rem;">Loading...</div>';
+    sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem;">Loading...</div>';
     try {
         const res = await fetch(`${API_URL}/chat/sessions`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (res.status === 401) { doLogout(); return; }
@@ -504,7 +667,7 @@ async function loadSessions() {
             if (!currentSessionId && allSessions[0]) await loadSession(allSessions[0].id);
         } else {
             allSessions = [];
-            sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666; font-size: 0.8rem;">No conversations yet</div>';
+            sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem;">No conversations yet</div>';
             if (!currentSessionId) await createNewSession();
         }
     } catch (err) {
@@ -522,7 +685,7 @@ function renderSessionList(sessions) {
         : sessions;
 
     if (filtered.length === 0) {
-        sessionListDiv.innerHTML = `<div style="padding: 1rem; text-align: center; color: #666; font-size: 0.8rem;">No matching chats</div>`;
+        sessionListDiv.innerHTML = `<div style="padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem;">No matching chats</div>`;
         return;
     }
 
@@ -563,9 +726,11 @@ function renderSessionList(sessions) {
     });
 }
 
+// IN-APP RENAME POPUP
 async function renameSessionFromSidebar(sessionId, currentTitle) {
-    const newName = prompt('Rename conversation:', currentTitle);
+    const newName = await showPromptDialog('Rename conversation', 'Enter a new title for this conversation:', currentTitle);
     if (!newName || newName === currentTitle) return;
+
     try {
         await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(newName)}`, {
             method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
@@ -573,18 +738,27 @@ async function renameSessionFromSidebar(sessionId, currentTitle) {
         if (currentSessionId === sessionId && chatTitleSpan) {
             chatTitleSpan.innerText = newName;
         }
+        showToast('Conversation renamed', 'success');
         await loadSessions();
     } catch (err) {
         showToast('Failed to rename', 'error');
     }
 }
 
+// IN-APP DELETE CONFIRMATION POPUP
 async function deleteSessionFromSidebar(sessionId) {
-    if (!confirm('Delete this conversation?')) return;
+    const confirmed = await showConfirmDialog(
+        'Delete conversation?',
+        'This will permanently delete this conversation and its history. This action cannot be undone.',
+        'Delete'
+    );
+    if (!confirmed) return;
+
     try {
         await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
             method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
         });
+        showToast('Conversation deleted', 'info');
         if (currentSessionId === sessionId) {
             currentSessionId = null;
             currentSessionDocuments = [];
@@ -615,6 +789,7 @@ async function createNewSession() {
             if (chatTitleSpan) chatTitleSpan.innerText = 'New conversation';
             clearMessages();
             await loadSessions();
+            showToast('New thread started', 'info', 1800);
         }
     } catch (err) {
         console.error('Failed to create session:', err);
@@ -637,7 +812,8 @@ async function loadSessionDocuments(sessionId) {
 
 function clearMessages() {
     if (!messagesDiv) return;
-    messagesDiv.innerHTML = WELCOME_HTML;
+    const displayName = user?.email?.split('@')[0] || 'Explorer';
+    messagesDiv.innerHTML = getWelcomeHtml(displayName);
     bindStarterChips();
 }
 
@@ -666,7 +842,7 @@ function hideTyping() {
 function onFileSelect(e) {
     const file = e.target.files[0];
     if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
-        alert('Please select a PDF file');
+        showToast('Please select a valid PDF file', 'error');
         return;
     }
     pendingFile = file;
@@ -675,6 +851,7 @@ function onFileSelect(e) {
         if (nameEl) nameEl.textContent = file.name;
         fileBadge.classList.remove('hidden');
     }
+    showToast(`Attached ${file.name}`, 'info', 2000);
 }
 
 async function uploadFile(file, sessionId) {
@@ -688,6 +865,7 @@ async function uploadFile(file, sessionId) {
         const error = await res.json();
         throw new Error(error.detail || 'Upload failed');
     }
+    showToast('Document indexed for RAG search', 'success', 2500);
     return await res.json();
 }
 
@@ -705,16 +883,19 @@ async function autoTitle(sessionId, firstMsg) {
 }
 
 async function renameSession() {
-    const newName = prompt('Rename conversation:', chatTitleSpan?.innerText);
-    if (!newName || newName === chatTitleSpan?.innerText || !currentSessionId) return;
+    const current = chatTitleSpan?.innerText || 'Conversation';
+    const newName = await showPromptDialog('Rename conversation', 'Enter a new title for this conversation:', current);
+    if (!newName || newName === current || !currentSessionId) return;
+
     try {
         await fetch(`${API_URL}/chat/sessions/${currentSessionId}?title=${encodeURIComponent(newName)}`, {
             method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
         });
         if (chatTitleSpan) chatTitleSpan.innerText = newName;
+        showToast('Conversation renamed', 'success');
         await loadSessions();
     } catch (err) {
-        console.error(err);
+        showToast('Failed to rename', 'error');
     }
 }
 
@@ -726,7 +907,7 @@ function escapeHtml(str) {
 function exportConversation() {
     const messages = messagesDiv?.querySelectorAll('.message');
     if (!messages || messages.length === 0) {
-        showToast('No messages to export');
+        showToast('No messages to export', 'info');
         return;
     }
 
@@ -873,9 +1054,9 @@ function tryParseResumeAnalysis(content) {
 
 // Starter chips click handler
 function bindStarterChips() {
-    document.querySelectorAll('.starter-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            const prompt = chip.dataset.prompt;
+    document.querySelectorAll('.starter-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const prompt = card.dataset.prompt;
             if (prompt && messageInput) {
                 messageInput.value = prompt;
                 messageInput.focus();
@@ -921,6 +1102,7 @@ async function doLogin() {
             user = { id: data.user_id, email: data.email };
             localStorage.setItem('dm_token', token);
             localStorage.setItem('dm_user', JSON.stringify(user));
+            showToast('Welcome to DualMind', 'success');
             showChatUI();
             await loadSessions();
         } else {
@@ -1003,6 +1185,7 @@ function doLogout() {
     allSessions = [];
     localStorage.clear();
     showLoginUI();
+    showToast('Signed out', 'info');
 }
 
 function checkAuth() {
@@ -1048,13 +1231,22 @@ function showChatUI() {
     if (chatPage) chatPage.classList.remove('hidden');
     
     const emailSidebar = document.getElementById('userEmailSidebar');
-    if (emailSidebar) emailSidebar.innerText = user?.email?.split('@')[0] || 'User';
+    const avatarLetter = document.getElementById('userAvatarLetter');
+    const name = user?.email?.split('@')[0] || 'User';
+    if (emailSidebar) emailSidebar.innerText = name;
+    if (avatarLetter) avatarLetter.innerText = name.charAt(0).toUpperCase();
+
+    const greetingEl = document.getElementById('welcomeGreeting');
+    if (greetingEl) greetingEl.textContent = getTimeGreeting(name);
 }
 
 function toggleForms(showRegister) {
     document.getElementById('loginForm')?.classList.toggle('active', !showRegister);
     document.getElementById('registerForm')?.classList.toggle('active', showRegister);
     document.getElementById('otpForm')?.classList.remove('active');
+
+    document.getElementById('tabSignIn')?.classList.toggle('active', !showRegister);
+    document.getElementById('tabSignUp')?.classList.toggle('active', showRegister);
 
     const loginError = document.getElementById('loginError');
     const registerError = document.getElementById('registerError');
@@ -1126,6 +1318,7 @@ async function verifyOtp() {
             localStorage.setItem('dm_token', token);
             localStorage.setItem('dm_user', JSON.stringify(user));
 
+            showToast('Email verified! Launching workspace...', 'success');
             showChatUI();
             loadSessions();
             hideOtpForm();
@@ -1205,6 +1398,7 @@ function updateScrollBottomBtn() {
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
     setupMarked();
+    initCustomModals();
 
     // Cache DOM
     loginPage = document.getElementById('loginPage');
@@ -1237,7 +1431,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    // Form switch
+    // Auth Tabs
+    document.getElementById('tabSignIn')?.addEventListener('click', () => toggleForms(false));
+    document.getElementById('tabSignUp')?.addEventListener('click', () => toggleForms(true));
     document.getElementById('showRegister')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(true); });
     document.getElementById('showLogin')?.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
 
@@ -1286,7 +1482,10 @@ function setupEventListeners() {
     newChatBtn?.addEventListener('click', createNewSession);
     renameBtn?.addEventListener('click', renameSession);
     chatTitleSpan?.addEventListener('click', renameSession);
-    logoutBtn?.addEventListener('click', doLogout);
+    logoutBtn?.addEventListener('click', async () => {
+        const confirmed = await showConfirmDialog('Sign out?', 'Are you sure you want to sign out of DualMind?', 'Sign Out', false);
+        if (confirmed) doLogout();
+    });
 
     // File attachments
     attachBtn?.addEventListener('click', () => fileInput?.click());
@@ -1295,6 +1494,7 @@ function setupEventListeners() {
         pendingFile = null;
         if (fileBadge) fileBadge.classList.add('hidden');
         if (fileInput) fileInput.value = '';
+        showToast('Attachment removed', 'info');
     });
 
     // Sidebar
@@ -1322,14 +1522,23 @@ function setupEventListeners() {
             modeBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentMode = btn.dataset.mode;
+            const modeName = currentMode === 'hybrid' ? 'Hybrid (Document + Web)' : 'Web Search';
+            showToast(`Mode: ${modeName}`, 'info', 1600);
         });
     });
 
     // Actions
     document.getElementById('exportChatBtn')?.addEventListener('click', exportConversation);
-    document.getElementById('clearChatHeaderBtn')?.addEventListener('click', () => {
-        if (confirm('Clear current messages?')) {
+    document.getElementById('clearChatHeaderBtn')?.addEventListener('click', async () => {
+        const confirmed = await showConfirmDialog(
+            'Clear conversation view?',
+            'This will clear the current message view. Your session history remains saved.',
+            'Clear View',
+            false
+        );
+        if (confirmed) {
             clearMessages();
+            showToast('Conversation view cleared', 'info');
         }
     });
 
@@ -1347,6 +1556,10 @@ function setupEventListeners() {
         } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
             e.preventDefault();
             toggleSidebar();
+        } else if (e.key === 'Escape') {
+            closeConfirmDialog(false);
+            closePromptDialog(null);
+            sidebar?.classList.remove('mobile-open');
         }
     });
 }
