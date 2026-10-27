@@ -10,25 +10,38 @@
         BACKEND_URL: '${BACKEND_URL}' 
     };
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Stylesheet -->
     <link rel="stylesheet" href="styles.css">
     
+    <!-- Markdown & Syntax Highlighting -->
     <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked-highlight@2.1.1/lib/index.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 </head>
 <body>
 
+<!-- Toast Notifications -->
+<div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+<!-- Loading Overlay -->
 <div id="loadingOverlay" class="loading-overlay hidden">
     <div class="loading-spinner">
         <div class="spinner"></div>
-        <p>DualMind is waking up...</p>
+        <p>Connecting to DualMind...</p>
     </div>
 </div>
 
-<!-- LOGIN PAGE -->
+<!-- ========================================================================= -->
+<!-- LOGIN / AUTHENTICATION PAGE -->
+<!-- ========================================================================= -->
 <div id="loginPage" class="login-page">
     <div class="login-card">
         <div class="login-icon"><i class="fas fa-brain"></i></div>
@@ -38,8 +51,17 @@
         <!-- Login Form -->
         <div id="loginForm" class="login-form active">
             <div id="loginError" class="form-error hidden"></div>
-            <input type="email" id="loginEmail" placeholder="Email" class="login-input">
-            <input type="password" id="loginPassword" placeholder="Password" class="login-input">
+            <div class="input-wrap">
+                <i class="fas fa-envelope field-icon"></i>
+                <input type="email" id="loginEmail" placeholder="Email" class="login-input" autocomplete="email">
+            </div>
+            <div class="input-wrap">
+                <i class="fas fa-lock field-icon"></i>
+                <input type="password" id="loginPassword" placeholder="Password" class="login-input" autocomplete="current-password">
+                <button type="button" class="password-toggle" data-target="loginPassword" title="Toggle password">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </div>
             <button id="loginBtn" class="login-btn">Sign In</button>
             <p class="login-switch">New user? <a href="#" id="showRegister">Create account</a></p>
         </div>
@@ -48,88 +70,150 @@
         <div id="registerForm" class="login-form">
             <div id="registerError" class="form-error hidden"></div>
             <div id="registerSuccess" class="form-success hidden"></div>
-            <input type="text" id="registerName" placeholder="Full name" class="login-input">
-            <input type="email" id="registerEmail" placeholder="Email" class="login-input">
-            <input type="password" id="registerPassword" placeholder="Password (min 6)" class="login-input">
+            <div class="input-wrap">
+                <i class="fas fa-user field-icon"></i>
+                <input type="text" id="registerName" placeholder="Full name" class="login-input">
+            </div>
+            <div class="input-wrap">
+                <i class="fas fa-envelope field-icon"></i>
+                <input type="email" id="registerEmail" placeholder="Email" class="login-input">
+            </div>
+            <div class="input-wrap">
+                <i class="fas fa-lock field-icon"></i>
+                <input type="password" id="registerPassword" placeholder="Password (min 6 characters)" class="login-input">
+                <button type="button" class="password-toggle" data-target="registerPassword" title="Toggle password">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </div>
             <button id="registerBtn" class="login-btn">Create Account</button>
             <p class="login-switch">Already have an account? <a href="#" id="showLogin">Sign in</a></p>
         </div>
         
         <!-- OTP Verification Form -->
         <div id="otpForm" class="login-form">
-            <div class="login-icon" style="margin-bottom: 0.5rem;"><i class="fas fa-envelope" style="font-size: 2.5rem;"></i></div>
-            <h2 style="font-size: 1.2rem; margin-bottom: 0.25rem; color: #fff;">Verify Your Email</h2>
-            <p style="color: #888; font-size: 0.8rem; margin-bottom: 1rem;">We sent a 6-digit code to <span id="otpEmailDisplay" style="color: #f97316;"></span></p>
+            <div class="login-icon" style="margin-bottom: 0.5rem;"><i class="fas fa-envelope-open-text" style="font-size: 2.5rem;"></i></div>
+            <h2>Verify Your Email</h2>
+            <p style="color: #999; font-size: 0.85rem; margin-bottom: 1.2rem;">We sent a 6-digit code to <span id="otpEmailDisplay" style="color: #f97316; font-weight: 500;"></span></p>
             <div id="otpError" class="form-error hidden"></div>
             <div id="otpSuccess" class="form-success hidden"></div>
+            
             <div class="otp-input-container">
-                <input type="text" id="otpInput" class="login-input" placeholder="Enter 6-digit code" maxlength="6" style="text-align: center; font-size: 1.5rem; letter-spacing: 4px;">
+                <input type="text" id="otpInput" class="login-input" placeholder="000000" maxlength="6" style="text-align: center; font-size: 1.6rem; letter-spacing: 6px; font-weight: 600;">
             </div>
             <button id="verifyOtpBtn" class="login-btn">Verify Email</button>
-            <p class="login-switch" style="margin-top: 0.75rem;">
-                Didn't receive code? <a href="#" id="resendOtpBtn">Resend OTP</a>
+            <p class="login-switch" style="margin-top: 1rem;">
+                Didn't receive code? <a href="#" id="resendOtpBtn">Resend code</a>
             </p>
             <p class="login-switch" style="margin-top: 0.5rem;">
-                <a href="#" id="backToSignin" style="color: #666; font-size: 0.75rem;">← Back to sign in</a>
+                <a href="#" id="backToSignin" style="color: #777; font-size: 0.78rem;">← Back to sign in</a>
             </p>
         </div>
     </div>
 </div>
 
-<!-- CHAT PAGE -->
+<!-- ========================================================================= -->
+<!-- CHAT PAGE WORKSPACE -->
+<!-- ========================================================================= -->
 <div id="chatPage" class="chat-page hidden">
     <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-        <button class="sidebar-toggle" id="sidebarToggle">
+    <aside class="sidebar" id="sidebar">
+        <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar (Ctrl+B)">
             <i class="fas fa-chevron-left"></i>
         </button>
+        
         <div class="sidebar-header">
             <div class="logo-area">
                 <i class="fas fa-brain"></i>
                 <span class="dualmind-sidebar-text">DualMind</span>
             </div>
-            <button id="newChatBtn" class="new-chat-btn">
+            <button id="newChatBtn" class="new-chat-btn" title="New conversation (Ctrl+K)">
                 <i class="fas fa-plus"></i>
                 <span>New chat</span>
             </button>
         </div>
+
+        <!-- Search conversations -->
+        <div class="search-box-wrap">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" id="sessionSearchInput" placeholder="Search chats..." autocomplete="off">
+            <button id="clearSearchBtn" class="clear-search-btn hidden" title="Clear">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
         <div id="sessionList" class="session-list"></div>
+
         <div class="sidebar-footer">
             <div class="user-row">
                 <i class="fas fa-user-circle"></i>
-                <span id="userEmailSidebar"></span>
+                <span id="userEmailSidebar">User</span>
             </div>
-            <button id="logoutSidebarBtn" class="logout-sidebar">
+            <button id="logoutSidebarBtn" class="logout-sidebar" title="Sign out">
                 <i class="fas fa-sign-out-alt"></i>
             </button>
         </div>
-    </div>
+    </aside>
     
     <!-- Main Chat Area -->
-    <div class="main-chat">
-        <div class="chat-header">
+    <main class="main-chat">
+        <header class="chat-header">
             <div class="title-area">
-                <h3 id="chatTitle">New conversation</h3>
+                <button class="mobile-toggle-btn" id="mobileToggleBtn" title="Toggle sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h3 id="chatTitle" title="Click to rename">New conversation</h3>
+                <button id="renameChatBtn" class="rename-icon-btn" title="Rename conversation">
+                    <i class="fas fa-pen"></i>
+                </button>
             </div>
-            <div class="logo-header">
-                <i class="fas fa-brain"></i>
-                <span>DualMind</span>
+            <div class="header-right">
+                <button id="exportChatBtn" class="header-tool-btn" title="Export as Markdown">
+                    <i class="fas fa-arrow-down-to-bracket"></i>
+                </button>
+                <button id="clearChatHeaderBtn" class="header-tool-btn" title="Clear messages">
+                    <i class="fas fa-eraser"></i>
+                </button>
+                <div class="logo-header">
+                    <i class="fas fa-brain"></i>
+                    <span>DualMind</span>
+                </div>
             </div>
-        </div>
+        </header>
         
         <div id="messagesContainer" class="messages-container">
-            <div class="welcome">
-                <i class="fas fa-brain"></i>
+            <div class="welcome" id="welcomeHero">
+                <div class="welcome-icon">
+                    <i class="fas fa-brain"></i>
+                </div>
                 <h3>Ready when you are</h3>
                 <p>Ask from your PDFs, the web, or both. Hybrid mode gives you the best of both worlds.</p>
+                
+                <div class="starter-grid">
+                    <button class="starter-chip" data-prompt="Summarize the core takeaways and findings from the uploaded document.">
+                        <i class="fas fa-file-pdf"></i>
+                        <span>Summarize document</span>
+                    </button>
+                    <button class="starter-chip" data-prompt="Search the web for the latest updates and developments on: ">
+                        <i class="fas fa-globe"></i>
+                        <span>Search the web</span>
+                    </button>
+                    <button class="starter-chip" data-prompt="Analyze this resume with ATS scoring, section feedback, and improvements.">
+                        <i class="fas fa-file-contract"></i>
+                        <span>ATS Resume Review</span>
+                    </button>
+                    <button class="starter-chip" data-prompt="Extract key metrics, dates, and important facts into a structured table.">
+                        <i class="fas fa-table"></i>
+                        <span>Tabulate key facts</span>
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div class="input-area">
-            <button id="scrollBottomBtn" class="scroll-bottom-btn hidden" title="Scroll to bottom">
-                <i class="fas fa-arrow-down"></i>
-            </button>
+        <button id="scrollBottomBtn" class="scroll-bottom-btn hidden" title="Scroll to bottom">
+            <i class="fas fa-arrow-down"></i>
+        </button>
 
+        <div class="input-area">
             <div class="input-container">
                 <div class="mode-selector">
                     <button class="mode-pill active" data-mode="hybrid">
@@ -143,32 +227,42 @@
                 </div>
                 
                 <div class="input-box">
+                    <!-- File attachment preview -->
+                    <div id="fileBadge" class="file-badge hidden">
+                        <div class="file-badge-text">
+                            <i class="fas fa-file-pdf"></i>
+                            <span id="fileBadgeName">document.pdf</span>
+                        </div>
+                        <button type="button" id="removeFileBtn" class="file-remove-btn" title="Remove attachment">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
                     <div class="input-wrapper">
                         <textarea id="messageInput" placeholder="Ask DualMind anything..." rows="1"></textarea>
-                        <button id="sendMsgBtn" class="send-button">
+                        <button id="sendMsgBtn" class="send-button" title="Send message (Enter)">
                             <i class="fas fa-arrow-up"></i>
                         </button>
                     </div>
                     
                     <div class="input-toolbar">
                         <div class="toolbar-left">
-                            <button id="attachPdfBtn" class="toolbar-btn">
+                            <button type="button" id="attachPdfBtn" class="toolbar-btn">
                                 <i class="fas fa-paperclip"></i>
                                 <span>Attach PDF</span>
                             </button>
                             <input type="file" id="pdfFileInput" accept=".pdf" hidden>
-                            <div id="fileBadge" class="file-badge hidden"></div>
                         </div>
                         <div class="toolbar-right">
                             <span class="hint-text">
-                                <i class="fas fa-info-circle"></i> Press Enter to send
+                                <i class="fas fa-keyboard"></i> Enter to send
                             </span>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 </div>
 
 <script src="script.js"></script>
