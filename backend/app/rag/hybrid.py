@@ -55,8 +55,8 @@ CACHE_TTL_SECONDS = 120  # 2 minutes
 CACHE_MAX_SIZE = 20
 
 
-def _cache_key(question: str, user_id: str, search_type: str, filename: Optional[str]) -> str:
-    raw = f"{user_id}|{search_type}|{filename or ''}|{question.strip().lower()}"
+def _cache_key(question: str, user_id: str, search_type: str, filename: Optional[str], model: Optional[str] = None) -> str:
+    raw = f"{user_id}|{search_type}|{filename or ''}|{model or ''}|{question.strip().lower()}"
     return hashlib.md5(raw.encode()).hexdigest()
 
 
@@ -311,10 +311,11 @@ def fetch_full_document(user_id: str, filename: str) -> str:
 # ANSWER GENERATORS
 # ─────────────────────────────────────────────
 
-def _call_llm(system_prompt: str, user_prompt: str, temperature: float, max_tokens: int, fallback_msg: str, error_prefix: str) -> str:
+def _call_llm(system_prompt: str, user_prompt: str, temperature: float, max_tokens: int, fallback_msg: str, error_prefix: str, model: Optional[str] = None) -> str:
+    active_model = model or Config.LLM_MODEL
     try:
         completion = groq_client.chat.completions.create(
-            model=Config.LLM_MODEL,
+            model=active_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -324,7 +325,7 @@ def _call_llm(system_prompt: str, user_prompt: str, temperature: float, max_toke
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
-        print(f"{error_prefix}: {e}")
+        print(f"{error_prefix} (model: {active_model}): {e}")
         return fallback_msg
 
 
@@ -343,7 +344,11 @@ to the fact that great technology can be built anywhere with enough curiosity an
 """.strip()
 
 
-def answer_identity_question(question: str, conversation_context: Optional[str] = None) -> str:
+def answer_identity_question(
+    question: str,
+    conversation_context: Optional[str] = None,
+    model: Optional[str] = None,
+) -> str:
     """
     Dedicated handler for all DualMind identity/system questions.
     Bypasses router and retrieval entirely — feeds raw identity doc straight to final answer stage.
@@ -378,7 +383,8 @@ Answer:"""
         temperature=0.2,
         max_tokens=512,
         fallback_msg="I was developed by Ajay Raj, a young and passionate AI developer from Kerala, India. He built me from the ground up using limited resources, overcoming hardware constraints to create a powerful, hybrid AI assistant.",
-        error_prefix="Identity answer error"
+        error_prefix="Identity answer error",
+        model=model,
     )
 
 
@@ -386,6 +392,7 @@ def generate_conversational_answer(
     question: str,
     conversation_context: Optional[str] = None,
     intent: str = "CASUAL_CHAT",
+    model: Optional[str] = None,
 ) -> str:
     """
     Handles: CASUAL_CHAT, CONVERSATION_RECALL, CODE_REQUEST (no file), general follow-ups.
@@ -464,7 +471,8 @@ Answer:"""
         temperature=0.4,
         max_tokens=1024,
         fallback_msg="I had trouble with that. Please try again.",
-        error_prefix="Conversational answer error"
+        error_prefix="Conversational answer error",
+        model=model,
     )
 
 
@@ -474,6 +482,7 @@ def generate_full_document_answer(
     filename: str,
     intent: str,
     conversation_context: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> str:
     """Full document LLM answer — for SUMMARIZE, GENERATE_NOTES, COMPARE."""
     context_section = ""
@@ -539,7 +548,8 @@ Answer:"""
         temperature=0.3,
         max_tokens=1024,
         fallback_msg="I had trouble processing the document. Please try again.",
-        error_prefix="Full document answer error"
+        error_prefix="Full document answer error",
+        model=model,
     )
 
 
@@ -547,6 +557,7 @@ def analyze_resume(
     full_text: str,
     filename: str,
     conversation_context: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     ATS Resume Analyzer — sends full document to Groq with a structured prompt
@@ -628,9 +639,10 @@ Base scores on ATS best practices:
 - Appropriate length and detail level
 """
 
+    active_model = model or Config.LLM_MODEL
     try:
         completion = groq_client.chat.completions.create(
-            model=Config.LLM_MODEL,
+            model=active_model,
             messages=[
                 {
                     "role": "system",
@@ -670,6 +682,7 @@ def generate_answer(
     sources: List[Dict],
     conversation_context: Optional[str] = None,
     intent: str = "FACTUAL_LOOKUP",
+    model: Optional[str] = None,
 ) -> str:
     """
     RAG answer generator — for PDF chunks and web search results.
@@ -814,7 +827,8 @@ Answer:"""
         temperature=0.35,
         max_tokens=1024,
         fallback_msg="I had trouble processing your request. Please try again.",
-        error_prefix="Generate answer error"
+        error_prefix="Generate answer error",
+        model=model,
     )
 
 
@@ -925,6 +939,7 @@ async def hybrid_search(
     search_type: str = "hybrid",
     conversation_context: Optional[str] = None,
     filename: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Agentic Hybrid RAG pipeline.
@@ -968,7 +983,7 @@ async def hybrid_search(
     if any(_re.search(p, _q) for p in _meta_triggers):
         print("🛡️ Pre-router identity bypass → META_QUESTION")
         return {
-            "answer": answer_identity_question(question, conversation_context),
+            "answer": answer_identity_question(question, conversation_context, model=model),
             "sources": [],
             "search_type_used": "Conversation",
             "closed_source_count": 0,
@@ -981,7 +996,7 @@ async def hybrid_search(
         print("📊 Pre-router ATS bypass → ATS_RESUME")
         full_text = fetch_full_document(user_id, filename)
         if full_text:
-            ats_data = analyze_resume(full_text, filename, conversation_context)
+            ats_data = analyze_resume(full_text, filename, conversation_context, model=model)
             return {
                 "answer": json.dumps(ats_data),
                 "sources": [{"type": "PDF Document", "title": filename[:40], "content": "ATS Resume Analysis", "url": ""}],
@@ -993,7 +1008,7 @@ async def hybrid_search(
             }
 
     # ── Cache lookup ──
-    cache_key = _cache_key(question, user_id, search_type, filename)
+    cache_key = _cache_key(question, user_id, search_type, filename, model=model)
     cached = _cache_get(cache_key)
     if cached:
         return cached
@@ -1019,7 +1034,7 @@ async def hybrid_search(
     # ── Step 2a: No retrieval — conversational / code from knowledge / meta ──
     if retrieval_mode == "none" or intent in ("CASUAL_CHAT", "CONVERSATION_RECALL", "META_QUESTION"):
         return {
-            "answer": generate_conversational_answer(question, conversation_context, intent),
+            "answer": generate_conversational_answer(question, conversation_context, intent, model=model),
             "sources": [],
             "search_type_used": "Conversation",
             "closed_source_count": 0,
@@ -1033,7 +1048,7 @@ async def hybrid_search(
         if full_text:
             # ATS Resume intent — use structured analyzer
             if intent == "ATS_RESUME":
-                ats_data = analyze_resume(full_text, filename, conversation_context)
+                ats_data = analyze_resume(full_text, filename, conversation_context, model=model)
                 result = {
                     "answer": json.dumps(ats_data),
                     "sources": [{"type": "PDF Document", "title": filename[:40], "content": "ATS Resume Analysis", "url": ""}],
@@ -1052,6 +1067,7 @@ async def hybrid_search(
                 filename=filename,
                 intent=intent,
                 conversation_context=conversation_context,
+                model=model,
             )
             result = {
                 "answer": answer,
@@ -1127,9 +1143,9 @@ async def hybrid_search(
     # ── Step 4: Generate answer ──
     if retrieval_mode == "none":
         # Direct conversational answer without sources
-        answer = generate_conversational_answer(question, conversation_context, intent)
+        answer = generate_conversational_answer(question, conversation_context, intent, model=model)
     else:
-        answer = generate_answer(question, all_sources, conversation_context, intent)
+        answer = generate_answer(question, all_sources, conversation_context, intent, model=model)
     
     answer = sanitize_verbose_response(answer)
 

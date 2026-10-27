@@ -46,7 +46,7 @@
 <!-- IN-APP CUSTOM CONFIRMATION MODAL (Replaces browser confirm popup) -->
 <!-- ========================================================================= -->
 <div id="customConfirmModal" class="app-modal-overlay hidden">
-    <div class="app-modal-card">
+    <div class="app-modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
         <div class="modal-icon-wrap danger" id="confirmModalIcon">
             <i class="fas fa-trash-alt"></i>
         </div>
@@ -63,7 +63,7 @@
 <!-- IN-APP CUSTOM PROMPT MODAL (Replaces browser prompt popup) -->
 <!-- ========================================================================= -->
 <div id="customPromptModal" class="app-modal-overlay hidden">
-    <div class="app-modal-card">
+    <div class="app-modal-card" role="dialog" aria-modal="true" aria-labelledby="promptModalTitle">
         <div class="modal-icon-wrap brand">
             <i class="fas fa-pen"></i>
         </div>
@@ -104,8 +104,8 @@
                 <div class="auth-nebula-mesh"></div>
                 <div class="auth-hero-content">
                     <div class="auth-brand-row">
-                        <img class="brand-brain-logo" src="dualmind_logo.png" alt="">
-                        <span class="brand-name">DualMind</span>
+                        <span class="brand-logo-mark"><img class="brand-brain-logo" src="dualmind_logo.png" alt=""></span>
+                        <span class="brand-lockup-copy"><span class="brand-name">DualMind</span><span class="brand-tagline">Agentic research workspace</span></span>
                     </div>
                     
                     <h1 class="auth-hero-title">One clear answer.<br>Every source in reach.</h1>
@@ -268,6 +268,9 @@
             <button class="rail-item" id="railDocumentsBtn" title="Attach PDF Document">
                 <i class="fas fa-file-pdf"></i>
             </button>
+            <button class="rail-item" id="railClearChatBtn" title="Clear current chat view" aria-label="Clear current chat view">
+                <i class="fas fa-eraser"></i>
+            </button>
         </nav>
 
         <div class="rail-bottom">
@@ -321,6 +324,9 @@
         <!-- Top Navigation Bar -->
         <header class="top-nav-bar">
             <div class="nav-left-cluster">
+                <button class="drawer-toggle-btn" id="drawerToggleBtn" type="button" title="Show or hide sessions" aria-label="Show or hide sessions" aria-controls="sessionDrawer" aria-expanded="true">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <!-- Active Thread Title -->
                 <div class="active-thread-title-wrap">
                     <span id="chatTitle" class="active-thread-title">New conversation</span>
@@ -329,8 +335,8 @@
 
             <div class="nav-right-cluster">
                 <div class="topbar-brand" aria-label="DualMind">
-                    <img src="dualmind_logo.png" alt="">
-                    <span>DualMind</span>
+                    <span class="brand-logo-mark"><img src="dualmind_logo.png" alt=""></span>
+                    <span class="topbar-brand-name">DualMind</span>
                 </div>
                 <button id="exportChatBtn" class="top-tool-pill" title="Export conversation as Markdown">
                     <i class="fas fa-arrow-up-right-from-square"></i>
@@ -436,10 +442,21 @@
                             </button>
                             <div class="composer-menu model-menu hidden" id="composerModelMenu" role="menu">
                                 <div class="composer-menu-heading">Choose a model</div>
-                                <button type="button" class="composer-menu-option selected" data-model="Llama 3.3 70B" role="menuitemradio" aria-checked="true"><span><strong>Llama 3.3 70B</strong><small>Balanced reasoning · Current default</small></span><i class="fas fa-check"></i></button>
-                                <button type="button" class="composer-menu-option" data-model="Llama 3.1 8B" role="menuitemradio" aria-checked="false"><span><strong>Llama 3.1 8B</strong><small>Faster responses</small></span><i class="fas fa-check"></i></button>
-                                <button type="button" class="composer-menu-option" data-model="Auto" role="menuitemradio" aria-checked="false"><span><strong>Auto</strong><small>Let DualMind choose</small></span><i class="fas fa-check"></i></button>
-                                <div class="composer-menu-note">Model selection is a UI preference for now.</div>
+                                <div class="composer-model-list" id="composerModelList">
+                                    <button type="button" class="composer-menu-option selected" data-model="llama-3.3-70b-versatile" data-name="Llama 3.3 70B" role="menuitemradio" aria-checked="true">
+                                        <span><strong>Llama 3.3 70B</strong><small>Balanced reasoning · Current default</small></span>
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button type="button" class="composer-menu-option" data-model="llama-3.1-8b-instant" data-name="Llama 3.1 8B" role="menuitemradio" aria-checked="false">
+                                        <span><strong>Llama 3.1 8B</strong><small>Faster responses · 128k context</small></span>
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button type="button" class="composer-menu-option" data-model="auto" data-name="Auto" role="menuitemradio" aria-checked="false">
+                                        <span><strong>Auto</strong><small>Let DualMind choose</small></span>
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </div>
+                                <div class="composer-menu-note" id="composerModelNote">Auto-synced with active API key</div>
                             </div>
                         </div>
                     </div>

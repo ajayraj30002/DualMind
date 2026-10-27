@@ -49,6 +49,7 @@ class QueryRequest(BaseModel):
     search_type: str = "hybrid"
     include_sources: bool = True
     uploaded_document: Optional[str] = None
+    model: Optional[str] = None
 
 class QueryResponse(BaseModel):
     answer: str

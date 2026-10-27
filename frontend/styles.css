@@ -2317,6 +2317,73 @@ html, body {
     }
 }
 
+/* Finish the brand and primary utility surfaces with clearer hierarchy. */
+.brand-logo-mark {
+    width: 44px; height: 44px; flex: 0 0 44px; display: inline-flex;
+    align-items: center; justify-content: center; overflow: hidden;
+    border: 1px solid rgba(255,173,104,.22); border-radius: 50%;
+    background: radial-gradient(circle at 50% 42%, #18191e 0%, #090a0d 72%);
+    box-shadow: 0 0 22px rgba(242,138,66,.12), inset 0 1px rgba(255,255,255,.06);
+}
+.brand-brain-logo { width: 37px; height: 37px; object-fit: contain; border-radius: 50%; mix-blend-mode: screen; }
+.brand-lockup-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.auth-brand-row { align-items: center; gap: 13px; padding-bottom: 56px; }
+.auth-brand-row .brand-name { font-size: 1.38rem; font-weight: 800; letter-spacing: -.045em; color: #fff; }
+.brand-tagline { color: rgba(255,255,255,.62); font-size: .72rem; font-weight: 500; letter-spacing: .015em; }
+.topbar-brand { gap: 10px; }
+.topbar-brand .brand-logo-mark { width: 38px; height: 38px; flex-basis: 38px; }
+.topbar-brand .brand-logo-mark img { width: 33px; height: 33px; }
+.topbar-brand-name { color: #f7f4f1; font-size: 1rem; font-weight: 750; letter-spacing: -.045em; }
+.drawer-toggle-btn {
+    width: 36px; height: 36px; flex: 0 0 36px; display: inline-flex;
+    align-items: center; justify-content: center; color: #aeb4bf;
+    background: transparent; border: 1px solid transparent; border-radius: 9px;
+    transition: background .16s ease, color .16s ease, border-color .16s ease;
+}
+.drawer-toggle-btn:hover, .drawer-toggle-btn[aria-expanded="true"] {
+    color: #f4f5f7; background: #191d24; border-color: #2a2e37;
+}
+.top-nav-bar .nav-left-cluster { gap: 12px; }
+.top-nav-bar .active-thread-title { max-width: min(52vw, 620px); }
+.app-modal-overlay { background: rgba(3,5,8,.76); backdrop-filter: blur(14px); }
+.app-modal-card {
+    max-width: 448px; padding: 32px 32px 28px; border-radius: 20px;
+    background: linear-gradient(160deg,#191d24 0%,#13161c 100%);
+    border-color: rgba(255,255,255,.1);
+    box-shadow: 0 28px 90px rgba(0,0,0,.58), 0 1px rgba(255,255,255,.04) inset;
+}
+.modal-icon-wrap { width: 58px; height: 58px; margin-bottom: 18px; font-size: 1.15rem; }
+.modal-icon-wrap.danger { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.24); color: #ff6f6a; }
+.modal-icon-wrap.brand { background: rgba(242,138,66,.1); border-color: rgba(242,138,66,.22); color: #ffad68; }
+.app-modal-card h3 { font-size: 1.24rem; letter-spacing: -.035em; }
+.app-modal-card p { max-width: 350px; margin: 0 auto 24px; color: #a1a7b2; line-height: 1.6; }
+.app-modal-actions { gap: 12px; }
+.modal-btn-cancel, .modal-btn-danger, .modal-btn-primary {
+    min-height: 46px; padding: 0 18px; border-radius: 10px; font-size: .84rem;
+    transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.modal-btn-cancel { background: #232730; border-color: rgba(255,255,255,.08); color: #d1d5dc; }
+.modal-btn-cancel:hover { background: #2b303a; color: #fff; }
+.modal-btn-danger { background: linear-gradient(110deg,#ef5754,#d93d3b); }
+.modal-btn-danger:hover { box-shadow: 0 7px 20px rgba(220,60,58,.22); }
+.modal-btn-primary { background: linear-gradient(105deg,#ffb06e,#f28a42); color: #21150d; }
+.modal-btn-primary:hover { background: linear-gradient(105deg,#ffc28d,#f79750); box-shadow: 0 7px 20px rgba(206,101,49,.2); }
+.modal-btn-cancel:active, .modal-btn-danger:active, .modal-btn-primary:active { transform: translateY(1px); }
+.app-modal-input { min-height: 46px; border-radius: 10px; }
+.rail-item#railClearChatBtn:hover { color: #ff9a91; background: rgba(239,68,68,.1); }
+.rail-item#railClearChatBtn:focus-visible, .drawer-toggle-btn:focus-visible, .rail-item:focus-visible {
+    outline: 2px solid rgba(255,173,104,.8); outline-offset: 2px;
+}
+
+@media (max-width: 680px) {
+    .auth-brand-row { padding-bottom: 28px; }
+    .brand-logo-mark { width: 40px; height: 40px; flex-basis: 40px; }
+    .brand-brain-logo { width: 34px; height: 34px; }
+    .topbar-brand .brand-lockup-copy { display: none; }
+    .app-modal-card { padding: 28px 22px 22px; }
+    .top-nav-bar .nav-left-cluster { gap: 7px; }
+}
+
 @media (max-width: 480px) {
     .social-auth-row {
         grid-template-columns: 1fr;
@@ -2616,8 +2683,52 @@ html, body {
 .composer-menu-option strong { color: #f2f3f6; font-size: .79rem; font-weight: 600; }
 .composer-menu-option small { color: #999fac; font-size: .68rem; line-height: 1.35; }
 .composer-menu-option > i { opacity: 0; color: #ffad68; font-size: .78rem; }
-.composer-menu-option.selected > i { opacity: 1; }
-.composer-menu-note { padding: 8px 10px 5px; color: #808794; border-top: 1px solid rgba(255,255,255,.07); font-size: .66rem; }
+.composer-menu-note { padding: 8px 10px 5px; color: #808794; border-top: 1px solid rgba(255,255,255,.07); font-size: .66rem; display: flex; align-items: center; justify-content: space-between; }
+.composer-model-list {
+    max-height: 290px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding-right: 2px;
+}
+.composer-model-list::-webkit-scrollbar {
+    width: 4px;
+}
+.composer-model-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+.composer-model-list::-webkit-scrollbar-thumb {
+    background: #2b303c;
+    border-radius: 4px;
+}
+.model-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    border-radius: 4px;
+    background: rgba(242, 138, 66, 0.16);
+    color: #ffad68;
+    border: 1px solid rgba(242, 138, 66, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.model-badge.smart {
+    background: rgba(180, 154, 255, 0.16);
+    color: #c9b5ff;
+    border-color: rgba(180, 154, 255, 0.3);
+}
+.model-badge.fast {
+    background: rgba(46, 204, 113, 0.14);
+    color: #55e695;
+    border-color: rgba(46, 204, 113, 0.28);
+}
+.model-badge.reasoning {
+    background: rgba(86, 178, 255, 0.16);
+    color: #79c5ff;
+    border-color: rgba(86, 178, 255, 0.3);
+}
 .user-popup-menu {
     width: 254px; padding: 14px; border: 1px solid #2b3039; border-radius: 14px;
     background: #171a21; box-shadow: 0 18px 48px rgba(0,0,0,.5); animation: chatMenuEnter .16s ease;

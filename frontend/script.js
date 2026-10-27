@@ -20,6 +20,8 @@ let pendingFile = null;
 let currentSessionDocuments = [];
 let pendingSignupEmail = null;
 let allSessions = [];
+let currentSelectedModel = localStorage.getItem('dualmind_model_preference') || 'auto';
+let availableModels = [];
 
 // DOM References
 let loginPage, chatPage, sessionListDiv, messagesDiv, messageInput, sendBtn;
@@ -194,6 +196,16 @@ function showConfirmDialog(title, message, confirmText = 'Delete', isDanger = tr
         confirmMessage.textContent = message;
         confirmActionBtn.textContent = confirmText;
         confirmActionBtn.className = isDanger ? 'modal-btn-danger' : 'modal-btn-primary';
+        const confirmIconWrap = document.getElementById('confirmModalIcon');
+        const confirmIcon = confirmIconWrap?.querySelector('i');
+        const action = confirmText.toLowerCase();
+        const icon = action.includes('delete') ? 'fa-trash-can'
+            : action.includes('sign out') ? 'fa-right-from-bracket'
+            : action.includes('clear') ? 'fa-eraser'
+            : 'fa-circle-question';
+        confirmIconWrap?.classList.toggle('danger', isDanger || action.includes('sign out'));
+        confirmIconWrap?.classList.toggle('brand', !isDanger && !action.includes('sign out'));
+        if (confirmIcon) confirmIcon.className = `fas ${icon}`;
 
         confirmResolveFn = resolve;
         confirmModal.classList.remove('hidden');
@@ -685,7 +697,13 @@ async function sendMessage() {
         const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ question: text, search_type: currentMode, include_sources: true, uploaded_document: uploadedFilename })
+            body: JSON.stringify({
+                question: text,
+                search_type: currentMode,
+                include_sources: true,
+                uploaded_document: uploadedFilename,
+                model: currentSelectedModel || undefined
+            })
         });
 
         if (res.status === 401) { doLogout(); return; }
@@ -771,7 +789,10 @@ async function loadSession(sessionId) {
 function toggleSidebar() {
     if (sidebar) {
         sidebar.classList.toggle('collapsed');
-        localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        localStorage.setItem('sidebar_collapsed', isCollapsed);
+        document.getElementById('drawerToggleBtn')?.setAttribute('aria-expanded', String(!isCollapsed));
+        document.getElementById('railHistoryBtn')?.setAttribute('aria-expanded', String(!isCollapsed));
     }
 }
 
@@ -1577,11 +1598,121 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const savedSidebarState = localStorage.getItem('sidebar_collapsed');
     if (savedSidebarState === 'true' && sidebar) sidebar.classList.add('collapsed');
+    const sidebarIsOpen = !sidebar?.classList.contains('collapsed');
+    document.getElementById('drawerToggleBtn')?.setAttribute('aria-expanded', String(sidebarIsOpen));
 
     bindStarterChips();
     setupEventListeners();
+    loadAvailableModels(false);
     checkAuth();
 });
+
+// ============================================================================
+// DYNAMIC MODEL DISCOVERY SERVICE
+// Fetches whatever models are available with the API key in .env, auto-refreshed
+// ============================================================================
+async function loadAvailableModels(forceRefresh = false) {
+    const listContainer = document.getElementById('composerModelList');
+    const noteEl = document.getElementById('composerModelNote');
+
+    try {
+        const url = `${API_URL}/models${forceRefresh ? '?refresh=1' : ''}`;
+        const res = await fetch(url);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.models && Array.isArray(data.models) && data.models.length > 0) {
+                availableModels = data.models;
+                renderModelOptions(data.models, data.default);
+                if (noteEl) {
+                    noteEl.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;"><i class="fas fa-bolt" style="color:#65d69a;"></i> Synced with API key</span> <span style="color:#6c7280;font-size:0.65rem;">${data.models.length} available</span>`;
+                }
+                return;
+            }
+        }
+    } catch (err) {
+        console.warn('Dynamic model fetch failed, using fallback models:', err);
+    }
+
+    // Fallback models when offline, initial load before network, or demo mode
+    if (!availableModels || availableModels.length === 0) {
+        availableModels = [
+            { id: 'auto', name: 'Auto', description: 'Let DualMind choose the best model', badge: 'Smart' },
+            { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Balanced reasoning · Current default', badge: 'Default' },
+            { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Faster responses · 128k context', badge: 'Fast' },
+            { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 70B', description: 'Advanced reasoning & logic', badge: 'Reasoning' }
+        ];
+        renderModelOptions(availableModels, 'llama-3.3-70b-versatile');
+    }
+}
+
+function renderModelOptions(models, defaultModelId = 'llama-3.3-70b-versatile') {
+    const listContainer = document.getElementById('composerModelList');
+    const modelMenu = document.getElementById('composerModelMenu');
+    const modelButton = document.getElementById('composerModelBtn');
+    const labelSpan = document.getElementById('selectedModelLabel');
+    if (!listContainer) return;
+
+    // Retrieve saved user preference
+    const saved = localStorage.getItem('dualmind_model_preference') || currentSelectedModel || 'auto';
+    let matched = models.find(m => m.id.toLowerCase() === saved.toLowerCase() || m.name.toLowerCase() === saved.toLowerCase());
+    if (!matched) {
+        matched = models.find(m => m.id === defaultModelId) || models[0];
+    }
+    currentSelectedModel = matched ? matched.id : 'auto';
+
+    if (labelSpan && matched) {
+        labelSpan.textContent = matched.name;
+    }
+
+    listContainer.innerHTML = '';
+    models.forEach(m => {
+        const isSelected = (m.id.toLowerCase() === currentSelectedModel.toLowerCase() || 
+                           (currentSelectedModel === 'auto' && m.id === 'auto'));
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `composer-menu-option ${isSelected ? 'selected' : ''}`;
+        btn.dataset.model = m.id;
+        btn.dataset.name = m.name;
+        btn.setAttribute('role', 'menuitemradio');
+        btn.setAttribute('aria-checked', String(isSelected));
+
+        const badgeClass = (m.badge || '').toLowerCase();
+        const badgeHtml = m.badge 
+            ? `<span class="model-badge ${badgeClass}">${escapeHtml(m.badge)}</span>` 
+            : '';
+
+        btn.innerHTML = `
+            <span>
+                <strong style="display:inline-flex;align-items:center;gap:6px;">
+                    <span>${escapeHtml(m.name)}</span>
+                    ${badgeHtml}
+                </strong>
+                <small>${escapeHtml(m.description || '')}</small>
+            </span>
+            <i class="fas fa-check"></i>
+        `;
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentSelectedModel = m.id;
+            localStorage.setItem('dualmind_model_preference', m.id);
+            if (labelSpan) labelSpan.textContent = m.name;
+
+            listContainer.querySelectorAll('.composer-menu-option').forEach(opt => {
+                const sel = (opt === btn);
+                opt.classList.toggle('selected', sel);
+                opt.setAttribute('aria-checked', String(sel));
+            });
+
+            if (modelMenu) modelMenu.classList.add('hidden');
+            if (modelButton) modelButton.setAttribute('aria-expanded', 'false');
+            showToast(`Active model: ${m.name}`, 'info', 1600);
+        });
+
+        listContainer.appendChild(btn);
+    });
+}
 
 function setupEventListeners() {
     // Auth Tabs
@@ -1654,6 +1785,19 @@ function setupEventListeners() {
 
     // Drawer / Rail Navigation
     document.getElementById('railHistoryBtn')?.addEventListener('click', toggleSidebar);
+    document.getElementById('drawerToggleBtn')?.addEventListener('click', toggleSidebar);
+    document.getElementById('railClearChatBtn')?.addEventListener('click', async () => {
+        const confirmed = await showConfirmDialog(
+            'Clear this chat view?',
+            'This clears the messages from view. Your saved thread remains in Sessions.',
+            'Clear chat',
+            false
+        );
+        if (confirmed) {
+            clearMessages();
+            showToast('Chat view cleared', 'info');
+        }
+    });
     document.getElementById('closeDrawerBtn')?.addEventListener('click', () => {
         const drawer = document.getElementById('sessionDrawer') || sidebar;
         drawer?.classList.add('collapsed');
@@ -1686,21 +1830,10 @@ function setupEventListeners() {
         const opening = modelMenu?.classList.contains('hidden');
         modelMenu?.classList.toggle('hidden', !opening);
         modelButton.setAttribute('aria-expanded', String(Boolean(opening)));
+        if (opening) {
+            loadAvailableModels(false);
+        }
     });
-    modelMenu?.querySelectorAll('[data-model]').forEach(option => option.addEventListener('click', () => {
-        document.getElementById('selectedModelLabel').textContent = option.dataset.model;
-        localStorage.setItem('dualmind_model_preference', option.dataset.model);
-        modelMenu.querySelectorAll('[data-model]').forEach(item => {
-            const selected = item === option;
-            item.classList.toggle('selected', selected);
-            item.setAttribute('aria-checked', String(selected));
-        });
-        modelMenu.classList.add('hidden');
-        modelButton.setAttribute('aria-expanded', 'false');
-    }));
-    const savedModel = localStorage.getItem('dualmind_model_preference');
-    const savedOption = savedModel && [...(modelMenu?.querySelectorAll('[data-model]') || [])].find(option => option.dataset.model === savedModel);
-    if (savedOption) savedOption.click();
 
     // User Avatar Popup Menu
     const userAvatarBtn = document.getElementById('railUserAvatarBtn');

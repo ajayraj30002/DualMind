@@ -20,6 +20,7 @@ from .auth import (
     create_access_token, get_current_user, supabase,
     generate_otp, send_otp_email, store_otp, verify_otp
 )
+from .services.model_service import model_service
 
 # Email validation regex (RFC 5322 simplified)
 EMAIL_REGEX = re.compile(
@@ -53,7 +54,7 @@ app.add_middleware(
 # Ensure upload directory exists
 os.makedirs(Config.UPLOAD_DIR, exist_ok=True)
 
-# ========== HEALTH CHECK ==========
+# ========== HEALTH CHECK & METADATA ==========
 @app.get("/")
 def root():
     return {"message": "DualMind API is running", "status": "healthy"}
@@ -61,6 +62,11 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+@app.get("/models")
+def get_available_models():
+    """Returns dynamic list of models available with the configured Groq API key."""
+    return model_service.get_models()
 
 # ========== AUTH ENDPOINTS ==========
 
@@ -379,14 +385,16 @@ async def send_message(
     supabase.table("chat_messages").insert(user_message).execute()
     
     effective_mode = query_request.search_type
+    resolved_model = model_service.resolve_model(query_request.model)
     
-    # Hybrid search with the effective mode
+    # Hybrid search with the effective mode and selected model
     result = await hybrid_search(
         question=query_request.question,
         user_id=current_user["user_id"],
         search_type=effective_mode,
         conversation_context=conversation_context,
-        filename=query_request.uploaded_document
+        filename=query_request.uploaded_document,
+        model=resolved_model,
     )
     
     # Save assistant message
@@ -490,10 +498,12 @@ async def upload_pdf(file: UploadFile = File(...), current_user: dict = Depends(
 
 @app.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest, current_user: dict = Depends(get_current_user)):
+    resolved_model = model_service.resolve_model(request.model)
     result = await hybrid_search(
         question=request.question,
         user_id=current_user["user_id"],
-        search_type=request.search_type
+        search_type=request.search_type,
+        model=resolved_model,
     )
     return QueryResponse(
         answer=result["answer"],
