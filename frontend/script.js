@@ -140,7 +140,7 @@ function getWelcomeHtml(userName = null) {
     return `
     <div class="welcome-stage" id="welcomeHero">
         <div class="orb-visual-wrap">
-            <img class="welcome-brand-logo" src="dualmind_logo.png" alt="DualMind brain logo">
+            <img class="welcome-brand-logo" src="dualmind_logo.png?v=2.5.0" width="128" height="128" alt="DualMind brain logo">
         </div>
 
         <h2 class="welcome-greeting-text" id="welcomeGreeting">${catchUp.greeting}</h2>
