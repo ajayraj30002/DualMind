@@ -797,6 +797,7 @@ async function loadSession(sessionId) {
             }
         }
         renderSessionList(allSessions);
+        closeMobileSidebar();
     } catch (err) {
         console.error('Error loading session:', err);
     }
@@ -809,6 +810,21 @@ function toggleSidebar() {
         localStorage.setItem('sidebar_collapsed', isCollapsed);
         document.getElementById('drawerToggleBtn')?.setAttribute('aria-expanded', String(!isCollapsed));
         document.getElementById('railHistoryBtn')?.setAttribute('aria-expanded', String(!isCollapsed));
+
+        const backdrop = document.getElementById('drawerBackdrop');
+        if (backdrop) {
+            backdrop.classList.toggle('active', !isCollapsed && window.innerWidth <= 768);
+        }
+    }
+}
+
+function closeMobileSidebar() {
+    if (window.innerWidth <= 768 && sidebar && !sidebar.classList.contains('collapsed')) {
+        sidebar.classList.add('collapsed');
+        localStorage.setItem('sidebar_collapsed', 'true');
+        document.getElementById('drawerToggleBtn')?.setAttribute('aria-expanded', 'false');
+        document.getElementById('railHistoryBtn')?.setAttribute('aria-expanded', 'false');
+        document.getElementById('drawerBackdrop')?.classList.remove('active');
     }
 }
 
@@ -976,6 +992,7 @@ function startNewChat() {
     pendingFile = null;
     clearMessages();
     renderSessionList(allSessions);
+    closeMobileSidebar();
     showToast('New thread started', 'info', 1400);
 }
 
@@ -1419,9 +1436,13 @@ function showChatUI() {
     
     const emailSidebar = document.getElementById('userEmailSidebar');
     const avatarLetter = document.getElementById('userAvatarLetter');
+    const drawerEmail = document.getElementById('drawerUserEmail');
+    const drawerAvatarLetter = document.getElementById('drawerUserAvatarLetter');
     const name = getUserDisplayName();
     if (emailSidebar) emailSidebar.innerText = name;
     if (avatarLetter) avatarLetter.innerText = name.charAt(0).toUpperCase();
+    if (drawerEmail) drawerEmail.innerText = name;
+    if (drawerAvatarLetter) drawerAvatarLetter.innerText = name.charAt(0).toUpperCase();
 
     // Application opens with a fresh new chat by default
     currentSessionId = null;
@@ -1612,8 +1633,11 @@ document.addEventListener('DOMContentLoaded', () => {
     sessionSearchInput = document.getElementById('sessionSearchInput');
     clearSearchBtn = document.getElementById('clearSearchBtn');
 
+    const isMobile = window.innerWidth <= 768;
     const savedSidebarState = localStorage.getItem('sidebar_collapsed');
-    if (savedSidebarState === 'true' && sidebar) sidebar.classList.add('collapsed');
+    if ((savedSidebarState === 'true' || (isMobile && savedSidebarState === null)) && sidebar) {
+        sidebar.classList.add('collapsed');
+    }
     const sidebarIsOpen = !sidebar?.classList.contains('collapsed');
     document.getElementById('drawerToggleBtn')?.setAttribute('aria-expanded', String(sidebarIsOpen));
 
@@ -1817,6 +1841,22 @@ function setupEventListeners() {
     document.getElementById('closeDrawerBtn')?.addEventListener('click', () => {
         const drawer = document.getElementById('sessionDrawer') || sidebar;
         drawer?.classList.add('collapsed');
+        localStorage.setItem('sidebar_collapsed', 'true');
+        document.getElementById('drawerToggleBtn')?.setAttribute('aria-expanded', 'false');
+        document.getElementById('railHistoryBtn')?.setAttribute('aria-expanded', 'false');
+        document.getElementById('drawerBackdrop')?.classList.remove('active');
+    });
+
+    document.getElementById('drawerBackdrop')?.addEventListener('click', closeMobileSidebar);
+
+    document.getElementById('drawerLogoutBtn')?.addEventListener('click', () => {
+        doLogout();
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            document.getElementById('drawerBackdrop')?.classList.remove('active');
+        }
     });
 
     // Search strategy and model pickers live beside the message composer.

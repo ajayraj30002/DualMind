@@ -3216,16 +3216,533 @@ input:-webkit-autofill:focus {
 .popup-item { width: 100%; margin-top: 10px; border-radius: 8px; }
 .popup-item:hover { background: rgba(228,83,77,.11); }
 
-@media (max-width: 680px) {
-    .icon-rail { display: flex; width: 54px; flex: 0 0 54px; }
-    .active-thread-title { max-width: 46vw; }
-    .nav-right-cluster { gap: 8px; }
-    .topbar-brand { gap: 4px; font-size: .82rem; }
-    .topbar-brand img { width: 28px; height: 28px; }
-    .top-tool-pill span { display: none; }
-    .drawer-new-thread-btn { padding: 0 9px; }
-    .dock-controls-bar { align-items: flex-end; }
-    .controls-left { flex-wrap: wrap; }
-    .composer-menu { width: min(290px, calc(100vw - 36px)); }
-    .session-menu-trigger { opacity: 1; transform: none; }
+/* ============================================================================
+   ENTERPRISE MOBILE RESPONSIVE SYSTEM (Mobile Phone & Tablet Optimizations)
+   Maintains 100% of current desktop design, branding, and color harmony,
+   while providing fluid, thumb-friendly usability on mobile viewports.
+   ============================================================================ */
+
+/* Drawer Backdrop for Mobile */
+.drawer-backdrop {
+    display: none;
+}
+.drawer-mobile-footer {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    /* 1. Global Viewport & Base Layout */
+    html, body {
+        height: 100%;
+        height: 100dvh;
+        overflow: hidden;
+    }
+
+    .chat-layout {
+        width: 100%;
+        height: 100%;
+        height: 100dvh;
+        overflow-x: hidden;
+        position: relative;
+    }
+
+    /* 2. Hide Desktop Vertical Rail on Mobile (Frees up 100% screen width) */
+    .icon-rail {
+        display: none !important;
+    }
+
+    /* 3. Mobile Slide-Out Sessions Drawer */
+    .session-drawer {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        height: 100% !important;
+        height: 100dvh !important;
+        width: min(320px, 86vw) !important;
+        max-width: 340px !important;
+        z-index: 600 !important;
+        background: #101218 !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 10px 0 40px rgba(0, 0, 0, 0.72) !important;
+        transform: translateX(0) !important;
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .session-drawer.collapsed {
+        transform: translateX(-100%) !important;
+        pointer-events: none !important;
+        width: min(320px, 86vw) !important;
+    }
+
+    /* Backdrop overlay when drawer is open */
+    .drawer-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 550;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+
+    .drawer-backdrop.active,
+    .session-drawer:not(.collapsed) ~ .drawer-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* Drawer Mobile Footer (User Account & Sign Out) */
+    .drawer-mobile-footer {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 12px 14px !important;
+        background: #141720 !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+        margin-top: auto !important;
+    }
+
+    .drawer-mobile-user {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        min-width: 0 !important;
+    }
+
+    .drawer-user-avatar {
+        width: 32px !important;
+        height: 32px !important;
+        flex: 0 0 32px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #ffb06e, #f28a42) !important;
+        color: #1a0f07 !important;
+        font-weight: 700 !important;
+        font-size: 0.8rem !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .drawer-user-meta {
+        display: flex !important;
+        flex-direction: column !important;
+        min-width: 0 !important;
+    }
+
+    .drawer-user-email {
+        font-size: 0.78rem !important;
+        font-weight: 600 !important;
+        color: #f0f1f4 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 170px !important;
+    }
+
+    .drawer-user-badge {
+        font-size: 0.68rem !important;
+        color: #65d69a !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+    }
+
+    .drawer-user-badge i {
+        font-size: 0.45rem !important;
+    }
+
+    .drawer-logout-btn {
+        width: 34px !important;
+        height: 34px !important;
+        border-radius: 8px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: #ff8a83 !important;
+        background: rgba(239, 68, 68, 0.1) !important;
+        border: 1px solid rgba(239, 68, 68, 0.2) !important;
+        cursor: pointer !important;
+        transition: background 0.15s ease !important;
+    }
+
+    .drawer-logout-btn:hover {
+        background: rgba(239, 68, 68, 0.22) !important;
+    }
+
+    /* 4. Main Workspace & Top Navigation Bar */
+    .main-workspace {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 0 !important;
+        height: 100% !important;
+        height: 100dvh !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    .top-nav-bar {
+        height: 54px !important;
+        padding: 0 12px !important;
+        flex-shrink: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        background: rgba(11, 13, 17, 0.95) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07) !important;
+        z-index: 200 !important;
+    }
+
+    .drawer-toggle-btn {
+        width: 36px !important;
+        height: 36px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 8px !important;
+        background: rgba(255, 255, 255, 0.04) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        color: #e0e3ea !important;
+        font-size: 0.95rem !important;
+        cursor: pointer !important;
+    }
+
+    .active-thread-title-wrap {
+        display: flex !important;
+        margin-left: 8px !important;
+        min-width: 0 !important;
+        flex: 1 !important;
+    }
+
+    .active-thread-title {
+        max-width: clamp(100px, 32vw, 190px) !important;
+        font-size: 0.8rem !important;
+        color: #b0b5bf !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .topbar-brand {
+        gap: 6px !important;
+    }
+
+    .topbar-brand .brand-logo-mark {
+        width: 32px !important;
+        height: 32px !important;
+        flex: 0 0 32px !important;
+    }
+
+    .topbar-brand img {
+        width: 26px !important;
+        height: 26px !important;
+    }
+
+    .topbar-brand-name {
+        font-size: 0.92rem !important;
+    }
+
+    .top-tool-pill span {
+        display: none !important;
+    }
+
+    .top-tool-pill {
+        padding: 7px 9px !important;
+        border-radius: 8px !important;
+    }
+
+    /* 5. Welcome Stage & Proportional Brain Scaling */
+    .welcome-stage {
+        margin: 1rem auto 150px auto !important;
+        padding: 0 14px !important;
+        width: 100% !important;
+        max-width: 520px !important;
+    }
+
+    .welcome-stage .orb-visual-wrap {
+        width: 135px !important;
+        height: 135px !important;
+        margin: 0 auto 12px !important;
+    }
+
+    .dynamic-brain-core {
+        width: 125px !important;
+        height: 130px !important;
+    }
+
+    .welcome-greeting-text {
+        font-size: 0.92rem !important;
+        margin-bottom: 5px !important;
+    }
+
+    .welcome-headline-text {
+        font-size: clamp(1.4rem, 5.8vw, 1.85rem) !important;
+        line-height: 1.24 !important;
+        letter-spacing: -0.03em !important;
+        margin-bottom: 22px !important;
+    }
+
+    .starter-section-heading {
+        font-size: 0.66rem !important;
+        letter-spacing: 0.08em !important;
+        margin-bottom: 9px !important;
+    }
+
+    .starter-cards-grid {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+
+    .starter-tall-card {
+        height: auto !important;
+        min-height: 54px !important;
+        padding: 12px 14px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        text-align: left !important;
+        border-radius: 12px !important;
+    }
+
+    .card-prompt-label {
+        font-size: 0.82rem !important;
+        line-height: 1.4 !important;
+    }
+
+    .card-bottom-icon {
+        margin-left: 10px !important;
+        flex-shrink: 0 !important;
+        font-size: 0.82rem !important;
+        color: #ffad68 !important;
+    }
+
+    /* 6. Mobile Floating Command Dock */
+    .bottom-dock-wrapper,
+    .bottom-input-anchor {
+        position: fixed !important;
+        bottom: 8px !important;
+        left: 0 !important;
+        right: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 10px !important;
+        z-index: 400 !important;
+    }
+
+    .floating-command-dock {
+        padding: 9px 12px 8px !important;
+        border-radius: 16px !important;
+        background: rgba(18, 21, 27, 0.97) !important;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55) !important;
+        border: 1px solid rgba(255, 255, 255, 0.09) !important;
+        gap: 6px !important;
+    }
+
+    .dock-input-row {
+        gap: 8px !important;
+    }
+
+    .dock-sparkle-icon {
+        font-size: 0.88rem !important;
+        margin-top: 3px !important;
+    }
+
+    .dock-input-row textarea {
+        font-size: 16px !important; /* CRITICAL: prevents iOS Safari auto-zoom */
+        line-height: 1.38 !important;
+        min-height: 24px !important;
+        max-height: 110px !important;
+        padding: 2px 0 !important;
+    }
+
+    .dock-controls-bar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding-top: 6px !important;
+        margin-top: 3px !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+        gap: 6px !important;
+    }
+
+    .controls-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+        padding-bottom: 2px !important;
+    }
+
+    .controls-left::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .dock-pill-btn {
+        padding: 5px 9px !important;
+        font-size: 0.74rem !important;
+        border-radius: 7px !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+    }
+
+    .send-action-circle {
+        width: 36px !important;
+        height: 36px !important;
+        flex: 0 0 36px !important;
+        border-radius: 50% !important;
+        font-size: 0.82rem !important;
+    }
+
+    .messages-container {
+        padding: 10px 10px 155px 10px !important;
+    }
+
+    .composer-menu {
+        width: min(290px, calc(100vw - 28px)) !important;
+        left: 0 !important;
+    }
+
+    .session-menu-trigger {
+        opacity: 1 !important;
+        transform: none !important;
+    }
+
+    /* 7. Message Bubbles on Mobile */
+    .message-row {
+        padding: 10px 8px !important;
+        gap: 8px !important;
+    }
+
+    .message-avatar {
+        width: 28px !important;
+        height: 28px !important;
+        flex: 0 0 28px !important;
+        font-size: 0.75rem !important;
+    }
+
+    .message-bubble {
+        padding: 11px 13px !important;
+        font-size: 0.87rem !important;
+        line-height: 1.55 !important;
+        border-radius: 13px !important;
+        max-width: 95% !important;
+    }
+
+    .message-bubble pre {
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        font-size: 0.78rem !important;
+        padding: 10px !important;
+    }
+
+    /* 8. Mobile Auth / Sign-In Layout */
+    .login-page {
+        padding: 12px !important;
+        align-items: center !important;
+        min-height: 100dvh !important;
+    }
+
+    .mac-window-frame {
+        width: 100% !important;
+        max-width: 480px !important;
+        border-radius: 16px !important;
+        margin: auto 0 !important;
+    }
+
+    .auth-split-grid {
+        grid-template-columns: 1fr !important;
+        min-height: auto !important;
+    }
+
+    .auth-hero-card {
+        padding: 24px 20px 20px !important;
+        min-height: auto !important;
+    }
+
+    .auth-brand-row {
+        margin-bottom: 14px !important;
+    }
+
+    .brand-brain-logo {
+        width: 44px !important;
+        height: 44px !important;
+    }
+
+    .auth-hero-title {
+        font-size: 1.6rem !important;
+        line-height: 1.18 !important;
+        margin-bottom: 8px !important;
+    }
+
+    .auth-hero-desc {
+        font-size: 0.82rem !important;
+        line-height: 1.5 !important;
+        margin-bottom: 14px !important;
+    }
+
+    .auth-steps-stack {
+        gap: 6px !important;
+    }
+
+    .auth-step-pill {
+        min-height: 52px !important;
+        padding: 9px 12px !important;
+    }
+
+    .auth-form-card {
+        padding: 24px 20px 28px !important;
+        border-left: none !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+    }
+
+    .auth-tabs-row {
+        margin-bottom: 22px !important;
+    }
+
+    .form-title-group {
+        margin-bottom: 20px !important;
+    }
+
+    .form-title-group h2 {
+        font-size: 1.35rem !important;
+    }
+
+    .sleek-input {
+        min-height: 46px !important;
+        font-size: 16px !important; /* CRITICAL: prevents iOS Safari auto-zoom */
+    }
+
+    .primary-cta-btn {
+        min-height: 48px !important;
+        font-size: 0.9rem !important;
+    }
+}
+
+/* Extra Compact Phones (<= 380px, e.g. iPhone SE) */
+@media (max-width: 380px) {
+    .welcome-headline-text {
+        font-size: 1.35rem !important;
+    }
+
+    .topbar-brand-name {
+        display: none !important;
+    }
+
+    .dock-pill-btn {
+        padding: 4px 7px !important;
+        font-size: 0.7rem !important;
+    }
 }

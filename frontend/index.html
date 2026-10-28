@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <!-- Enterprise Design System Stylesheet -->
-    <link rel="stylesheet" href="styles.css?v=2.6.0">
+    <link rel="stylesheet" href="styles.css?v=2.7.0">
     
     <!-- Markdown & Syntax Highlighting -->
     <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.min.js"></script>
@@ -317,7 +317,22 @@
             </div>
         </div>
         <div id="sessionList" class="session-list"></div>
+        <!-- Mobile Drawer Footer (User Info & Logout) -->
+        <div class="drawer-mobile-footer" id="drawerMobileFooter">
+            <div class="drawer-mobile-user">
+                <div class="drawer-user-avatar" id="drawerUserAvatarLetter">U</div>
+                <div class="drawer-user-meta">
+                    <span class="drawer-user-email" id="drawerUserEmail">user@dualmind.ai</span>
+                    <span class="drawer-user-badge"><i class="fas fa-circle"></i> Authenticated</span>
+                </div>
+            </div>
+            <button type="button" class="drawer-logout-btn" id="drawerLogoutBtn" title="Sign Out">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
     </div>
+    <!-- Drawer backdrop overlay for mobile -->
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
 
     <!-- Main Workspace Container -->
     <main class="main-workspace" id="mainWorkspace">
@@ -487,6 +502,6 @@
 <script src="orb.js?v=2.6.0"></script>
 
 <!-- Application Controller -->
-<script src="script.js?v=2.6.0"></script>
+<script src="script.js?v=2.7.0"></script>
 </body>
 </html>
