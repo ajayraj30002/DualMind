@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <!-- Enterprise Design System Stylesheet -->
-    <link rel="stylesheet" href="styles.css?v=2.5.0">
+    <link rel="stylesheet" href="styles.css?v=2.6.0">
     
     <!-- Markdown & Syntax Highlighting -->
     <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.min.js"></script>
@@ -350,7 +350,17 @@
             <!-- Welcome Hero State -->
             <div class="welcome-stage" id="welcomeHero">
                 <div class="orb-visual-wrap">
-                    <img class="welcome-brand-logo" src="dualmind_logo.png?v=2.5.0" width="128" height="128" alt="DualMind brain logo">
+                    <div class="dynamic-brain-core">
+                        <div class="brain-backdrop-glow"></div>
+                        <svg class="brain-orbit-svg" viewBox="0 0 200 200">
+                            <ellipse cx="100" cy="100" rx="92" ry="92" fill="none" stroke="rgba(255, 173, 104, 0.22)" stroke-width="1.2" stroke-dasharray="5 15" class="orbit-ring-outer"/>
+                            <ellipse cx="100" cy="100" rx="78" ry="78" fill="none" stroke="rgba(168, 85, 247, 0.18)" stroke-width="1.2" stroke-dasharray="3 20" class="orbit-ring-inner"/>
+                        </svg>
+                        <img class="dynamic-brain-image" src="dualmind_brain_tight.png?v=2.6.0" alt="DualMind Neural Brain Core" width="160" height="165">
+                        <div class="synapse-spark spark-1"></div>
+                        <div class="synapse-spark spark-2"></div>
+                        <div class="synapse-spark spark-3"></div>
+                    </div>
                 </div>
 
                 <!-- Dynamic Greeting & Headline -->
@@ -474,9 +484,9 @@
 </div>
 
 <!-- 3D Glowing Orb Engine -->
-<script src="orb.js?v=2.5.0"></script>
+<script src="orb.js?v=2.6.0"></script>
 
 <!-- Application Controller -->
-<script src="script.js?v=2.5.0"></script>
+<script src="script.js?v=2.6.0"></script>
 </body>
 </html>
