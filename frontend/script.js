@@ -141,7 +141,7 @@ function getDynamicBrainMarkup() {
             <ellipse cx="100" cy="100" rx="92" ry="92" fill="none" stroke="rgba(255, 173, 104, 0.22)" stroke-width="1.2" stroke-dasharray="5 15" class="orbit-ring-outer"/>
             <ellipse cx="100" cy="100" rx="78" ry="78" fill="none" stroke="rgba(168, 85, 247, 0.18)" stroke-width="1.2" stroke-dasharray="3 20" class="orbit-ring-inner"/>
         </svg>
-        <img class="dynamic-brain-image" src="dualmind_brain_tight.png?v=2.6.0" alt="DualMind Neural Brain Core" width="160" height="165">
+        <img class="dynamic-brain-image" src="dualmind_brain_tight.png?v=2.8.0" alt="DualMind Neural Brain Core" width="160" height="165">
         <div class="synapse-spark spark-1"></div>
         <div class="synapse-spark spark-2"></div>
         <div class="synapse-spark spark-3"></div>
