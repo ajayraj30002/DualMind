@@ -1417,7 +1417,7 @@ html, body {
 
 .welcome-stage {
     width: 100%;
-    max-width: 860px;
+    max-width: 960px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
@@ -1475,7 +1475,7 @@ html, body {
 /* Starter Cards */
 .starter-section-wrap {
     width: 100%;
-    max-width: 860px;
+    max-width: 960px;
 }
 
 .starter-section-heading {
@@ -1485,24 +1485,24 @@ html, body {
     text-transform: uppercase;
     color: #798090;
     text-align: left;
-    margin-bottom: 7px;
+    margin-bottom: 8px;
 }
 
 .starter-cards-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
+    gap: 12px;
 }
 
 .starter-tall-card {
     min-height: 0;
     height: auto;
-    padding: 10px 12px 9px;
+    padding: 13px 15px 12px;
     background: rgba(17, 20, 26, 0.82);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    border-radius: 13px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -1531,7 +1531,7 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
 }
 .card-eyebrow {
     display: inline-flex;
@@ -1579,38 +1579,40 @@ html, body {
 .card-body-wrap {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    margin-bottom: 4px;
+    gap: 6px;
+    margin-bottom: 8px;
 }
 .card-prompt-label {
-    font-size: 0.80rem;
+    font-size: 0.83rem;
     font-weight: 600;
-    color: #e2e5ec;
-    line-height: 1.28;
+    color: #f1f4f9;
+    line-height: 1.38;
+    letter-spacing: -0.01em;
     transition: color 0.2s;
 }
 .starter-tall-card:hover .card-prompt-label {
     color: #ffffff;
 }
 .card-desc {
-    font-size: 0.68rem;
-    color: #79808d;
-    line-height: 1.32;
+    font-size: 0.71rem;
+    color: #8b93a2;
+    line-height: 1.42;
     transition: color 0.2s;
 }
 .starter-tall-card:hover .card-desc {
-    color: #a4acb9;
+    color: #b0b8c7;
 }
 
 .card-action-cue {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    font-size: 0.69rem;
+    gap: 5px;
+    font-size: 0.72rem;
     font-weight: 600;
     color: #ff9f43;
-    opacity: 0.9;
-    margin-top: 3px;
+    opacity: 0.95;
+    margin-top: auto;
+    padding-top: 4px;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     align-self: flex-start;
 }
@@ -3349,15 +3351,15 @@ input:-webkit-autofill:focus {
 }
 
 .main-workspace { background: #0b0d11; }
-.welcome-stage { max-width: 860px; }
+.welcome-stage { max-width: 960px; }
 .orb-visual-wrap { width: 104px; height: 104px; margin-bottom: 5px; }
 #heroOrbCanvas { width: 104px; height: 104px; }
 .welcome-greeting-text { font-size: 0.95rem; color: #9ea4b0; font-weight: 500; margin-bottom: 2px; }
 .welcome-headline-text { max-width: 780px; font-size: clamp(1.55rem, 2.3vw, 2.05rem); letter-spacing: -0.035em; line-height: 1.18; margin-bottom: 12px; }
 .gradient-orange-text { background-image: linear-gradient(110deg,#ffbd86 0%,#f28a42 48%,#b49aff 100%); }
-.starter-section-wrap { max-width: 860px; }
-.starter-section-heading { margin-bottom: 7px; letter-spacing: 1.3px; color: #798090; font-size: 0.65rem; }
-.bottom-dock-wrapper, .bottom-input-anchor { max-width: 860px; bottom: 14px; }
+.starter-section-wrap { max-width: 960px; }
+.starter-section-heading { margin-bottom: 8px; letter-spacing: 1.3px; color: #798090; font-size: 0.65rem; }
+.bottom-dock-wrapper, .bottom-input-anchor { max-width: 880px; bottom: 14px; }
 
 @media (max-width: 1024px) {
     .auth-split-grid { grid-template-columns: 1fr; }
