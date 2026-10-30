@@ -137,11 +137,12 @@ function getDynamicBrainMarkup() {
     return `
     <div class="dynamic-brain-core">
         <div class="brain-backdrop-glow"></div>
-        <svg class="brain-orbit-svg" viewBox="0 0 200 200">
-            <ellipse cx="100" cy="100" rx="92" ry="92" fill="none" stroke="rgba(255, 173, 104, 0.22)" stroke-width="1.2" stroke-dasharray="5 15" class="orbit-ring-outer"/>
-            <ellipse cx="100" cy="100" rx="78" ry="78" fill="none" stroke="rgba(168, 85, 247, 0.18)" stroke-width="1.2" stroke-dasharray="3 20" class="orbit-ring-inner"/>
+        <svg class="brain-orbit-svg" viewBox="0 0 200 200" aria-hidden="true">
+            <circle cx="100" cy="100" r="92" fill="none" stroke="rgba(255, 173, 104, 0.28)" stroke-width="1" class="orbit-ring-outer"/>
+            <circle cx="100" cy="100" r="85" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" stroke-dasharray="2 12" class="orbit-ring-ticks"/>
+            <circle cx="100" cy="100" r="76" fill="none" stroke="rgba(180, 154, 255, 0.24)" stroke-width="1" stroke-dasharray="24 16" class="orbit-ring-inner"/>
         </svg>
-        <img class="dynamic-brain-image" src="dualmind_brain_tight.png?v=2.8.0" alt="DualMind Neural Brain Core" width="160" height="165">
+        <img class="dynamic-brain-image" src="dualmind_brain_tight.png?v=2.9.0" alt="DualMind Neural Brain Core" width="160" height="165">
         <div class="synapse-spark spark-1"></div>
         <div class="synapse-spark spark-2"></div>
         <div class="synapse-spark spark-3"></div>
@@ -159,6 +160,11 @@ function getWelcomeHtml(userName = null) {
             ${getDynamicBrainMarkup()}
         </div>
 
+        <div class="enterprise-stage-pill">
+            <span class="hero-pulse-dot"></span>
+            <span class="hero-stage-tag">NEURAL RETRIEVAL PIPELINE ACTIVE</span>
+        </div>
+
         <h2 class="welcome-greeting-text" id="welcomeGreeting">${catchUp.greeting}</h2>
         <h1 class="welcome-headline-text">${catchUp.headlineHtml}</h1>
         
@@ -166,23 +172,63 @@ function getWelcomeHtml(userName = null) {
             <div class="starter-section-heading">AGENTIC RETRIEVAL CAPABILITIES</div>
             <div class="starter-cards-grid">
                 <button class="starter-tall-card" data-prompt="Synthesize the core takeaways, methodology, and empirical conclusions from the attached PDF document.">
-                    <span class="card-prompt-label">Synthesize document findings & methodology</span>
-                    <div class="card-bottom-icon"><i class="fas fa-file-lines"></i></div>
+                    <div class="card-header-row">
+                        <span class="card-eyebrow"><span class="eyebrow-accent dot-amber"></span>HYBRID RAG</span>
+                        <span class="card-top-icon"><i class="fas fa-file-lines"></i></span>
+                    </div>
+                    <div class="card-body-wrap">
+                        <span class="card-prompt-label">Synthesize document findings & methodology</span>
+                        <span class="card-desc">Multi-vector neural embeddings + BM25 keyword reranking</span>
+                    </div>
+                    <div class="card-action-cue">
+                        <span>Synthesize</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
                 </button>
 
                 <button class="starter-tall-card" data-prompt="Cross-examine the claims in my attached document against current public industry consensus found online.">
-                    <span class="card-prompt-label">Cross-examine claims with live web intelligence</span>
-                    <div class="card-bottom-icon"><i class="fas fa-network-wired"></i></div>
+                    <div class="card-header-row">
+                        <span class="card-eyebrow"><span class="eyebrow-accent dot-violet"></span>LIVE INTEL</span>
+                        <span class="card-top-icon"><i class="fas fa-globe"></i></span>
+                    </div>
+                    <div class="card-body-wrap">
+                        <span class="card-prompt-label">Cross-examine claims with live web</span>
+                        <span class="card-desc">Real-time public consensus & source verification</span>
+                    </div>
+                    <div class="card-action-cue">
+                        <span>Cross-examine</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
                 </button>
 
                 <button class="starter-tall-card" data-prompt="Perform an in-depth ATS resume audit with score breakdown, keyword density, and actionable fixes.">
-                    <span class="card-prompt-label">Perform comprehensive ATS resume audit</span>
-                    <div class="card-bottom-icon"><i class="fas fa-file-shield"></i></div>
+                    <div class="card-header-row">
+                        <span class="card-eyebrow"><span class="eyebrow-accent dot-green"></span>ATS AUDIT</span>
+                        <span class="card-top-icon"><i class="fas fa-shield-halved"></i></span>
+                    </div>
+                    <div class="card-body-wrap">
+                        <span class="card-prompt-label">Comprehensive ATS resume audit</span>
+                        <span class="card-desc">Keyword density, section scoring & structural fixes</span>
+                    </div>
+                    <div class="card-action-cue">
+                        <span>Audit</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
                 </button>
 
                 <button class="starter-tall-card" data-prompt="Explain the architecture of hybrid reciprocal rank fusion (RRF) and provide a Python implementation.">
-                    <span class="card-prompt-label">Explain hybrid RRF architecture with code</span>
-                    <div class="card-bottom-icon"><i class="fas fa-terminal"></i></div>
+                    <div class="card-header-row">
+                        <span class="card-eyebrow"><span class="eyebrow-accent dot-blue"></span>ARCHITECTURE</span>
+                        <span class="card-top-icon"><i class="fas fa-code"></i></span>
+                    </div>
+                    <div class="card-body-wrap">
+                        <span class="card-prompt-label">Hybrid RRF architecture & code</span>
+                        <span class="card-desc">Reciprocal Rank Fusion formula & runnable Python</span>
+                    </div>
+                    <div class="card-action-cue">
+                        <span>Explain</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
                 </button>
             </div>
         </div>
@@ -686,6 +732,7 @@ async function sendMessage() {
 
     messageInput.value = '';
     messageInput.style.height = 'auto';
+    updateSendButtonState();
 
     await addMessageToChat('user', text, uploadedFilename);
 
@@ -698,6 +745,7 @@ async function sendMessage() {
             await uploadFile(pendingFile, currentSessionId);
             pendingFile = null;
             if (fileBadge) fileBadge.classList.add('hidden');
+            updateSendButtonState();
             hideTyping();
         } catch (err) {
             hideTyping();
@@ -739,6 +787,7 @@ async function sendMessage() {
         await addMessageToChat('assistant', 'Connection error. Please check if the server is running.');
     } finally {
         if (sendBtn) sendBtn.disabled = false;
+        updateSendButtonState();
         messageInput?.focus();
     }
 }
@@ -1055,7 +1104,39 @@ function onFileSelect(e) {
         if (nameEl) nameEl.textContent = file.name;
         fileBadge.classList.remove('hidden');
     }
+    updateSendButtonState();
     showToast(`Attached ${file.name}`, 'info', 2000);
+}
+
+function updateSendButtonState() {
+    const hasText = Boolean(messageInput && messageInput.value.trim().length > 0);
+    const hasDoc = Boolean(pendingFile);
+    const canSend = hasText || hasDoc;
+    if (sendBtn) {
+        sendBtn.classList.toggle('has-text', canSend);
+        sendBtn.title = canSend ? 'Send message (Enter)' : 'Enter a prompt or attach a PDF to send';
+    }
+}
+
+function copyConversationTranscript() {
+    const messages = messagesDiv?.querySelectorAll('.message');
+    if (!messages || messages.length === 0) {
+        showToast('No messages to copy', 'info');
+        return;
+    }
+    const title = chatTitleSpan?.innerText || 'DualMind Conversation';
+    let text = `DualMind Intelligence - ${title}\n` + '='.repeat(40) + '\n\n';
+    messages.forEach(msg => {
+        const isUser = msg.classList.contains('user');
+        const role = isUser ? 'User' : 'DualMind Assistant';
+        const content = msg.querySelector('.message-content')?.innerText.trim() || '';
+        text += `[${role}]\n${content}\n\n`;
+    });
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Transcript copied to clipboard', 'success');
+    }).catch(() => {
+        showToast('Unable to access clipboard', 'error');
+    });
 }
 
 async function uploadFile(file, sessionId) {
@@ -1266,6 +1347,7 @@ function bindStarterChips() {
                 messageInput.focus();
                 messageInput.style.height = 'auto';
                 messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
+                updateSendButtonState();
             }
         });
     });
@@ -1700,8 +1782,12 @@ function renderModelOptions(models, defaultModelId = 'llama-3.3-70b-versatile') 
     }
     currentSelectedModel = matched ? matched.id : 'auto';
 
+    const topbarPill = document.getElementById('topbarModelPill');
     if (labelSpan && matched) {
         labelSpan.textContent = matched.name;
+    }
+    if (topbarPill && matched) {
+        topbarPill.textContent = matched.name;
     }
 
     listContainer.innerHTML = '';
@@ -1738,6 +1824,7 @@ function renderModelOptions(models, defaultModelId = 'llama-3.3-70b-versatile') 
             currentSelectedModel = m.id;
             localStorage.setItem('dualmind_model_preference', m.id);
             if (labelSpan) labelSpan.textContent = m.name;
+            if (topbarPill) topbarPill.textContent = m.name;
 
             listContainer.querySelectorAll('.composer-menu-option').forEach(opt => {
                 const sel = (opt === btn);
@@ -1801,6 +1888,7 @@ function setupEventListeners() {
     messageInput?.addEventListener('input', () => {
         messageInput.style.height = 'auto';
         messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
+        updateSendButtonState();
     });
 
     newChatBtn?.addEventListener('click', startNewChat);
@@ -1820,6 +1908,7 @@ function setupEventListeners() {
         pendingFile = null;
         if (fileBadge) fileBadge.classList.add('hidden');
         if (fileInput) fileInput.value = '';
+        updateSendButtonState();
         showToast('Attachment removed', 'info');
     });
 
@@ -1899,6 +1988,35 @@ function setupEventListeners() {
         userMenu?.classList.toggle('hidden');
     });
 
+    // Enterprise Multi-Format Export Menu
+    const exportBtn = document.getElementById('exportChatBtn');
+    const exportDropdown = document.getElementById('exportDropdownMenu');
+    exportBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!exportDropdown) {
+            exportConversation();
+            return;
+        }
+        const opening = exportDropdown.classList.contains('hidden');
+        exportDropdown.classList.toggle('hidden', !opening);
+        exportBtn.setAttribute('aria-expanded', String(opening));
+    });
+    document.getElementById('exportMarkdownOption')?.addEventListener('click', () => {
+        exportDropdown?.classList.add('hidden');
+        exportBtn?.setAttribute('aria-expanded', 'false');
+        exportConversation();
+    });
+    document.getElementById('exportCopyOption')?.addEventListener('click', () => {
+        exportDropdown?.classList.add('hidden');
+        exportBtn?.setAttribute('aria-expanded', 'false');
+        copyConversationTranscript();
+    });
+    document.getElementById('exportPrintOption')?.addEventListener('click', () => {
+        exportDropdown?.classList.add('hidden');
+        exportBtn?.setAttribute('aria-expanded', 'false');
+        window.print();
+    });
+
     // Close menus on outside click
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.session-actions')) {
@@ -1912,6 +2030,10 @@ function setupEventListeners() {
         if (!e.target.closest('.composer-model-wrap')) {
             modelMenu?.classList.add('hidden');
             modelButton?.setAttribute('aria-expanded', 'false');
+        }
+        if (!e.target.closest('.topbar-export-wrap')) {
+            exportDropdown?.classList.add('hidden');
+            exportBtn?.setAttribute('aria-expanded', 'false');
         }
         if (userMenu && !userMenu.contains(e.target) && !userAvatarBtn?.contains(e.target)) {
             userMenu.classList.add('hidden');
@@ -1931,13 +2053,14 @@ function setupEventListeners() {
         renderSessionList(allSessions);
     });
 
-    // Actions
-    document.getElementById('exportChatBtn')?.addEventListener('click', exportConversation);
     // Scroll
     scrollBottomBtn?.addEventListener('click', () => {
         if (messagesDiv) messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
     });
     messagesDiv?.addEventListener('scroll', updateScrollBottomBtn);
+
+    // Initial state sync
+    updateSendButtonState();
 
     // Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
@@ -1952,6 +2075,8 @@ function setupEventListeners() {
             closePromptDialog(null);
             modelMenu?.classList.add('hidden');
             searchModeMenu?.classList.add('hidden');
+            exportDropdown?.classList.add('hidden');
+            exportBtn?.setAttribute('aria-expanded', 'false');
             document.querySelectorAll('.session-context-menu').forEach(menu => menu.classList.add('hidden'));
             userMenu?.classList.add('hidden');
         }

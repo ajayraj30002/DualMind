@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <!-- Design System Stylesheet -->
-    <link rel="stylesheet" href="styles.css?v=2.8.0">
+    <link rel="stylesheet" href="styles.css?v=2.9.0">
     
     <!-- Markdown & Syntax Highlighting -->
     <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.min.js"></script>
@@ -337,26 +337,56 @@
     <!-- Main Workspace Container -->
     <main class="main-workspace" id="mainWorkspace">
         <!-- Top Navigation Bar -->
+        <!-- Top Navigation Bar -->
         <header class="top-nav-bar">
             <div class="nav-left-cluster">
-                <button class="drawer-toggle-btn" id="drawerToggleBtn" type="button" title="Show or hide sessions" aria-label="Show or hide sessions" aria-controls="sessionDrawer" aria-expanded="true">
+                <button class="drawer-toggle-btn" id="drawerToggleBtn" type="button" title="Toggle session history" aria-label="Toggle session history" aria-controls="sessionDrawer" aria-expanded="true">
                     <i class="fas fa-bars"></i>
                 </button>
-                <!-- Active Thread Title -->
-                <div class="active-thread-title-wrap">
-                    <span id="chatTitle" class="active-thread-title">New conversation</span>
+                <!-- Enterprise Breadcrumb Navigation -->
+                <div class="nav-breadcrumb-wrap" aria-label="Breadcrumb">
+                    <span class="nav-breadcrumb-root"><i class="fas fa-layer-group"></i> Workspace</span>
+                    <span class="nav-breadcrumb-sep">/</span>
+                    <span id="chatTitle" class="active-thread-title" title="Current conversation">New conversation</span>
+                </div>
+            </div>
+
+            <!-- Real-time Engine Telemetry Indicator -->
+            <div class="nav-center-cluster">
+                <div class="engine-telemetry-badge" title="DualMind Engine: Multi-vector embeddings + BM25 keyword reranker active">
+                    <span class="telemetry-status-dot"></span>
+                    <span class="telemetry-status-text">HYBRID RAG ACTIVE</span>
+                    <span class="telemetry-status-divider">·</span>
+                    <span class="telemetry-status-model" id="topbarModelPill">Llama 3.3 70B</span>
                 </div>
             </div>
 
             <div class="nav-right-cluster">
                 <div class="topbar-brand" aria-label="DualMind">
-                    <span class="brand-logo-mark"><img src="dualmind_logo.png?v=2.8.0" width="34" height="34" alt=""></span>
+                    <span class="brand-logo-mark"><img src="dualmind_logo.png?v=2.9.0" width="34" height="34" alt=""></span>
                     <span class="topbar-brand-name">DualMind</span>
                 </div>
-                <button id="exportChatBtn" class="top-tool-pill" title="Export conversation as Markdown">
-                    <i class="fas fa-arrow-up-right-from-square"></i>
-                    <span>Export</span>
-                </button>
+                <div class="topbar-export-wrap">
+                    <button id="exportChatBtn" class="top-tool-pill top-tool-export" title="Export conversation" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-arrow-up-right-from-square"></i>
+                        <span>Export</span>
+                        <i class="fas fa-chevron-down pill-chevron-small"></i>
+                    </button>
+                    <div class="export-dropdown-menu hidden" id="exportDropdownMenu" role="menu">
+                        <button type="button" class="export-menu-item" id="exportMarkdownOption" role="menuitem">
+                            <i class="fas fa-file-lines"></i>
+                            <span><strong>Markdown (.md)</strong><small>Formatted notes with citations</small></span>
+                        </button>
+                        <button type="button" class="export-menu-item" id="exportCopyOption" role="menuitem">
+                            <i class="fas fa-copy"></i>
+                            <span><strong>Copy Transcript</strong><small>Copy all turns to clipboard</small></span>
+                        </button>
+                        <button type="button" class="export-menu-item" id="exportPrintOption" role="menuitem">
+                            <i class="fas fa-print"></i>
+                            <span><strong>Print / PDF</strong><small>Executive report format</small></span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -367,50 +397,89 @@
                 <div class="orb-visual-wrap">
                     <div class="dynamic-brain-core">
                         <div class="brain-backdrop-glow"></div>
-                        <svg class="brain-orbit-svg" viewBox="0 0 200 200">
-                            <ellipse cx="100" cy="100" rx="92" ry="92" fill="none" stroke="rgba(255, 173, 104, 0.22)" stroke-width="1.2" stroke-dasharray="5 15" class="orbit-ring-outer"/>
-                            <ellipse cx="100" cy="100" rx="78" ry="78" fill="none" stroke="rgba(168, 85, 247, 0.18)" stroke-width="1.2" stroke-dasharray="3 20" class="orbit-ring-inner"/>
+                        <svg class="brain-orbit-svg" viewBox="0 0 200 200" aria-hidden="true">
+                            <circle cx="100" cy="100" r="92" fill="none" stroke="rgba(255, 173, 104, 0.28)" stroke-width="1" class="orbit-ring-outer"/>
+                            <circle cx="100" cy="100" r="85" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" stroke-dasharray="2 12" class="orbit-ring-ticks"/>
+                            <circle cx="100" cy="100" r="76" fill="none" stroke="rgba(180, 154, 255, 0.24)" stroke-width="1" stroke-dasharray="24 16" class="orbit-ring-inner"/>
                         </svg>
-                        <img class="dynamic-brain-image" src="dualmind_brain_tight.png?v=2.8.0" alt="DualMind Neural Brain Core" width="160" height="165">
+                        <img class="dynamic-brain-image" src="dualmind_brain_tight.png?v=2.9.0" alt="DualMind Neural Brain Core" width="160" height="165">
                         <div class="synapse-spark spark-1"></div>
                         <div class="synapse-spark spark-2"></div>
                         <div class="synapse-spark spark-3"></div>
                     </div>
                 </div>
 
+                <!-- Enterprise Stage Status Badge -->
+                <div class="enterprise-stage-pill">
+                    <span class="hero-pulse-dot"></span>
+                    <span class="hero-stage-tag">NEURAL RETRIEVAL PIPELINE ACTIVE</span>
+                </div>
+
                 <!-- Dynamic Greeting & Headline -->
                 <h2 class="welcome-greeting-text" id="welcomeGreeting">Good afternoon, Analyst</h2>
                 <h1 class="welcome-headline-text">What would you like to <span class="gradient-orange-text">synthesize today?</span></h1>
 
-                <!-- Real DualMind Capabilities Starter Cards -->
+                <!-- Real DualMind Capabilities Starter Cards (Bento Grid) -->
                 <div class="starter-section-wrap">
                     <div class="starter-section-heading">AGENTIC RETRIEVAL CAPABILITIES</div>
                     <div class="starter-cards-grid">
                         <button class="starter-tall-card" data-prompt="Synthesize the core takeaways, methodology, and empirical conclusions from the attached PDF document.">
-                            <span class="card-prompt-label">Synthesize document findings & methodology</span>
-                            <div class="card-bottom-icon">
-                                <i class="fas fa-file-lines"></i>
+                            <div class="card-header-row">
+                                <span class="card-eyebrow"><span class="eyebrow-accent dot-amber"></span>HYBRID RAG</span>
+                                <span class="card-top-icon"><i class="fas fa-file-lines"></i></span>
+                            </div>
+                            <div class="card-body-wrap">
+                                <span class="card-prompt-label">Synthesize document findings & methodology</span>
+                                <span class="card-desc">Multi-vector neural embeddings + BM25 keyword reranking</span>
+                            </div>
+                            <div class="card-action-cue">
+                                <span>Synthesize</span>
+                                <i class="fas fa-arrow-right"></i>
                             </div>
                         </button>
 
                         <button class="starter-tall-card" data-prompt="Cross-examine the claims in my attached document against current public industry consensus found online.">
-                            <span class="card-prompt-label">Cross-examine claims with live web intelligence</span>
-                            <div class="card-bottom-icon">
-                                <i class="fas fa-network-wired"></i>
+                            <div class="card-header-row">
+                                <span class="card-eyebrow"><span class="eyebrow-accent dot-violet"></span>LIVE INTEL</span>
+                                <span class="card-top-icon"><i class="fas fa-globe"></i></span>
+                            </div>
+                            <div class="card-body-wrap">
+                                <span class="card-prompt-label">Cross-examine claims with live web</span>
+                                <span class="card-desc">Real-time public consensus & source verification</span>
+                            </div>
+                            <div class="card-action-cue">
+                                <span>Cross-examine</span>
+                                <i class="fas fa-arrow-right"></i>
                             </div>
                         </button>
 
                         <button class="starter-tall-card" data-prompt="Perform an in-depth ATS resume audit with score breakdown, keyword density, and actionable fixes.">
-                            <span class="card-prompt-label">Perform comprehensive ATS resume audit</span>
-                            <div class="card-bottom-icon">
-                                <i class="fas fa-file-shield"></i>
+                            <div class="card-header-row">
+                                <span class="card-eyebrow"><span class="eyebrow-accent dot-green"></span>ATS AUDIT</span>
+                                <span class="card-top-icon"><i class="fas fa-shield-halved"></i></span>
+                            </div>
+                            <div class="card-body-wrap">
+                                <span class="card-prompt-label">Comprehensive ATS resume audit</span>
+                                <span class="card-desc">Keyword density, section scoring & structural fixes</span>
+                            </div>
+                            <div class="card-action-cue">
+                                <span>Audit</span>
+                                <i class="fas fa-arrow-right"></i>
                             </div>
                         </button>
 
                         <button class="starter-tall-card" data-prompt="Explain the architecture of hybrid reciprocal rank fusion (RRF) and provide a Python implementation.">
-                            <span class="card-prompt-label">Explain hybrid RRF architecture with code</span>
-                            <div class="card-bottom-icon">
-                                <i class="fas fa-terminal"></i>
+                            <div class="card-header-row">
+                                <span class="card-eyebrow"><span class="eyebrow-accent dot-blue"></span>ARCHITECTURE</span>
+                                <span class="card-top-icon"><i class="fas fa-code"></i></span>
+                            </div>
+                            <div class="card-body-wrap">
+                                <span class="card-prompt-label">Hybrid RRF architecture & code</span>
+                                <span class="card-desc">Reciprocal Rank Fusion formula & runnable Python</span>
+                            </div>
+                            <div class="card-action-cue">
+                                <span>Explain</span>
+                                <i class="fas fa-arrow-right"></i>
                             </div>
                         </button>
                     </div>
@@ -439,21 +508,20 @@
 
                 <!-- Main Input Row -->
                 <div class="dock-input-row">
-                    <i class="fas fa-brain dock-sparkle-icon"></i>
-                    <textarea id="messageInput" placeholder="Query documents, search the live web, or attach a PDF..." rows="1"></textarea>
+                    <textarea id="messageInput" placeholder="Query documents, cross-examine with live web, or attach a PDF..." rows="1"></textarea>
                 </div>
 
                 <!-- Dock Controls Bar -->
                 <div class="dock-controls-bar">
                     <div class="controls-left">
-                        <button type="button" id="attachPdfBtn" class="dock-pill-btn">
+                        <button type="button" id="attachPdfBtn" class="dock-pill-btn" title="Attach PDF document for semantic analysis">
                             <i class="fas fa-paperclip"></i>
                             <span>Attach PDF</span>
                         </button>
                         <input type="file" id="pdfFileInput" accept=".pdf" hidden>
 
                         <div class="writing-style-wrap mode-picker-wrap">
-                            <button type="button" class="dock-pill-btn" id="writingStyleBtn" aria-haspopup="true" aria-expanded="false">
+                            <button type="button" class="dock-pill-btn" id="writingStyleBtn" aria-haspopup="true" aria-expanded="false" title="Switch retrieval strategy">
                                 <i class="fas fa-diagram-project"></i><span id="currentWritingStyle">Hybrid search</span><i class="fas fa-chevron-down pill-chevron-small"></i>
                             </button>
                             <div class="composer-menu hidden" id="searchModeMenu" role="menu">
@@ -462,7 +530,7 @@
                             </div>
                         </div>
                         <div class="model-picker-wrap composer-model-wrap">
-                            <button type="button" class="dock-pill-btn model-select-btn" id="composerModelBtn" aria-haspopup="true" aria-expanded="false">
+                            <button type="button" class="dock-pill-btn model-select-btn" id="composerModelBtn" aria-haspopup="true" aria-expanded="false" title="Choose LLM reasoning model">
                                 <i class="fas fa-microchip"></i><span id="selectedModelLabel">Llama 3.3 70B</span><i class="fas fa-chevron-down pill-chevron-small"></i>
                             </button>
                             <div class="composer-menu model-menu hidden" id="composerModelMenu" role="menu">
@@ -487,8 +555,11 @@
                     </div>
 
                     <div class="controls-right">
-                        <!-- Circular Send Button -->
-                        <button type="button" id="sendMsgBtn" class="send-action-circle" title="Send message (Enter)">
+                        <span class="dock-kbd-hint" title="Press Enter to send, Shift+Enter for newline">
+                            <span class="kbd-key">↵</span>
+                        </span>
+                        <!-- Precision Send Button -->
+                        <button type="button" id="sendMsgBtn" class="send-action-circle" title="Send message (Enter)" aria-label="Send message">
                             <i class="fas fa-arrow-up"></i>
                         </button>
                     </div>
@@ -502,6 +573,6 @@
 <script src="orb.js?v=2.6.0"></script>
 
 <!-- Application Controller -->
-<script src="script.js?v=2.8.0"></script>
+<script src="script.js?v=2.9.0"></script>
 </body>
 </html>
