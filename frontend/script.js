@@ -3,12 +3,26 @@
  * Enterprise Grade UI/UX with Custom In-App Modal Dialogs (No Browser Alert/Confirm Popups)
  */
 
-// API Configuration
+// API Configuration (Supports Render backend, custom URLs, and local dev)
+const _urlParams = new URLSearchParams(window.location.search);
+const _overrideBackend = _urlParams.get('backend') || _urlParams.get('backend_url');
+if (_overrideBackend) {
+    localStorage.setItem('dualmind_backend_url', _overrideBackend.replace(/\/+$/, ''));
+}
+const _savedBackend = localStorage.getItem('dualmind_backend_url');
+
 let API_URL = window.__ENV__?.BACKEND_URL;
 if (!API_URL || API_URL === '${BACKEND_URL}') {
-    API_URL = window.location.origin.includes(':5173') || window.location.origin.includes(':5174') || window.location.origin.includes(':5175')
-        ? 'http://localhost:8000'
-        : window.location.origin;
+    if (_savedBackend) {
+        API_URL = _savedBackend;
+    } else {
+        const port = window.location.port;
+        const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const isStaticDevPort = ['8080', '3000', '5173', '5174', '5175', '5500'].includes(port);
+        API_URL = (isLocalHost && isStaticDevPort)
+            ? 'http://localhost:8000'
+            : window.location.origin;
+    }
 }
 
 // Global Application State
@@ -775,11 +789,25 @@ async function sendMessage() {
             const resumeData = data.resume_analysis || null;
             await addMessageToChat('assistant', finalAnswer, null, searchSource, resumeData);
         } else {
-            await addMessageToChat('assistant', 'Sorry, something went wrong.');
+            const errDetail = data?.detail || 'Sorry, something went wrong on the server.';
+            await addMessageToChat('assistant', `⚠️ ${errDetail}`);
         }
     } catch (err) {
         hideTyping();
-        await addMessageToChat('assistant', 'Connection error. Please check if the server is running.');
+        if (token === 'demo_token') {
+            const lower = text.toLowerCase().trim();
+            let demoReply = '';
+            if (/^(hi|hello|hey|greetings)/i.test(lower)) {
+                demoReply = "Hello! I am **DualMind**, your agentic AI assistant powered by hybrid neural RAG and live web intelligence. What would you like to explore or synthesize today?";
+            } else if (lower.includes('rrf') || lower.includes('reciprocal')) {
+                demoReply = "### Reciprocal Rank Fusion (RRF)\n\n**RRF** combines search scores from dense vector search (semantic similarity) and sparse keyword search (BM25):\n\n$$\\text{RRF Score}(d) = \\sum_{m \\in M} \\frac{1}{k + r_m(d)}$$\n\nWhere $k=60$ balances rank-frequency distribution with zero single-model bias.";
+            } else {
+                demoReply = `### DualMind Agentic Intelligence\n\nI received your query: *"**${escapeHtml(text)}**"*\n\nTo connect live queries directly to your deployed backend, pass your Render backend URL (e.g. \`?backend=https://your-service.onrender.com\`) or ensure your backend is running.`;
+            }
+            await addMessageToChat('assistant', demoReply, null, currentMode);
+        } else {
+            await addMessageToChat('assistant', `⚠️ **Connection Error**: Unable to reach backend at \`${API_URL}\`. Please check that your Render service is awake or your backend server is running.`);
+        }
     } finally {
         if (sendBtn) sendBtn.disabled = false;
         updateSendButtonState();
