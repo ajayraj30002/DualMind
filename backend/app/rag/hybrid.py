@@ -5,7 +5,6 @@ import hashlib
 from typing import Any, Dict, List, Optional
 
 import httpx
-from groq import Groq 
 
 try:
     from .closed_domain import search_closed_domain
@@ -27,7 +26,183 @@ except ImportError:
 
 from ..config import Config
 
-groq_client = Groq(api_key=Config.GROQ_API_KEY)
+_groq_client = None
+
+def _get_groq_client():
+    global _groq_client
+    if _groq_client is not None:
+        return _groq_client
+    if Config.GROQ_API_KEY:
+        try:
+            from groq import Groq
+            _groq_client = Groq(api_key=Config.GROQ_API_KEY)
+            return _groq_client
+        except Exception as e:
+            print(f"Warning: Failed to initialize Groq client: {e}")
+    return None
+
+
+def _normalize_gemini_model(model: Optional[str]) -> str:
+    """Map user/internal model string to a valid Gemini model ID."""
+    if not model or model.lower() == "auto":
+        return "gemini-2.0-flash"
+    m = model.strip()
+    if m.startswith("models/"):
+        m = m[len("models/"):]
+    low = m.lower()
+    if "2.0-flash-lite" in low:
+        return "gemini-2.0-flash-lite"
+    if "2.0-flash" in low:
+        return "gemini-2.0-flash"
+    if "1.5-pro" in low:
+        return "gemini-1.5-pro"
+    if "1.5-flash" in low:
+        return "gemini-1.5-flash"
+    if "pro" in low or "reasoning" in low or "deepseek" in low:
+        return "gemini-1.5-pro"
+    if "flash" in low or "instant" in low:
+        return "gemini-1.5-flash"
+    if low.startswith("gemini-"):
+        return m
+    return "gemini-2.0-flash"
+
+
+def _call_gemini_api(
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float = 0.2,
+    max_tokens: int = 1500,
+    api_key: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Call Google Gemini API using httpx with two-tier resilience:
+      Tier 1: Google's official OpenAI-compatible endpoint (/v1beta/openai/chat/completions)
+      Tier 2: Fallback to native Gemini REST endpoint (/v1beta/models/{model}:generateContent)
+    """
+    key = api_key or Config.GEMINI_API_KEY
+    if not key:
+        return None
+
+    clean_model = _normalize_gemini_model(model)
+
+    # ── Tier 1: OpenAI-compatible endpoint ──
+    try:
+        url_openai = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        }
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
+
+        payload = {
+            "model": clean_model,
+            "messages": messages,
+            "temperature": float(temperature),
+            "max_tokens": int(max_tokens),
+        }
+
+        with httpx.Client(timeout=45.0) as client:
+            resp = client.post(url_openai, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices and "message" in choices[0]:
+                    content = choices[0]["message"].get("content", "")
+                    if content and content.strip():
+                        return content.strip()
+            else:
+                print(f"Gemini OpenAI endpoint status {resp.status_code}: {resp.text[:150]}")
+    except Exception as err:
+        print(f"Gemini OpenAI endpoint attempt failed ({err}), trying native REST endpoint...")
+
+    # ── Tier 2: Native Gemini REST endpoint ──
+    try:
+        url_native = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={key}"
+        native_body: Dict[str, Any] = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": user_prompt}],
+                }
+            ],
+            "generationConfig": {
+                "temperature": float(temperature),
+                "maxOutputTokens": int(max_tokens),
+            },
+        }
+        if system_prompt:
+            native_body["systemInstruction"] = {
+                "parts": [{"text": system_prompt}]
+            }
+
+        with httpx.Client(timeout=45.0) as client:
+            resp = client.post(url_native, json=native_body)
+            if resp.status_code == 200:
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    if parts and "text" in parts[0]:
+                        return parts[0]["text"].strip()
+            else:
+                print(f"Gemini native REST endpoint status {resp.status_code}: {resp.text[:150]}")
+    except Exception as err:
+        print(f"Gemini native REST endpoint failed: {err}")
+
+    return None
+
+
+def _call_unified_llm(
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float = 0.2,
+    max_tokens: int = 1500,
+    model: Optional[str] = None,
+) -> str:
+    """
+    Unified LLM caller. Automatically routes to Google Gemini (priority) or Groq
+    depending on available API keys, with automatic provider fallback.
+    """
+    # 1. Try Google Gemini if key is available
+    if Config.GEMINI_API_KEY:
+        gemini_result = _call_gemini_api(
+            model=model or Config.LLM_MODEL,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            api_key=Config.GEMINI_API_KEY,
+        )
+        if gemini_result:
+            return gemini_result
+        print("⚠️ Gemini call failed or returned empty; attempting fallback...")
+
+    # 2. Try Groq if key is available
+    groq_client = _get_groq_client()
+    if groq_client:
+        groq_model = model or Config.LLM_MODEL
+        if "gemini" in (groq_model or "").lower():
+            groq_model = "llama-3.3-70b-versatile"
+        try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": user_prompt})
+            completion = groq_client.chat.completions.create(
+                model=groq_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return completion.choices[0].message.content.strip()
+        except Exception as err:
+            print(f"⚠️ Groq call failed: {err}")
+
+    raise RuntimeError("No LLM provider succeeded. Please check GEMINI_API_KEY or GROQ_API_KEY in environment.")
 
 MAX_RERANK_CANDIDATES = int(os.getenv("MAX_RERANK_CANDIDATES", "10"))
 MAX_RERANK_DOC_CHARS  = int(os.getenv("MAX_RERANK_DOC_CHARS",  "1200"))
@@ -160,19 +335,13 @@ JSON Format:
 }}"""
 
     try:
-        completion = groq_client.chat.completions.create(
-            model=Config.LLM_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a highly intelligent, autonomous routing agent. Analyze the context and output only valid JSON containing your reasoning, intent, retrieval mode, and rewritten query.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0,
+        raw = _call_unified_llm(
+            system_prompt="You are a highly intelligent, autonomous routing agent. Analyze the context and output only valid JSON containing your reasoning, intent, retrieval mode, and rewritten query.",
+            user_prompt=prompt,
+            temperature=0.0,
             max_tokens=350,
+            model=Config.LLM_MODEL,
         )
-        raw = completion.choices[0].message.content.strip()
         raw = raw.replace("```json", "").replace("```", "").strip()
         parsed = json.loads(raw)
 
@@ -314,16 +483,13 @@ def fetch_full_document(user_id: str, filename: str) -> str:
 def _call_llm(system_prompt: str, user_prompt: str, temperature: float, max_tokens: int, fallback_msg: str, error_prefix: str, model: Optional[str] = None) -> str:
     active_model = model or Config.LLM_MODEL
     try:
-        completion = groq_client.chat.completions.create(
-            model=active_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+        return _call_unified_llm(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
             temperature=temperature,
             max_tokens=max_tokens,
+            model=active_model,
         )
-        return completion.choices[0].message.content.strip()
     except Exception as e:
         print(f"{error_prefix} (model: {active_model}): {e}")
         return fallback_msg
@@ -641,19 +807,13 @@ Base scores on ATS best practices:
 
     active_model = model or Config.LLM_MODEL
     try:
-        completion = groq_client.chat.completions.create(
-            model=active_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert ATS resume analyzer. Return ONLY valid JSON. No markdown, no explanations, just the JSON object.",
-                },
-                {"role": "user", "content": prompt},
-            ],
+        raw = _call_unified_llm(
+            system_prompt="You are an expert ATS resume analyzer. Return ONLY valid JSON. No markdown, no explanations, just the JSON object.",
+            user_prompt=prompt,
             temperature=0.2,
             max_tokens=1500,
+            model=active_model,
         )
-        raw = completion.choices[0].message.content.strip()
         raw = raw.replace("```json", "").replace("```", "").strip()
         parsed = json.loads(raw)
 

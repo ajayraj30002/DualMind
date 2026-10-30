@@ -515,17 +515,21 @@
                         </div>
                         <div class="model-picker-wrap composer-model-wrap">
                             <button type="button" class="dock-pill-btn model-select-btn" id="composerModelBtn" aria-haspopup="true" aria-expanded="false" title="Choose LLM reasoning model">
-                                <i class="fas fa-microchip"></i><span id="selectedModelLabel">Llama 3.3 70B</span><i class="fas fa-chevron-down pill-chevron-small"></i>
+                                <i class="fas fa-microchip"></i><span id="selectedModelLabel">Gemini 2.0 Flash</span><i class="fas fa-chevron-down pill-chevron-small"></i>
                             </button>
                             <div class="composer-menu model-menu hidden" id="composerModelMenu" role="menu">
                                 <div class="composer-menu-heading">Choose a model</div>
                                 <div class="composer-model-list" id="composerModelList">
-                                    <button type="button" class="composer-menu-option selected" data-model="llama-3.3-70b-versatile" data-name="Llama 3.3 70B" role="menuitemradio" aria-checked="true">
-                                        <span><strong>Llama 3.3 70B</strong><small>Balanced reasoning · Current default</small></span>
+                                    <button type="button" class="composer-menu-option selected" data-model="gemini-2.0-flash" data-name="Gemini 2.0 Flash" role="menuitemradio" aria-checked="true">
+                                        <span><strong>Gemini 2.0 Flash</strong><small>Fast, high intelligence · Current default</small></span>
                                         <i class="fas fa-check"></i>
                                     </button>
-                                    <button type="button" class="composer-menu-option" data-model="llama-3.1-8b-instant" data-name="Llama 3.1 8B" role="menuitemradio" aria-checked="false">
-                                        <span><strong>Llama 3.1 8B</strong><small>Faster responses · 128k context</small></span>
+                                    <button type="button" class="composer-menu-option" data-model="gemini-1.5-flash" data-name="Gemini 1.5 Flash" role="menuitemradio" aria-checked="false">
+                                        <span><strong>Gemini 1.5 Flash</strong><small>Ultra fast responses · 1M context</small></span>
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button type="button" class="composer-menu-option" data-model="gemini-1.5-pro" data-name="Gemini 1.5 Pro" role="menuitemradio" aria-checked="false">
+                                        <span><strong>Gemini 1.5 Pro</strong><small>Advanced reasoning & analysis · 2M context</small></span>
                                         <i class="fas fa-check"></i>
                                     </button>
                                     <button type="button" class="composer-menu-option" data-model="auto" data-name="Auto" role="menuitemradio" aria-checked="false">

@@ -9,50 +9,64 @@ from ..config import Config
 
 logger = logging.getLogger(__name__)
 
-# Known friendly metadata mapping for popular Groq models
+# Known friendly metadata mapping for models
 KNOWN_MODELS_META = {
+    # Google Gemini Models
+    "gemini-2.0-flash": {
+        "name": "Gemini 2.0 Flash",
+        "description": "Fast, high intelligence · Current default",
+        "badge": "Default",
+        "priority": 100
+    },
+    "gemini-1.5-flash": {
+        "name": "Gemini 1.5 Flash",
+        "description": "Ultra fast responses · 1M context",
+        "badge": "Fast",
+        "priority": 95
+    },
+    "gemini-1.5-pro": {
+        "name": "Gemini 1.5 Pro",
+        "description": "Advanced reasoning & analysis · 2M context",
+        "badge": "Reasoning",
+        "priority": 90
+    },
+    "gemini-2.0-flash-lite": {
+        "name": "Gemini 2.0 Flash-Lite",
+        "description": "Cost-efficient high throughput",
+        "badge": "Efficient",
+        "priority": 85
+    },
+    # Groq Models
     "llama-3.3-70b-versatile": {
         "name": "Llama 3.3 70B",
-        "description": "Balanced reasoning · Current default",
-        "badge": "Default",
-        "priority": 10
+        "description": "Balanced reasoning · 128k context",
+        "badge": "Versatile",
+        "priority": 80
     },
     "llama-3.1-8b-instant": {
         "name": "Llama 3.1 8B",
         "description": "Faster responses · 128k context",
         "badge": "Fast",
-        "priority": 9
+        "priority": 75
     },
     "deepseek-r1-distill-llama-70b": {
         "name": "DeepSeek R1 70B",
         "description": "Advanced reasoning & logic · 128k context",
         "badge": "Reasoning",
-        "priority": 8
+        "priority": 70
     },
     "gemma2-9b-it": {
         "name": "Gemma 2 9B",
         "description": "Google open model · High speed",
         "badge": "Efficient",
-        "priority": 7
+        "priority": 65
     },
     "mixtral-8x7b-32768": {
         "name": "Mixtral 8x7B",
         "description": "MoE architecture · 32k context",
         "badge": "Versatile",
-        "priority": 6
+        "priority": 60
     },
-    "llama3-70b-8192": {
-        "name": "Llama 3 70B",
-        "description": "Legacy 70B model · 8k context",
-        "badge": "Legacy",
-        "priority": 5
-    },
-    "llama3-8b-8192": {
-        "name": "Llama 3 8B",
-        "description": "Legacy 8B model · 8k context",
-        "badge": "Legacy",
-        "priority": 4
-    }
 }
 
 # Non-chat models to exclude from chat completions
@@ -63,10 +77,47 @@ EXCLUDED_PATTERNS = [
     "embed",
     "guard",
     "moderation",
-    "vision"
+    "vision",
+    "imagen",
+    "aqa",
 ]
 
-FALLBACK_MODELS = [
+FALLBACK_GEMINI_MODELS = [
+    {
+        "id": "gemini-2.0-flash",
+        "name": "Gemini 2.0 Flash",
+        "description": "Fast, high intelligence · Current default",
+        "badge": "Default",
+        "context_window": 1048576,
+        "is_default": True
+    },
+    {
+        "id": "gemini-1.5-flash",
+        "name": "Gemini 1.5 Flash",
+        "description": "Ultra fast responses · 1M context",
+        "badge": "Fast",
+        "context_window": 1048576,
+        "is_default": False
+    },
+    {
+        "id": "gemini-1.5-pro",
+        "name": "Gemini 1.5 Pro",
+        "description": "Advanced reasoning & analysis · 2M context",
+        "badge": "Reasoning",
+        "context_window": 2097152,
+        "is_default": False
+    },
+    {
+        "id": "gemini-2.0-flash-lite",
+        "name": "Gemini 2.0 Flash-Lite",
+        "description": "Cost-efficient high throughput",
+        "badge": "Efficient",
+        "context_window": 1048576,
+        "is_default": False
+    }
+]
+
+FALLBACK_GROQ_MODELS = [
     {
         "id": "llama-3.3-70b-versatile",
         "name": "Llama 3.3 70B",
@@ -101,12 +152,16 @@ FALLBACK_MODELS = [
     }
 ]
 
+# Legacy alias
+FALLBACK_MODELS = FALLBACK_GEMINI_MODELS
+
+
 class ModelService:
     def __init__(self, ttl_seconds: int = 300):
         self.ttl_seconds = ttl_seconds
         self._cached_models: List[Dict[str, Any]] = []
         self._last_fetched: float = 0
-        self._default_model = Config.LLM_MODEL or "llama-3.3-70b-versatile"
+        self._default_model = Config.LLM_MODEL or "gemini-2.0-flash"
 
     def _is_chat_model(self, model_id: str) -> bool:
         low = model_id.lower()
@@ -130,7 +185,8 @@ class ModelService:
             parts = m_id.replace("_", "-").split("-")
             name = " ".join([p.capitalize() if not p.isdigit() else p for p in parts if p not in ["preview", "it", "versatile", "instant"]])
             ctx_str = f"{ctx // 1024}k context" if ctx else "Active chat model"
-            desc = f"{ctx_str} · Groq cloud"
+            provider = "Google Gemini" if "gemini" in m_id.lower() else "Groq cloud"
+            desc = f"{ctx_str} · {provider}"
             badge = "Active"
             priority = 1
 
@@ -149,14 +205,68 @@ class ModelService:
             "priority": priority
         }
 
+    def fetch_models_from_gemini(self) -> List[Dict[str, Any]]:
+        api_key = Config.GEMINI_API_KEY
+        if not api_key:
+            return FALLBACK_GEMINI_MODELS
+
+        raw_models = []
+        try:
+            req = urllib.request.Request(
+                f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}",
+                headers={"User-Agent": "DualMind/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as res:
+                if res.status == 200:
+                    body = json.loads(res.read().decode("utf-8"))
+                    raw_models = body.get("models", [])
+        except Exception as err:
+            logger.info(f"Gemini API models list failed ({err}); using curated Gemini models.")
+            return FALLBACK_GEMINI_MODELS
+
+        if not raw_models:
+            return FALLBACK_GEMINI_MODELS
+
+        formatted = []
+        for m in raw_models:
+            name = m.get("name", "")
+            if name.startswith("models/"):
+                m_id = name[len("models/"):]
+            else:
+                m_id = name
+
+            if not m_id:
+                continue
+
+            methods = m.get("supportedGenerationMethods", [])
+            if "generateContent" not in methods:
+                continue
+
+            if not self._is_chat_model(m_id):
+                continue
+
+            if "gemini" not in m_id.lower():
+                continue
+
+            if any(x in m_id.lower() for x in ["embedding", "aqa", "imagen"]):
+                continue
+
+            model_obj = {
+                "id": m_id,
+                "context_window": m.get("inputTokenLimit")
+            }
+            formatted.append(self._format_model_meta(model_obj))
+
+        # Sort by priority descending
+        formatted.sort(key=lambda x: x["priority"], reverse=True)
+        return formatted or FALLBACK_GEMINI_MODELS
+
     def fetch_models_from_groq(self) -> List[Dict[str, Any]]:
         api_key = Config.GROQ_API_KEY
         if not api_key:
-            logger.warning("GROQ_API_KEY is not set. Returning fallback models.")
-            return FALLBACK_MODELS
+            return FALLBACK_GROQ_MODELS
 
         raw_models = []
-        # Attempt 1: Try using groq Python SDK if available
         try:
             from groq import Groq
             client = Groq(api_key=api_key)
@@ -169,7 +279,6 @@ class ModelService:
                 })
         except Exception as sdk_err:
             logger.info(f"Groq SDK models.list failed ({sdk_err}); trying REST API directly.")
-            # Attempt 2: Direct REST request via urllib
             try:
                 req = urllib.request.Request(
                     "https://api.groq.com/openai/v1/models",
@@ -184,10 +293,10 @@ class ModelService:
                         raw_models = body.get("data", [])
             except Exception as rest_err:
                 logger.error(f"Failed to fetch models from Groq REST API: {rest_err}")
-                return FALLBACK_MODELS
+                return FALLBACK_GROQ_MODELS
 
         if not raw_models:
-            return FALLBACK_MODELS
+            return FALLBACK_GROQ_MODELS
 
         formatted = []
         for m in raw_models:
@@ -200,21 +309,25 @@ class ModelService:
                 continue
             formatted.append(self._format_model_meta(m))
 
-        # Sort by priority descending
         formatted.sort(key=lambda x: x["priority"], reverse=True)
-        return formatted or FALLBACK_MODELS
+        return formatted or FALLBACK_GROQ_MODELS
 
     def get_models(self, force_refresh: bool = False) -> Dict[str, Any]:
         now = time.time()
         if force_refresh or not self._cached_models or (now - self._last_fetched > self.ttl_seconds):
             try:
-                models = self.fetch_models_from_groq()
+                if Config.GEMINI_API_KEY:
+                    models = self.fetch_models_from_gemini()
+                elif Config.GROQ_API_KEY:
+                    models = self.fetch_models_from_groq()
+                else:
+                    models = FALLBACK_GEMINI_MODELS
                 self._cached_models = models
                 self._last_fetched = now
             except Exception as e:
                 logger.error(f"Error refreshing models: {e}")
                 if not self._cached_models:
-                    self._cached_models = FALLBACK_MODELS
+                    self._cached_models = FALLBACK_GEMINI_MODELS if Config.GEMINI_API_KEY else FALLBACK_GROQ_MODELS
 
         # Always include "Auto" as the first choice
         model_list = [
@@ -234,16 +347,28 @@ class ModelService:
         }
 
     def resolve_model(self, requested_model: Optional[str]) -> str:
-        """Resolve a user-provided model ID or 'auto' to a valid Groq model string."""
+        """Resolve a user-provided model ID or 'auto' to a valid model string for active provider."""
         if not requested_model or requested_model.lower() == "auto":
             return self._default_model
-        
+
+        req = requested_model.strip().lower()
+        if Config.GEMINI_API_KEY:
+            # Map legacy Groq selection in browser localStorage to Gemini equivalent
+            if "llama" in req or "groq" in req or "mixtral" in req:
+                return "gemini-2.0-flash"
+            if "deepseek" in req:
+                return "gemini-1.5-pro"
+        else:
+            if "gemini" in req:
+                return "llama-3.3-70b-versatile"
+
         # Check against cached or fallback models
         models = self.get_models()["models"]
         for m in models:
-            if m["id"].lower() == requested_model.lower() or m["name"].lower() == requested_model.lower():
+            if m["id"].lower() == req or m["name"].lower() == req:
                 return m["id"]
-        
+
         return self._default_model
 
 model_service = ModelService()
+
