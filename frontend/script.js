@@ -53,15 +53,15 @@ function getDynamicCatchUpMessage(userName = 'Analyst') {
         // Morning: High energy, fresh start, productive
         const morningGreetings = [
             `Good morning, ${userName}`,
-            `Rise and shine, ${userName}`,
+            `Welcome back, ${userName}`,
             `Bright and early, ${userName}`,
             `Ready to tackle the day, ${userName}?`
         ];
         const morningHeadlines = [
+            { pre: 'Ready to dig into your next ', highlight: 'deep inquiry?' },
             { pre: 'What would you like to ', highlight: 'synthesize today?' },
             { pre: 'What intelligence shall we ', highlight: 'uncover this morning?' },
-            { pre: 'Ready to turn complex documents into ', highlight: 'clear answers?' },
-            { pre: 'What questions are on your ', highlight: 'agenda today?' }
+            { pre: 'Ready to turn complex documents into ', highlight: 'clear answers?' }
         ];
         timeGreeting = morningGreetings[Math.floor(Math.random() * morningGreetings.length)];
         const h = morningHeadlines[Math.floor(Math.random() * morningHeadlines.length)];
@@ -71,15 +71,15 @@ function getDynamicCatchUpMessage(userName = 'Analyst') {
         // Afternoon: Flow state, execution, deep dive
         const afternoonGreetings = [
             `Good afternoon, ${userName}`,
+            `Welcome back, ${userName}`,
             `Midday momentum, ${userName}`,
-            `Keeping up the pace, ${userName}`,
-            `Welcome back, ${userName}`
+            `Keeping up the pace, ${userName}`
         ];
         const afternoonHeadlines = [
+            { pre: 'Ready to dig into your next ', highlight: 'deep inquiry?' },
             { pre: 'What would you like to ', highlight: 'synthesize today?' },
             { pre: 'Where shall we direct your ', highlight: 'focus this afternoon?' },
-            { pre: 'What files or live web data shall we ', highlight: 'cross-examine?' },
-            { pre: 'Ready to dig into your next ', highlight: 'deep inquiry?' }
+            { pre: 'What files or live web data shall we ', highlight: 'cross-examine?' }
         ];
         timeGreeting = afternoonGreetings[Math.floor(Math.random() * afternoonGreetings.length)];
         const h = afternoonHeadlines[Math.floor(Math.random() * afternoonHeadlines.length)];
@@ -89,15 +89,15 @@ function getDynamicCatchUpMessage(userName = 'Analyst') {
         // Evening: Winding down, review, synthesis, clarity
         const eveningGreetings = [
             `Good evening, ${userName}`,
-            `Winding down the day, ${userName}`,
+            `Welcome back, ${userName}`,
             `Evening synthesis, ${userName}`,
             `Wrapping up discoveries, ${userName}`
         ];
         const eveningHeadlines = [
+            { pre: 'Ready to dig into your next ', highlight: 'deep inquiry?' },
             { pre: "Let's review and synthesize your ", highlight: 'findings tonight.' },
             { pre: 'What final insights would you like to ', highlight: 'uncover today?' },
-            { pre: 'What questions shall we ', highlight: 'clarify this evening?' },
-            { pre: 'Connecting the dots on ', highlight: "today's research." }
+            { pre: 'What questions shall we ', highlight: 'clarify this evening?' }
         ];
         timeGreeting = eveningGreetings[Math.floor(Math.random() * eveningGreetings.length)];
         const h = eveningHeadlines[Math.floor(Math.random() * eveningHeadlines.length)];
@@ -107,15 +107,15 @@ function getDynamicCatchUpMessage(userName = 'Analyst') {
         // Late Night / Midnight (21:00 - 05:00): Quiet, deep work, curiosity
         const nightGreetings = [
             `Quiet hours, ${userName}`,
+            `Welcome back, ${userName}`,
             `Late night deep work, ${userName}`,
-            `Burning the midnight oil, ${userName}?`,
             `Midnight inspiration, ${userName}`
         ];
         const nightHeadlines = [
+            { pre: 'Ready to dig into your next ', highlight: 'deep inquiry?' },
             { pre: 'Deep focus hours. What are we ', highlight: 'investigating tonight?' },
             { pre: 'Uninterrupted thinking. What shall we ', highlight: 'synthesize tonight?' },
-            { pre: 'Midnight breakthroughs start with the ', highlight: 'right question.' },
-            { pre: 'What would you like to ', highlight: 'explore tonight?' }
+            { pre: 'Midnight breakthroughs start with the ', highlight: 'right question.' }
         ];
         timeGreeting = nightGreetings[Math.floor(Math.random() * nightGreetings.length)];
         const h = nightHeadlines[Math.floor(Math.random() * nightHeadlines.length)];
@@ -158,11 +158,6 @@ function getWelcomeHtml(userName = null) {
     <div class="welcome-stage" id="welcomeHero">
         <div class="orb-visual-wrap">
             ${getDynamicBrainMarkup()}
-        </div>
-
-        <div class="enterprise-stage-pill">
-            <span class="hero-pulse-dot"></span>
-            <span class="hero-stage-tag">NEURAL RETRIEVAL PIPELINE ACTIVE</span>
         </div>
 
         <h2 class="welcome-greeting-text" id="welcomeGreeting">${catchUp.greeting}</h2>
@@ -1782,12 +1777,8 @@ function renderModelOptions(models, defaultModelId = 'llama-3.3-70b-versatile') 
     }
     currentSelectedModel = matched ? matched.id : 'auto';
 
-    const topbarPill = document.getElementById('topbarModelPill');
     if (labelSpan && matched) {
         labelSpan.textContent = matched.name;
-    }
-    if (topbarPill && matched) {
-        topbarPill.textContent = matched.name;
     }
 
     listContainer.innerHTML = '';
@@ -1824,7 +1815,6 @@ function renderModelOptions(models, defaultModelId = 'llama-3.3-70b-versatile') 
             currentSelectedModel = m.id;
             localStorage.setItem('dualmind_model_preference', m.id);
             if (labelSpan) labelSpan.textContent = m.name;
-            if (topbarPill) topbarPill.textContent = m.name;
 
             listContainer.querySelectorAll('.composer-menu-option').forEach(opt => {
                 const sel = (opt === btn);
