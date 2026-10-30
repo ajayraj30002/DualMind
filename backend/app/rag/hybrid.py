@@ -27,7 +27,11 @@ except ImportError:
 
 from ..config import Config
 
-groq_client = Groq(api_key=Config.GROQ_API_KEY)
+def get_groq_client() -> Optional[Groq]:
+    api_key = Config.GROQ_API_KEY or os.getenv("GROQ_API_KEY")
+    if not api_key or api_key == "your_groq_api_key":
+        return None
+    return Groq(api_key=api_key)
 
 MAX_RERANK_CANDIDATES = int(os.getenv("MAX_RERANK_CANDIDATES", "10"))
 MAX_RERANK_DOC_CHARS  = int(os.getenv("MAX_RERANK_DOC_CHARS",  "1200"))
@@ -159,8 +163,13 @@ JSON Format:
   "rewritten_query": "Optimized query here"
 }}"""
 
+    client = get_groq_client()
+    if not client:
+        print("⚠️ Router: GROQ_API_KEY not set — using regex router fallback")
+        return _fallback_route(question, filename, search_type)
+
     try:
-        completion = groq_client.chat.completions.create(
+        completion = client.chat.completions.create(
             model=Config.LLM_MODEL,
             messages=[
                 {
@@ -313,8 +322,19 @@ def fetch_full_document(user_id: str, filename: str) -> str:
 
 def _call_llm(system_prompt: str, user_prompt: str, temperature: float, max_tokens: int, fallback_msg: str, error_prefix: str, model: Optional[str] = None) -> str:
     active_model = model or Config.LLM_MODEL
+    client = get_groq_client()
+    if not client:
+        return (
+            "⚠️ **Groq API Key Not Configured**\n\n"
+            "DualMind requires a valid Groq API key to generate intelligent answers.\n\n"
+            "**How to configure:**\n"
+            "1. Create `backend/.env` (you can copy `backend/.env.example`)\n"
+            "2. Add your key: `GROQ_API_KEY=gsk_...`\n"
+            "3. Restart the backend service."
+        )
+
     try:
-        completion = groq_client.chat.completions.create(
+        completion = client.chat.completions.create(
             model=active_model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -325,7 +345,12 @@ def _call_llm(system_prompt: str, user_prompt: str, temperature: float, max_toke
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
-        print(f"{error_prefix} (model: {active_model}): {e}")
+        err_msg = str(e)
+        print(f"{error_prefix} (model: {active_model}): {err_msg}")
+        if "401" in err_msg or "invalid api key" in err_msg.lower() or "api_key" in err_msg.lower():
+            return "⚠️ **Groq Authentication Error**: The configured `GROQ_API_KEY` in `backend/.env` is invalid or expired. Please check your key at [console.groq.com](https://console.groq.com)."
+        elif "429" in err_msg or "rate limit" in err_msg.lower():
+            return "⚠️ **Groq Rate Limit Reached**: The free-tier request limit was reached. Please wait a few moments or switch to a different model in the composer dock."
         return fallback_msg
 
 
@@ -639,9 +664,18 @@ Base scores on ATS best practices:
 - Appropriate length and detail level
 """
 
+    client = get_groq_client()
+    if not client:
+        return {
+            "overall_score": 0,
+            "verdict": "Configuration Error",
+            "summary": "Groq API key not configured. Please add GROQ_API_KEY to backend/.env to run ATS resume audits.",
+            "categories": [],
+            "fixes": ["Add GROQ_API_KEY in backend/.env"]
+        }
     active_model = model or Config.LLM_MODEL
     try:
-        completion = groq_client.chat.completions.create(
+        completion = client.chat.completions.create(
             model=active_model,
             messages=[
                 {
