@@ -67,6 +67,23 @@ def _normalize_gemini_model(model: Optional[str]) -> str:
     return "gemini-2.0-flash"
 
 
+_last_llm_error: str = ""
+
+def _extract_google_error(resp: httpx.Response) -> str:
+    try:
+        data = resp.json()
+        err = data.get("error", {})
+        msg = err.get("message")
+        if msg:
+            return msg
+        details = err.get("details", [])
+        if details and isinstance(details, list) and "message" in details[0]:
+            return details[0]["message"]
+    except Exception:
+        pass
+    return resp.text[:200]
+
+
 def _call_gemini_api(
     model: str,
     system_prompt: str,
@@ -76,83 +93,128 @@ def _call_gemini_api(
     api_key: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Call Google Gemini API using httpx with two-tier resilience:
+    Call Google Gemini API using httpx with three-tier resilience:
       Tier 1: Google's official OpenAI-compatible endpoint (/v1beta/openai/chat/completions)
       Tier 2: Fallback to native Gemini REST endpoint (/v1beta/models/{model}:generateContent)
+      Tier 3: Fallback to stable Gemini REST endpoint (/v1/models/{model}:generateContent)
+      Plus automatic fallback to gemini-1.5-flash if the requested model is unavailable.
     """
-    key = api_key or Config.GEMINI_API_KEY
+    global _last_llm_error
+    key = api_key or Config.get_gemini_key() or Config.GEMINI_API_KEY
     if not key:
+        _last_llm_error = "No Gemini API key found. Please set GEMINI_API_KEY or gemini_key in Render environment variables."
         return None
 
     clean_model = _normalize_gemini_model(model)
+    models_to_try = [clean_model]
+    if clean_model != "gemini-1.5-flash":
+        models_to_try.append("gemini-1.5-flash")
 
-    # ── Tier 1: OpenAI-compatible endpoint ──
-    try:
-        url_openai = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        }
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": user_prompt})
+    last_err = ""
 
-        payload = {
-            "model": clean_model,
-            "messages": messages,
-            "temperature": float(temperature),
-            "max_tokens": int(max_tokens),
-        }
+    for target_model in models_to_try:
+        # ── Tier 1: OpenAI-compatible endpoint ──
+        try:
+            url_openai = f"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key={key}"
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": user_prompt})
 
-        with httpx.Client(timeout=45.0) as client:
-            resp = client.post(url_openai, headers=headers, json=payload)
-            if resp.status_code == 200:
-                data = resp.json()
-                choices = data.get("choices", [])
-                if choices and "message" in choices[0]:
-                    content = choices[0]["message"].get("content", "")
-                    if content and content.strip():
-                        return content.strip()
-            else:
-                print(f"Gemini OpenAI endpoint status {resp.status_code}: {resp.text[:150]}")
-    except Exception as err:
-        print(f"Gemini OpenAI endpoint attempt failed ({err}), trying native REST endpoint...")
-
-    # ── Tier 2: Native Gemini REST endpoint ──
-    try:
-        url_native = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={key}"
-        native_body: Dict[str, Any] = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": user_prompt}],
-                }
-            ],
-            "generationConfig": {
+            payload = {
+                "model": target_model,
+                "messages": messages,
                 "temperature": float(temperature),
-                "maxOutputTokens": int(max_tokens),
-            },
-        }
-        if system_prompt:
-            native_body["systemInstruction"] = {
-                "parts": [{"text": system_prompt}]
+                "max_tokens": int(max_tokens),
             }
 
-        with httpx.Client(timeout=45.0) as client:
-            resp = client.post(url_native, json=native_body)
-            if resp.status_code == 200:
-                data = resp.json()
-                candidates = data.get("candidates", [])
-                if candidates:
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    if parts and "text" in parts[0]:
-                        return parts[0]["text"].strip()
-            else:
-                print(f"Gemini native REST endpoint status {resp.status_code}: {resp.text[:150]}")
-    except Exception as err:
-        print(f"Gemini native REST endpoint failed: {err}")
+            with httpx.Client(timeout=40.0) as client:
+                resp = client.post(url_openai, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices and "message" in choices[0]:
+                        content = choices[0]["message"].get("content", "")
+                        if content and content.strip():
+                            return content.strip()
+                else:
+                    last_err = _extract_google_error(resp)
+                    print(f"Gemini OpenAI endpoint ({target_model}) status {resp.status_code}: {last_err}")
+        except Exception as err:
+            last_err = str(err)
+            print(f"Gemini OpenAI endpoint ({target_model}) error: {err}")
 
+        # ── Tier 2: Native Gemini REST endpoint (v1beta) ──
+        try:
+            url_native = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={key}"
+            full_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+            native_body: Dict[str, Any] = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": full_prompt}],
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": float(temperature),
+                    "maxOutputTokens": int(max_tokens),
+                },
+            }
+
+            with httpx.Client(timeout=40.0) as client:
+                resp = client.post(url_native, json=native_body)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts and "text" in parts[0]:
+                            return parts[0]["text"].strip()
+                else:
+                    last_err = _extract_google_error(resp)
+                    print(f"Gemini native REST ({target_model}) status {resp.status_code}: {last_err}")
+        except Exception as err:
+            last_err = str(err)
+            print(f"Gemini native REST ({target_model}) error: {err}")
+
+        # ── Tier 3: Native Gemini REST endpoint (v1 stable) ──
+        try:
+            url_v1 = f"https://generativelanguage.googleapis.com/v1/models/{target_model}:generateContent?key={key}"
+            full_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+            native_body_v1 = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": full_prompt}],
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": float(temperature),
+                    "maxOutputTokens": int(max_tokens),
+                },
+            }
+
+            with httpx.Client(timeout=40.0) as client:
+                resp = client.post(url_v1, json=native_body_v1)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts and "text" in parts[0]:
+                            return parts[0]["text"].strip()
+                else:
+                    last_err = _extract_google_error(resp)
+                    print(f"Gemini v1 REST ({target_model}) status {resp.status_code}: {last_err}")
+        except Exception as err:
+            last_err = str(err)
+            print(f"Gemini v1 REST ({target_model}) error: {err}")
+
+    _last_llm_error = f"Google Gemini API error: {last_err}" if last_err else "Failed to get response from Gemini endpoints."
     return None
 
 
@@ -167,19 +229,23 @@ def _call_unified_llm(
     Unified LLM caller. Automatically routes to Google Gemini (priority) or Groq
     depending on available API keys, with automatic provider fallback.
     """
+    global _last_llm_error
+    gemini_key = Config.get_gemini_key() or Config.GEMINI_API_KEY
+    groq_key = Config.get_groq_key() or Config.GROQ_API_KEY
+
     # 1. Try Google Gemini if key is available
-    if Config.GEMINI_API_KEY:
+    if gemini_key:
         gemini_result = _call_gemini_api(
             model=model or Config.LLM_MODEL,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             temperature=temperature,
             max_tokens=max_tokens,
-            api_key=Config.GEMINI_API_KEY,
+            api_key=gemini_key,
         )
         if gemini_result:
             return gemini_result
-        print("⚠️ Gemini call failed or returned empty; attempting fallback...")
+        print(f"⚠️ Gemini call failed ({_last_llm_error}); attempting fallback...")
 
     # 2. Try Groq if key is available
     groq_client = _get_groq_client()
@@ -201,8 +267,13 @@ def _call_unified_llm(
             return completion.choices[0].message.content.strip()
         except Exception as err:
             print(f"⚠️ Groq call failed: {err}")
+            if not _last_llm_error:
+                _last_llm_error = f"Groq API error: {err}"
 
-    raise RuntimeError("No LLM provider succeeded. Please check GEMINI_API_KEY or GROQ_API_KEY in environment.")
+    if _last_llm_error:
+        raise RuntimeError(_last_llm_error)
+
+    raise RuntimeError("No LLM API key detected. Please configure GEMINI_API_KEY or gemini_key in Render environment variables.")
 
 MAX_RERANK_CANDIDATES = int(os.getenv("MAX_RERANK_CANDIDATES", "10"))
 MAX_RERANK_DOC_CHARS  = int(os.getenv("MAX_RERANK_DOC_CHARS",  "1200"))
@@ -491,7 +562,14 @@ def _call_llm(system_prompt: str, user_prompt: str, temperature: float, max_toke
             model=active_model,
         )
     except Exception as e:
-        print(f"{error_prefix} (model: {active_model}): {e}")
+        err_msg = str(e)
+        print(f"{error_prefix} (model: {active_model}): {err_msg}")
+        if any(term in err_msg for term in ["API key", "Gemini", "Google", "Render", "quota", "UNAUTHENTICATED", "INVALID_ARGUMENT", "PERMISSION_DENIED"]):
+            return (
+                f"**AI Connection Notice**\n\n"
+                f"{err_msg}\n\n"
+                f"> **Fix**: Please check your API key in Render environment variables. A valid Google Gemini API key starts with `AIzaSy...` and can be generated for free at [Google AI Studio](https://aistudio.google.com/app/apikey)."
+            )
         return fallback_msg
 
 

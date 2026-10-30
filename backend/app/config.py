@@ -13,28 +13,60 @@ def _clean_env(val: os.PathLike | str | None) -> str | None:
     cleaned = str(val).strip().strip('"').strip("'")
     return cleaned if cleaned else None
 
+def _resolve_gemini_key() -> str | None:
+    # 1. Check all standard, uppercase, and lowercase environment variable names
+    candidates = [
+        "GEMINI_API_KEY", "gemini_api_key",
+        "GEMINI_KEY", "gemini_key",
+        "GOOGLE_API_KEY", "google_api_key",
+        "GOOGLE_GEMINI_API_KEY", "google_gemini_api_key",
+    ]
+    for name in candidates:
+        val = _clean_env(os.getenv(name))
+        if val:
+            return val
+
+    # 2. Check GROQ_API_KEY / groq_api_key:
+    # If the user replaced GROQ_API_KEY with their Gemini key (anything that doesn't start with 'gsk_'):
+    for name in ["GROQ_API_KEY", "groq_api_key"]:
+        val = _clean_env(os.getenv(name))
+        if val and not val.startswith("gsk_"):
+            return val
+
+    # 3. Dynamic search: any variable starting with AIza or containing 'gemini' in its name
+    for k, v in os.environ.items():
+        if isinstance(v, str):
+            cleaned = _clean_env(v)
+            if cleaned:
+                if cleaned.startswith("AIza"):
+                    return cleaned
+                if "gemini" in k.lower() and not k.lower().startswith("npm_"):
+                    return cleaned
+
+    return None
+
+def _resolve_groq_key() -> str | None:
+    for name in ["GROQ_API_KEY", "groq_api_key"]:
+        val = _clean_env(os.getenv(name))
+        if val and val.startswith("gsk_"):
+            return val
+    return None
+
 class Config:
-    # ─── Raw Environment Keys ───
-    _raw_groq = _clean_env(os.getenv("GROQ_API_KEY"))
-    _raw_gemini = _clean_env(os.getenv("GEMINI_API_KEY"))
+    @classmethod
+    def get_gemini_key(cls) -> str | None:
+        return _resolve_gemini_key()
 
-    # If user provided GEMINI_API_KEY, use it.
-    # If user pasted a Google key (starts with 'AIza') into GROQ_API_KEY in Render, auto-detect as Gemini.
-    if _raw_gemini:
-        GEMINI_API_KEY = _raw_gemini
-    elif _raw_groq and _raw_groq.startswith("AIza"):
-        GEMINI_API_KEY = _raw_groq
-    else:
-        GEMINI_API_KEY = None
+    @classmethod
+    def get_groq_key(cls) -> str | None:
+        return _resolve_groq_key()
 
-    # Groq API key: only set if it's not a Gemini key
-    if _raw_groq and not _raw_groq.startswith("AIza"):
-        GROQ_API_KEY = _raw_groq
-    else:
-        GROQ_API_KEY = None
+    # Initial static resolution
+    GEMINI_API_KEY = _resolve_gemini_key()
+    GROQ_API_KEY = _resolve_groq_key()
 
     # Active LLM Provider
-    LLM_PROVIDER = "gemini" if GEMINI_API_KEY else ("groq" if GROQ_API_KEY else "gemini")
+    LLM_PROVIDER = "gemini" if (GEMINI_API_KEY or not GROQ_API_KEY) else "groq"
 
     # API Keys
     TAVILY_API_KEY = _clean_env(os.getenv("TAVILY_API_KEY"))

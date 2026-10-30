@@ -206,7 +206,7 @@ class ModelService:
         }
 
     def fetch_models_from_gemini(self) -> List[Dict[str, Any]]:
-        api_key = Config.GEMINI_API_KEY
+        api_key = Config.get_gemini_key() or Config.GEMINI_API_KEY
         if not api_key:
             return FALLBACK_GEMINI_MODELS
 
@@ -262,7 +262,7 @@ class ModelService:
         return formatted or FALLBACK_GEMINI_MODELS
 
     def fetch_models_from_groq(self) -> List[Dict[str, Any]]:
-        api_key = Config.GROQ_API_KEY
+        api_key = Config.get_groq_key() or Config.GROQ_API_KEY
         if not api_key:
             return FALLBACK_GROQ_MODELS
 
@@ -316,9 +316,11 @@ class ModelService:
         now = time.time()
         if force_refresh or not self._cached_models or (now - self._last_fetched > self.ttl_seconds):
             try:
-                if Config.GEMINI_API_KEY:
+                has_gemini = bool(Config.get_gemini_key() or Config.GEMINI_API_KEY)
+                has_groq = bool(Config.get_groq_key() or Config.GROQ_API_KEY)
+                if has_gemini:
                     models = self.fetch_models_from_gemini()
-                elif Config.GROQ_API_KEY:
+                elif has_groq:
                     models = self.fetch_models_from_groq()
                 else:
                     models = FALLBACK_GEMINI_MODELS
@@ -327,7 +329,8 @@ class ModelService:
             except Exception as e:
                 logger.error(f"Error refreshing models: {e}")
                 if not self._cached_models:
-                    self._cached_models = FALLBACK_GEMINI_MODELS if Config.GEMINI_API_KEY else FALLBACK_GROQ_MODELS
+                    has_gemini = bool(Config.get_gemini_key() or Config.GEMINI_API_KEY)
+                    self._cached_models = FALLBACK_GEMINI_MODELS if has_gemini else FALLBACK_GROQ_MODELS
 
         # Always include "Auto" as the first choice
         model_list = [
@@ -352,7 +355,8 @@ class ModelService:
             return self._default_model
 
         req = requested_model.strip().lower()
-        if Config.GEMINI_API_KEY:
+        has_gemini = bool(Config.get_gemini_key() or Config.GEMINI_API_KEY)
+        if has_gemini:
             # Map legacy Groq selection in browser localStorage to Gemini equivalent
             if "llama" in req or "groq" in req or "mixtral" in req:
                 return "gemini-2.0-flash"
