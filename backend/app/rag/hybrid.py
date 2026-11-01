@@ -116,46 +116,14 @@ def _call_gemini_api(
     last_err = ""
 
     for target_model in candidate_models:
-        # ── Tier 1: OpenAI-compatible endpoint (Bearer auth only, clean URL) ──
-        try:
-            url_openai = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            }
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": user_prompt})
-
-            payload = {
-                "model": target_model,
-                "messages": messages,
-                "temperature": float(temperature),
-                "max_tokens": int(max_tokens),
-            }
-
-            with httpx.Client(timeout=40.0) as client:
-                resp = client.post(url_openai, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    choices = data.get("choices", [])
-                    if choices and "message" in choices[0]:
-                        content = choices[0]["message"].get("content", "")
-                        if content and content.strip():
-                            return content.strip()
-                else:
-                    err_text = _extract_google_error(resp)
-                    last_err = err_text
-                    print(f"Gemini OpenAI endpoint ({target_model}) status {resp.status_code}: {err_text}")
-        except Exception as err:
-            last_err = str(err)
-            print(f"Gemini OpenAI endpoint ({target_model}) error: {err}")
-
-        # ── Tier 2: Native Gemini REST endpoint (v1beta generateContent) ──
+        # ── Tier 1: Native Gemini REST endpoint (v1beta generateContent) ──
+        # Uses direct Google AI endpoint with dual x-goog-api-key header and URL key
         try:
             url_native = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={key}"
-            headers = {"Content-Type": "application/json"}
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": key,
+            }
             native_body: Dict[str, Any] = {
                 "contents": [
                     {
@@ -192,9 +160,49 @@ def _call_gemini_api(
             last_err = str(err)
             print(f"Gemini native REST ({target_model}) error: {err}")
 
-        # ── Tier 3: Native Gemini REST endpoint (v1beta combined prompt) ──
+        # ── Tier 2: OpenAI-compatible endpoint (/v1beta/openai/chat/completions) ──
+        try:
+            url_openai = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": user_prompt})
+
+            payload = {
+                "model": target_model,
+                "messages": messages,
+                "temperature": float(temperature),
+                "max_tokens": int(max_tokens),
+            }
+
+            with httpx.Client(timeout=40.0) as client:
+                resp = client.post(url_openai, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices and "message" in choices[0]:
+                        content = choices[0]["message"].get("content", "")
+                        if content and content.strip():
+                            return content.strip()
+                else:
+                    err_text = _extract_google_error(resp)
+                    last_err = err_text
+                    print(f"Gemini OpenAI endpoint ({target_model}) status {resp.status_code}: {err_text}")
+        except Exception as err:
+            last_err = str(err)
+            print(f"Gemini OpenAI endpoint ({target_model}) error: {err}")
+
+        # ── Tier 3: Native Gemini REST endpoint (v1beta combined prompt fallback) ──
         try:
             url_native = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={key}"
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": key,
+            }
             combined_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
             native_body_combined: Dict[str, Any] = {
                 "contents": [
@@ -209,7 +217,7 @@ def _call_gemini_api(
             }
 
             with httpx.Client(timeout=40.0) as client:
-                resp = client.post(url_native, headers={"Content-Type": "application/json"}, json=native_body_combined)
+                resp = client.post(url_native, headers=headers, json=native_body_combined)
                 if resp.status_code == 200:
                     data = resp.json()
                     candidates = data.get("candidates", [])
@@ -577,6 +585,12 @@ def _call_llm(system_prompt: str, user_prompt: str, temperature: float, max_toke
     except Exception as e:
         err_msg = str(e)
         print(f"{error_prefix} (model: {active_model}): {err_msg}")
+        if "API version v1" in err_msg:
+            return (
+                f"**AI Deployment Notice**\n\n"
+                f"Your request was handled by a previous container instance while Render is updating the container.\n\n"
+                f"> **Next step**: Render updates take 2–4 minutes to pull and start new images. Please wait a minute and send your message again, or in the Render dashboard select **Manual Deploy** → **Clear build cache & deploy**."
+            )
         if any(term in err_msg for term in ["API key", "Gemini", "Google", "Render", "quota", "UNAUTHENTICATED", "INVALID_ARGUMENT", "PERMISSION_DENIED"]):
             return (
                 f"**AI Connection Notice**\n\n"

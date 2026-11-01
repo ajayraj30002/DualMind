@@ -61,7 +61,13 @@ def root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "version": "2.1.0-gemini-v1beta",
+        "provider": Config.LLM_PROVIDER,
+        "default_model": Config.LLM_MODEL,
+        "gemini_configured": bool(Config.get_gemini_key()),
+    }
 
 @app.get("/models")
 def get_available_models():
