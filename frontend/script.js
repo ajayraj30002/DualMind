@@ -1754,15 +1754,15 @@ async function loadAvailableModels(forceRefresh = false) {
     if (!availableModels || availableModels.length === 0) {
         availableModels = [
             { id: 'auto', name: 'Auto', description: 'Let DualMind choose the best model', badge: 'Smart' },
-            { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fast, high intelligence · Current default', badge: 'Default' },
-            { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Ultra fast responses · 1M context', badge: 'Fast' },
+            { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Fast, intelligent · Universal default', badge: 'Default' },
+            { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Next-gen speed · 1M context', badge: 'Fast' },
             { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Advanced reasoning & analysis · 2M context', badge: 'Reasoning' }
         ];
-        renderModelOptions(availableModels, 'gemini-2.0-flash');
+        renderModelOptions(availableModels, 'gemini-1.5-flash');
     }
 }
 
-function renderModelOptions(models, defaultModelId = 'gemini-2.0-flash') {
+function renderModelOptions(models, defaultModelId = 'gemini-1.5-flash') {
     const listContainer = document.getElementById('composerModelList');
     const modelMenu = document.getElementById('composerModelMenu');
     const modelButton = document.getElementById('composerModelBtn');

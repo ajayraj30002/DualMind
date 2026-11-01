@@ -84,17 +84,17 @@ EXCLUDED_PATTERNS = [
 
 FALLBACK_GEMINI_MODELS = [
     {
-        "id": "gemini-2.0-flash",
-        "name": "Gemini 2.0 Flash",
-        "description": "Fast, high intelligence · Current default",
+        "id": "gemini-1.5-flash",
+        "name": "Gemini 1.5 Flash",
+        "description": "Fast, high intelligence · Universal default",
         "badge": "Default",
         "context_window": 1048576,
         "is_default": True
     },
     {
-        "id": "gemini-1.5-flash",
-        "name": "Gemini 1.5 Flash",
-        "description": "Ultra fast responses · 1M context",
+        "id": "gemini-2.0-flash",
+        "name": "Gemini 2.0 Flash",
+        "description": "Next-gen experimental speed",
         "badge": "Fast",
         "context_window": 1048576,
         "is_default": False
@@ -161,7 +161,7 @@ class ModelService:
         self.ttl_seconds = ttl_seconds
         self._cached_models: List[Dict[str, Any]] = []
         self._last_fetched: float = 0
-        self._default_model = Config.LLM_MODEL or "gemini-2.0-flash"
+        self._default_model = Config.LLM_MODEL or "gemini-1.5-flash"
 
     def _is_chat_model(self, model_id: str) -> bool:
         low = model_id.lower()

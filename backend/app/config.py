@@ -88,9 +88,9 @@ class Config:
     # Model settings
     EMBEDDING_MODEL = "embed-english-v3.0"
 
-    # Default LLM model: gemini-2.0-flash if Gemini, or llama-3.3-70b-versatile if Groq
+    # Default LLM model: gemini-1.5-flash if Gemini, or llama-3.3-70b-versatile if Groq
     if LLM_PROVIDER == "gemini":
-        LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash")
+        LLM_MODEL = os.getenv("LLM_MODEL", "gemini-1.5-flash")
     else:
         LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
     
