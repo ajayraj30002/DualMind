@@ -45,11 +45,13 @@ def _get_groq_client():
 def _normalize_gemini_model(model: Optional[str]) -> str:
     """Map user/internal model string to a valid Gemini model ID."""
     if not model or model.lower() == "auto":
-        return "gemini-1.5-flash"
+        return "gemini-2.0-flash"
     m = model.strip()
     if m.startswith("models/"):
         m = m[len("models/"):]
     low = m.lower()
+    if "2.5-flash" in low:
+        return "gemini-2.5-flash"
     if "2.0-flash" in low:
         return "gemini-2.0-flash"
     if "1.5-pro" in low:
@@ -61,24 +63,73 @@ def _normalize_gemini_model(model: Optional[str]) -> str:
     if "pro" in low or "reasoning" in low or "deepseek" in low:
         return "gemini-1.5-pro"
     if "flash" in low or "instant" in low:
-        return "gemini-1.5-flash"
+        return "gemini-2.0-flash"
     if low.startswith("gemini-"):
         return m
-    return "gemini-1.5-flash"
+    return "gemini-2.0-flash"
 
 
 _last_llm_error: str = ""
+_cached_gemini_models: List[str] = []
+_cached_gemini_models_time: float = 0.0
+
+def _get_dynamic_gemini_models(api_key: str) -> List[str]:
+    """Query Google AI Studio to discover which models are active and permitted for this API key."""
+    global _cached_gemini_models, _cached_gemini_models_time
+    now = time.time()
+    if _cached_gemini_models and (now - _cached_gemini_models_time < 300):
+        return _cached_gemini_models
+
+    discovered = []
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        with httpx.Client(timeout=8.0) as client:
+            resp = client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                for m in data.get("models", []):
+                    name = m.get("name", "")
+                    methods = m.get("supportedGenerationMethods", [])
+                    if "generateContent" in methods:
+                        m_id = name[len("models/"):] if name.startswith("models/") else name
+                        if "gemini" in m_id.lower() and not any(x in m_id.lower() for x in ["embedding", "aqa", "imagen"]):
+                            discovered.append(m_id)
+    except Exception as e:
+        print(f"Warning: Dynamic Gemini models discovery error: {e}")
+
+    ordered = []
+    priority_order = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    for p in priority_order:
+        for d in discovered:
+            if d == p or d.startswith(p):
+                if d not in ordered:
+                    ordered.append(d)
+    for d in discovered:
+        if d not in ordered:
+            ordered.append(d)
+
+    fallback = ordered if ordered else ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    _cached_gemini_models = fallback
+    _cached_gemini_models_time = now
+    return fallback
+
 
 def _extract_google_error(resp: httpx.Response) -> str:
     try:
         data = resp.json()
-        err = data.get("error", {})
-        msg = err.get("message")
-        if msg:
-            return msg
-        details = err.get("details", [])
-        if details and isinstance(details, list) and "message" in details[0]:
-            return details[0]["message"]
+        if isinstance(data, list) and data:
+            data = data[0]
+        if isinstance(data, dict):
+            err = data.get("error", {})
+            if isinstance(err, dict):
+                msg = err.get("message")
+                if msg:
+                    return msg
+                details = err.get("details", [])
+                if details and isinstance(details, list) and isinstance(details[0], dict) and "message" in details[0]:
+                    return details[0]["message"]
+            elif isinstance(err, str):
+                return err
     except Exception:
         pass
     return resp.text[:200]
@@ -94,12 +145,11 @@ def _call_gemini_api(
 ) -> Optional[str]:
     """
     Call Google Gemini API using httpx with multi-model and multi-endpoint resilience:
-      Tier 1: Google's official OpenAI-compatible endpoint (/v1beta/openai/chat/completions)
-              with header 'Authorization: Bearer <key>'
-      Tier 2: Native Gemini REST endpoint (/v1beta/models/<model>:generateContent?key=<key>)
-              with structured system_instruction
+      Tier 1: Native Gemini REST endpoint (/v1beta/models/<model>:generateContent?key=<key>)
+              with structured system_instruction and x-goog-api-key header
+      Tier 2: OpenAI-compatible endpoint (/v1beta/openai/chat/completions)
       Tier 3: Native Gemini REST endpoint with combined prompt fallback
-      Attempts clean_model first, then gemini-1.5-flash, then gemini-2.0-flash, then gemini-1.5-pro.
+      Dynamically auto-discovers and attempts active models permitted for this API key.
     """
     global _last_llm_error
     key = api_key or Config.get_gemini_key() or Config.GEMINI_API_KEY
@@ -109,7 +159,10 @@ def _call_gemini_api(
 
     clean_model = _normalize_gemini_model(model)
     candidate_models = [clean_model]
-    for fallback_m in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]:
+    for dyn_m in _get_dynamic_gemini_models(key):
+        if dyn_m not in candidate_models:
+            candidate_models.append(dyn_m)
+    for fallback_m in ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
         if fallback_m not in candidate_models:
             candidate_models.append(fallback_m)
 
@@ -585,13 +638,7 @@ def _call_llm(system_prompt: str, user_prompt: str, temperature: float, max_toke
     except Exception as e:
         err_msg = str(e)
         print(f"{error_prefix} (model: {active_model}): {err_msg}")
-        if "API version v1" in err_msg:
-            return (
-                f"**AI Deployment Notice**\n\n"
-                f"Your request was handled by a previous container instance while Render is updating the container.\n\n"
-                f"> **Next step**: Render updates take 2–4 minutes to pull and start new images. Please wait a minute and send your message again, or in the Render dashboard select **Manual Deploy** → **Clear build cache & deploy**."
-            )
-        if any(term in err_msg for term in ["API key", "Gemini", "Google", "Render", "quota", "UNAUTHENTICATED", "INVALID_ARGUMENT", "PERMISSION_DENIED"]):
+        if any(term in err_msg for term in ["API key", "Gemini", "Google", "Render", "quota", "UNAUTHENTICATED", "INVALID_ARGUMENT", "PERMISSION_DENIED", "not found"]):
             return (
                 f"**AI Connection Notice**\n\n"
                 f"{err_msg}\n\n"
