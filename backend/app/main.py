@@ -14,7 +14,7 @@ from .models.schemas import (
     VerifyOTPRequest, VerifyOTPResponse,
     ResendOTPRequest,
     QueryRequest, QueryResponse,  
-    UploadResponse
+    UploadResponse, CreateSessionRequest
 )
 from .auth import (
     create_access_token, get_current_user, supabase,
@@ -288,16 +288,53 @@ async def get_sessions(current_user: dict = Depends(get_current_user)):
             .eq("user_id", current_user["user_id"])\
             .order("updated_at", desc=True)\
             .execute()
-        return {"sessions": response.data}
+        sessions = response.data or []
+        
+        # Filter and clean up empty or orphaned "New Chat" sessions
+        cleaned_sessions = []
+        for s in sessions:
+            title = (s.get("title") or "").strip()
+            if title in ("New Chat", "New conversation", "Untitled", ""):
+                # Check if it has any messages
+                msg_check = supabase.table("chat_messages").select("id").eq("session_id", s["id"]).limit(1).execute()
+                if not msg_check.data:
+                    # Abandoned session with 0 messages - prune from database silently
+                    try:
+                        supabase.table("chat_sessions").delete().eq("id", s["id"]).execute()
+                    except Exception:
+                        pass
+                    continue
+                else:
+                    # Session has messages, but was stuck with "New Chat"! Auto-recover title from first user message
+                    try:
+                        first_msg = supabase.table("chat_messages")\
+                            .select("content")\
+                            .eq("session_id", s["id"])\
+                            .eq("role", "user")\
+                            .order("created_at", desc=False)\
+                            .limit(1)\
+                            .execute()
+                        if first_msg.data and first_msg.data[0].get("content"):
+                            recovered_title = first_msg.data[0]["content"].strip()
+                            if len(recovered_title) > 35:
+                                recovered_title = recovered_title[:35].rstrip() + "..."
+                            s["title"] = recovered_title
+                            supabase.table("chat_sessions").update({"title": recovered_title}).eq("id", s["id"]).execute()
+                    except Exception:
+                        pass
+            cleaned_sessions.append(s)
+
+        return {"sessions": cleaned_sessions}
     except Exception as e:
         raise HTTPException(500, f"Failed to get sessions: {str(e)}")
 
 @app.post("/chat/sessions")
-async def create_session(current_user: dict = Depends(get_current_user)):
+async def create_session(request: Optional[CreateSessionRequest] = None, current_user: dict = Depends(get_current_user)):
     try:
+        session_title = (request.title.strip() if request and request.title else "") or "New Chat"
         response = supabase.table("chat_sessions").insert({
             "user_id": current_user["user_id"],
-            "title": "New Chat",
+            "title": session_title,
             "created_at": "now()",
             "updated_at": "now()"
         }).execute()
@@ -411,9 +448,17 @@ async def send_message(
         "sources": result.get("sources")
     }).execute()
     
-    # Update session updated_at
+    # Update session updated_at and auto-title if still default
+    update_data = {"updated_at": "now()"}
+    if session.data and session.data[0].get("title") in ("New Chat", "New conversation", "Untitled"):
+        derived_title = query_request.question.strip()
+        if len(derived_title) > 35:
+            derived_title = derived_title[:35].rstrip() + "..."
+        if derived_title:
+            update_data["title"] = derived_title
+
     supabase.table("chat_sessions")\
-        .update({"updated_at": "now()"})\
+        .update(update_data)\
         .eq("id", session_id)\
         .execute()
     

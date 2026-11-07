@@ -700,58 +700,77 @@ async function sendMessage() {
     const text = messageInput?.value.trim();
     if (!text) return;
     const hasFile = !!pendingFile;
+    const uploadedFileObj = pendingFile;
     const uploadedFilename = hasFile ? pendingFile.name : null;
 
-    // Auto-create chat session on the fly if starting a new chat
-    if (!currentSessionId) {
+    // 1. INSTANT 0ms OPTIMISTIC UI:
+    // Immediately clear input, append user message, and show typing indicator
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+    updateSendButtonState();
+    if (sendBtn) sendBtn.disabled = true;
+
+    await addMessageToChat('user', text, uploadedFilename);
+    showTyping();
+
+    // 2. Prepare title for new thread
+    const shortTitle = text.length > 32 ? text.substring(0, 32).trim() + '...' : text;
+    const isNewChat = !currentSessionId;
+
+    if (isNewChat && chatTitleSpan) {
+        chatTitleSpan.innerText = shortTitle;
+    }
+
+    // 3. Auto-create session on the fly if starting a new chat
+    if (isNewChat) {
         try {
             const sessRes = await fetch(`${API_URL}/chat/sessions`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: shortTitle })
             });
             if (sessRes.status === 401) { doLogout(); return; }
             const sessData = await sessRes.json();
             if (sessRes.ok && sessData.session) {
                 currentSessionId = sessData.session.id;
                 currentSessionDocuments = [];
-                if (chatTitleSpan) chatTitleSpan.innerText = sessData.session.title || 'New conversation';
+                // Prepend to allSessions smoothly without full reload/flicker
+                const newSessObj = {
+                    ...sessData.session,
+                    title: sessData.session.title || shortTitle
+                };
+                allSessions = [newSessObj, ...(allSessions || []).filter(s => s.id !== newSessObj.id)];
+                renderSessionList(allSessions);
             } else {
+                hideTyping();
                 showToast('Failed to start chat session', 'error');
+                if (sendBtn) sendBtn.disabled = false;
                 return;
             }
         } catch (e) {
+            hideTyping();
             showToast('Unable to reach server', 'error');
+            if (sendBtn) sendBtn.disabled = false;
             return;
         }
     }
 
-    messageInput.value = '';
-    messageInput.style.height = 'auto';
-    updateSendButtonState();
-
-    await addMessageToChat('user', text, uploadedFilename);
-
-    const messageCount = messagesDiv?.querySelectorAll('.message').length || 0;
-    if (messageCount === 1) await autoTitle(currentSessionId, text);
-
+    // 4. Handle file upload if present
     if (hasFile) {
         try {
-            showTyping();
-            await uploadFile(pendingFile, currentSessionId);
+            await uploadFile(uploadedFileObj, currentSessionId);
             pendingFile = null;
             if (fileBadge) fileBadge.classList.add('hidden');
             updateSendButtonState();
-            hideTyping();
         } catch (err) {
             hideTyping();
             await addMessageToChat('assistant', `❌ Document upload failed: ${err.message}`);
+            if (sendBtn) sendBtn.disabled = false;
             return;
         }
     }
 
-    showTyping();
-    if (sendBtn) sendBtn.disabled = true;
-
+    // 5. Send message query to LLM
     try {
         const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
             method: 'POST',
@@ -774,6 +793,17 @@ async function sendMessage() {
             const searchSource = data.search_type_used || currentMode;
             const resumeData = data.resume_analysis || null;
             await addMessageToChat('assistant', finalAnswer, null, searchSource, resumeData);
+
+            // Keep current session at the top of the sidebar list smoothly
+            if (allSessions && allSessions.length > 0) {
+                const sIdx = allSessions.findIndex(s => s.id === currentSessionId);
+                if (sIdx > -1) {
+                    const [sObj] = allSessions.splice(sIdx, 1);
+                    sObj.updated_at = new Date().toISOString();
+                    allSessions.unshift(sObj);
+                    renderSessionList(allSessions);
+                }
+            }
         } else {
             await addMessageToChat('assistant', 'Sorry, something went wrong.');
         }
@@ -883,7 +913,10 @@ function savePinnedSessionIds(pinned) {
 
 async function loadSessions(shouldSelectFirst = false) {
     if (!sessionListDiv) return;
-    sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem;">Loading...</div>';
+    // Only show loading shimmer on initial cold load before any sessions exist
+    if (!allSessions || allSessions.length === 0) {
+        sessionListDiv.innerHTML = '<div class="session-list-loading"><div class="skeleton-pill"></div><div class="skeleton-pill"></div><div class="skeleton-pill"></div></div>';
+    }
     try {
         const res = await fetch(`${API_URL}/chat/sessions`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (res.status === 401) { doLogout(); return; }
@@ -899,20 +932,35 @@ async function loadSessions(shouldSelectFirst = false) {
             sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem;">No conversations yet</div>';
         }
     } catch (err) {
-        sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #ef4444; font-size: 0.8rem;">Failed to load</div>';
+        if (!allSessions || allSessions.length === 0) {
+            sessionListDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #ef4444; font-size: 0.8rem;">Failed to load</div>';
+        }
     }
 }
 
 function renderSessionList(sessions) {
     if (!sessionListDiv) return;
-    sessionListDiv.innerHTML = '';
 
     const filterQuery = sessionSearchInput?.value.toLowerCase().trim() || '';
     const pinned = getPinnedSessionIds();
+
+    // Enterprise filter: exclude empty/unnamed "New Chat" / "Untitled" ghost sessions
+    // unless it is the currently active thread being viewed
+    const sanitized = (sessions || []).filter(s => {
+        if (!s) return false;
+        const title = (s.title || '').trim();
+        if (title === 'New Chat' || title === 'New conversation' || title === 'Untitled' || title === '') {
+            return s.id === currentSessionId;
+        }
+        return true;
+    });
+
     const filtered = filterQuery
-        ? sessions.filter(s => (s.title || '').toLowerCase().includes(filterQuery))
-        : sessions;
+        ? sanitized.filter(s => (s.title || '').toLowerCase().includes(filterQuery))
+        : sanitized;
     filtered.sort((a, b) => Number(pinned.has(String(b.id))) - Number(pinned.has(String(a.id))));
+
+    sessionListDiv.innerHTML = '';
 
     if (filtered.length === 0) {
         sessionListDiv.innerHTML = `<div style="padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem;">No matching chats</div>`;
@@ -1150,15 +1198,22 @@ async function uploadFile(file, sessionId) {
 }
 
 async function autoTitle(sessionId, firstMsg) {
-    const short = firstMsg.length > 30 ? firstMsg.substring(0, 30) + '...' : firstMsg;
+    if (!sessionId || !firstMsg) return;
+    const short = firstMsg.length > 32 ? firstMsg.substring(0, 32).trim() + '...' : firstMsg.trim();
+    if (chatTitleSpan && currentSessionId === sessionId) {
+        chatTitleSpan.innerText = short;
+    }
+    const existing = allSessions.find(s => s.id === sessionId);
+    if (existing) {
+        existing.title = short;
+        renderSessionList(allSessions);
+    }
     try {
         await fetch(`${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(short)}`, {
             method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (chatTitleSpan) chatTitleSpan.innerText = short;
-        await loadSessions();
     } catch (err) {
-        console.error(err);
+        console.error('Error auto-titling:', err);
     }
 }
 

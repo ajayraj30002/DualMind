@@ -62,6 +62,10 @@ class UploadResponse(BaseModel):
     filename: str
     chunk_count: int
 
+class CreateSessionRequest(BaseModel):
+    title: Optional[str] = "New Chat"
+
+
 class UserDocumentResponse(BaseModel):
     id: str
     filename: str
