@@ -11,9 +11,15 @@ from supabase import create_client
 
 from .config import Config
 
-print("Loading embedding model (paraphrase-MiniLM-L3-v2)...", flush=True)
-embedding_model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
-print("Small model loaded successfully", flush=True)
+_embedding_model = None
+
+def _get_embedding_model():
+    global _embedding_model
+    if _embedding_model is None:
+        print("Loading embedding model (paraphrase-MiniLM-L3-v2)...", flush=True)
+        _embedding_model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
+        print("Small model loaded successfully", flush=True)
+    return _embedding_model
 
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
@@ -28,7 +34,8 @@ def get_embedding(text: str) -> Optional[list]:
         text = text.replace("\n", " ").strip()
         if not text:
             return None
-        return embedding_model.encode(text).tolist()
+        model = _get_embedding_model()
+        return model.encode(text).tolist()
     except Exception as e:
         print(f"Embedding error: {e}", flush=True)
         return None
@@ -101,7 +108,7 @@ def process_and_store_pdf(file_path: str, user_id: str, filename: str) -> int:
         processed_texts = [t.replace("\n", " ").strip() for t in batch_chunks]
 
         try:
-            embeddings = embedding_model.encode(processed_texts).tolist()
+            embeddings = _get_embedding_model().encode(processed_texts).tolist()
             records = []
             for j, (chunk, emb) in enumerate(zip(batch_chunks, embeddings)):
                 if emb:

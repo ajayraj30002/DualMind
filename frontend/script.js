@@ -1777,6 +1777,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     loadAvailableModels(false);
     checkAuth();
+    // Warm up dormant Render backend container immediately in background
+    fetch(`${API_URL}/health`).catch(() => {});
 });
 
 // ============================================================================

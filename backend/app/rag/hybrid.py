@@ -135,6 +135,17 @@ def _extract_google_error(resp: httpx.Response) -> str:
     return resp.text[:200]
 
 
+_shared_httpx_client: Optional[httpx.Client] = None
+
+def _get_httpx_client() -> httpx.Client:
+    global _shared_httpx_client
+    if _shared_httpx_client is None or _shared_httpx_client.is_closed:
+        _shared_httpx_client = httpx.Client(
+            timeout=35.0,
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=60.0),
+        )
+    return _shared_httpx_client
+
 def _call_gemini_api(
     model: str,
     system_prompt: str,
@@ -144,12 +155,11 @@ def _call_gemini_api(
     api_key: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Call Google Gemini API using httpx with multi-model and multi-endpoint resilience:
+    Call Google Gemini API using httpx with persistent connection pooling and multi-endpoint resilience:
       Tier 1: Native Gemini REST endpoint (/v1beta/models/<model>:generateContent?key=<key>)
               with structured system_instruction and x-goog-api-key header
       Tier 2: OpenAI-compatible endpoint (/v1beta/openai/chat/completions)
       Tier 3: Native Gemini REST endpoint with combined prompt fallback
-      Dynamically auto-discovers and attempts active models permitted for this API key.
     """
     global _last_llm_error
     key = api_key or Config.get_gemini_key() or Config.GEMINI_API_KEY
@@ -158,19 +168,17 @@ def _call_gemini_api(
         return None
 
     clean_model = _normalize_gemini_model(model)
+    # Direct candidate models: prioritize requested model directly without blocking on model discovery
     candidate_models = [clean_model]
-    for dyn_m in _get_dynamic_gemini_models(key):
-        if dyn_m not in candidate_models:
-            candidate_models.append(dyn_m)
     for fallback_m in ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
         if fallback_m not in candidate_models:
             candidate_models.append(fallback_m)
 
+    client = _get_httpx_client()
     last_err = ""
 
     for target_model in candidate_models:
         # ── Tier 1: Native Gemini REST endpoint (v1beta generateContent) ──
-        # Uses direct Google AI endpoint with dual x-goog-api-key header and URL key
         try:
             url_native = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={key}"
             headers = {
@@ -194,21 +202,20 @@ def _call_gemini_api(
                     "parts": [{"text": system_prompt}]
                 }
 
-            with httpx.Client(timeout=40.0) as client:
-                resp = client.post(url_native, headers=headers, json=native_body)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        content = candidates[0].get("content", {})
-                        parts = content.get("parts", [])
-                        texts = [p.get("text", "") for p in parts if "text" in p]
-                        if texts:
-                            return "".join(texts).strip()
-                else:
-                    err_text = _extract_google_error(resp)
-                    last_err = err_text
-                    print(f"Gemini native REST ({target_model}) status {resp.status_code}: {err_text}")
+            resp = client.post(url_native, headers=headers, json=native_body)
+            if resp.status_code == 200:
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if candidates:
+                    content = candidates[0].get("content", {})
+                    parts = content.get("parts", [])
+                    texts = [p.get("text", "") for p in parts if "text" in p]
+                    if texts:
+                        return "".join(texts).strip()
+            else:
+                err_text = _extract_google_error(resp)
+                last_err = err_text
+                print(f"Gemini native REST ({target_model}) status {resp.status_code}: {err_text}")
         except Exception as err:
             last_err = str(err)
             print(f"Gemini native REST ({target_model}) error: {err}")
@@ -232,19 +239,18 @@ def _call_gemini_api(
                 "max_tokens": int(max_tokens),
             }
 
-            with httpx.Client(timeout=40.0) as client:
-                resp = client.post(url_openai, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    choices = data.get("choices", [])
-                    if choices and "message" in choices[0]:
-                        content = choices[0]["message"].get("content", "")
-                        if content and content.strip():
-                            return content.strip()
-                else:
-                    err_text = _extract_google_error(resp)
-                    last_err = err_text
-                    print(f"Gemini OpenAI endpoint ({target_model}) status {resp.status_code}: {err_text}")
+            resp = client.post(url_openai, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices and "message" in choices[0]:
+                    content = choices[0]["message"].get("content", "")
+                    if content and content.strip():
+                        return content.strip()
+            else:
+                err_text = _extract_google_error(resp)
+                last_err = err_text
+                print(f"Gemini OpenAI endpoint ({target_model}) status {resp.status_code}: {err_text}")
         except Exception as err:
             last_err = str(err)
             print(f"Gemini OpenAI endpoint ({target_model}) error: {err}")
@@ -269,21 +275,20 @@ def _call_gemini_api(
                 },
             }
 
-            with httpx.Client(timeout=40.0) as client:
-                resp = client.post(url_native, headers=headers, json=native_body_combined)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        content = candidates[0].get("content", {})
-                        parts = content.get("parts", [])
-                        texts = [p.get("text", "") for p in parts if "text" in p]
-                        if texts:
-                            return "".join(texts).strip()
-                else:
-                    err_text = _extract_google_error(resp)
-                    last_err = err_text
-                    print(f"Gemini native combined ({target_model}) status {resp.status_code}: {err_text}")
+            resp = client.post(url_native, headers=headers, json=native_body_combined)
+            if resp.status_code == 200:
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if candidates:
+                    content = candidates[0].get("content", {})
+                    parts = content.get("parts", [])
+                    texts = [p.get("text", "") for p in parts if "text" in p]
+                    if texts:
+                        return "".join(texts).strip()
+            else:
+                err_text = _extract_google_error(resp)
+                last_err = err_text
+                print(f"Gemini native combined ({target_model}) status {resp.status_code}: {err_text}")
         except Exception as err:
             last_err = str(err)
             print(f"Gemini native combined ({target_model}) error: {err}")
@@ -1318,6 +1323,19 @@ async def hybrid_search(
                 "rewritten_query": "ATS resume analysis",
                 "resume_analysis": ats_data,
             }
+
+    # ── Pre-router: Fast-path for greetings & casual conversational messages ──
+    _greetings_pattern = r'^(hi|hello|hey|hey there|greetings|good morning|good afternoon|good evening|howdy|sup|yo|thanks|thank you|thx|bye|goodbye|see ya|ok|okay|cool)[\s!.,?]*$'
+    if not filename and _re.match(_greetings_pattern, _q):
+        print(f"⚡ Fast-path conversational greeting bypass: '{question}'")
+        return {
+            "answer": generate_conversational_answer(question, conversation_context, "CASUAL_CHAT", model=model),
+            "sources": [],
+            "search_type_used": "Conversation",
+            "closed_source_count": 0,
+            "open_source_count": 0,
+            "rewritten_query": question,
+        }
 
     # ── Cache lookup ──
     cache_key = _cache_key(question, user_id, search_type, filename, model=model)
