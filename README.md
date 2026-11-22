@@ -1,3 +1,16 @@
+---
+title: DualMind
+emoji: 🧠
+colorFrom: indigo
+colorTo: purple
+sdk: gradio
+sdk_version: 4.44.0
+python_version: 3.11
+app_file: app.py
+pinned: false
+license: mit
+---
+
 <div align="center">
 
 <img src="assets/dualmind_logo.png" alt="DualMind Logo" width="160" />  

@@ -120,3 +120,26 @@ jobs:
         done
         echo "❌ Deployment verification failed"
         exit 1
+
+  # JOB 4: Auto-deploy to Hugging Face Spaces (16 GB RAM)
+  deploy-huggingface:
+    needs: test
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        lfs: true
+    
+    - name: Push to Hugging Face Space
+      if: ${{ secrets.HF_TOKEN != '' }}
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      run: |
+        git push --force https://ajayyyyyyyyy28:$HF_TOKEN@huggingface.co/spaces/ajayyyyyyyyy28/DualMind main
+
