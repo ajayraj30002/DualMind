@@ -137,9 +137,12 @@ jobs:
         lfs: true
     
     - name: Push to Hugging Face Space
-      if: ${{ secrets.HF_TOKEN != '' }}
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
-        git push --force https://ajayyyyyyyyy28:$HF_TOKEN@huggingface.co/spaces/ajayyyyyyyyy28/DualMind main
+        if [ -n "$HF_TOKEN" ]; then
+          git push --force https://ajayyyyyyyyy28:$HF_TOKEN@huggingface.co/spaces/ajayyyyyyyyy28/DualMind main
+        else
+          echo "⚠️ HF_TOKEN not configured in GitHub Secrets. Skipping Hugging Face deploy."
+        fi
 
