@@ -6,6 +6,10 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'app.py'
+      - 'requirements.txt'
+      - '.github/workflows/**'
+      - 'README.md'
   pull_request:
     branches: [ main ]
     paths:
