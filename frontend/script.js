@@ -694,7 +694,109 @@ function bindAssistantActions(messageEl, rawText) {
 }
 
 // ============================================================================
-// SEND MESSAGE
+// STREAMING ASSISTANT MESSAGE BUILDER
+// ============================================================================
+function createStreamingAssistantMessage(initialMode = null) {
+    if (!messagesDiv) return null;
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'message-avatar';
+    avatarDiv.innerHTML = '<i class="fas fa-brain"></i>';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+
+    // Container for streaming tokens + animated pulsing cursor
+    const bodyDiv = document.createElement('div');
+    bodyDiv.className = 'md-body streaming-body';
+
+    const textSpan = document.createElement('span');
+    textSpan.className = 'streaming-text';
+
+    const cursorSpan = document.createElement('span');
+    cursorSpan.className = 'streaming-cursor';
+
+    bodyDiv.appendChild(textSpan);
+    bodyDiv.appendChild(cursorSpan);
+
+    const badgeContainer = document.createElement('div');
+    badgeContainer.className = 'source-badge-container';
+    if (initialMode) {
+        badgeContainer.innerHTML = buildSourceBadge(initialMode);
+    }
+
+    const actionContainer = document.createElement('div');
+    actionContainer.className = 'action-bar-container';
+
+    contentDiv.appendChild(bodyDiv);
+    contentDiv.appendChild(badgeContainer);
+    contentDiv.appendChild(actionContainer);
+
+    messageDiv.appendChild(avatarDiv);
+    messageDiv.appendChild(contentDiv);
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    updateScrollBottomBtn();
+
+    let accumulatedText = '';
+    let renderedAts = false;
+
+    return {
+        messageEl: messageDiv,
+        updateSourceBadge(searchType) {
+            badgeContainer.innerHTML = buildSourceBadge(searchType);
+        },
+        appendToken(token) {
+            if (renderedAts) return;
+            accumulatedText += token;
+            // Progressive token display during active streaming
+            textSpan.innerHTML = escapeHtml(accumulatedText).replace(/\n/g, '<br>');
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            updateScrollBottomBtn();
+        },
+        renderAtsCard(atsData) {
+            renderedAts = true;
+            if (cursorSpan.parentNode) cursorSpan.remove();
+            bodyDiv.innerHTML = renderResumeScoreCard(atsData);
+            badgeContainer.innerHTML = '<div class="source-badge"><i class="fas fa-file-contract"></i> <span>ATS Analysis</span></div>';
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            updateScrollBottomBtn();
+        },
+        async finalize(finalText, searchTypeUsed, resumeData) {
+            if (cursorSpan.parentNode) cursorSpan.remove();
+            const textToUse = finalText || accumulatedText;
+            const atsData = resumeData || tryParseResumeAnalysis(textToUse);
+
+            if (atsData && atsData.overall_score) {
+                bodyDiv.innerHTML = renderResumeScoreCard(atsData);
+                badgeContainer.innerHTML = '<div class="source-badge"><i class="fas fa-file-contract"></i> <span>ATS Analysis</span></div>';
+            } else {
+                const clean = cleanDualMindResponse(textToUse);
+                const isCasual = isCasualConversation(clean);
+                if (isCasual) {
+                    bodyDiv.innerHTML = escapeHtml(clean).replace(/\n/g, '<br>');
+                } else {
+                    bodyDiv.innerHTML = await renderMarkdown(clean);
+                    setTimeout(() => addCopyButtonsToCodeBlocks(), 80);
+                }
+                if (searchTypeUsed) {
+                    badgeContainer.innerHTML = buildSourceBadge(searchTypeUsed);
+                }
+            }
+
+            actionContainer.innerHTML = buildAssistantActionBar(textToUse);
+            bindAssistantActions(messageDiv, textToUse);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            updateScrollBottomBtn();
+        }
+    };
+}
+
+// ============================================================================
+// SEND MESSAGE (SSE Streaming with 0ms Optimistic UI)
 // ============================================================================
 async function sendMessage() {
     const text = messageInput?.value.trim();
@@ -770,11 +872,16 @@ async function sendMessage() {
         }
     }
 
-    // 5. Send message query to LLM
+    // 5. Send message query to LLM via direct SSE HTTP stream
+    let streamingMsg = null;
     try {
-        const res = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
+        const streamUrl = `${API_URL}/chat/sessions/${currentSessionId}/messages/stream`;
+        const res = await fetch(streamUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({
                 question: text,
                 search_type: currentMode,
@@ -785,31 +892,111 @@ async function sendMessage() {
         });
 
         if (res.status === 401) { doLogout(); return; }
-        const data = await res.json();
-        hideTyping();
 
-        if (res.ok) {
-            let finalAnswer = data.answer || data.response || data.content || '';
-            const searchSource = data.search_type_used || currentMode;
-            const resumeData = data.resume_analysis || null;
-            await addMessageToChat('assistant', finalAnswer, null, searchSource, resumeData);
+        if (!res.ok) {
+            hideTyping();
+            const errJson = await res.json().catch(() => ({}));
+            const errMsg = errJson.detail || errJson.message || 'Sorry, something went wrong.';
+            await addMessageToChat('assistant', errMsg);
+            return;
+        }
 
-            // Keep current session at the top of the sidebar list smoothly
-            if (allSessions && allSessions.length > 0) {
-                const sIdx = allSessions.findIndex(s => s.id === currentSessionId);
-                if (sIdx > -1) {
-                    const [sObj] = allSessions.splice(sIdx, 1);
-                    sObj.updated_at = new Date().toISOString();
-                    allSessions.unshift(sObj);
-                    renderSessionList(allSessions);
+        // Initialize streaming reader
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let streamStarted = false;
+        let lastMetadata = null;
+        let atsResult = null;
+        let fullAnswer = '';
+        const targetSessionId = currentSessionId;
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop(); // keep partial trailing chunk in buffer
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed.startsWith('data:')) continue;
+                const jsonStr = trimmed.replace(/^data:\s*/, '').trim();
+                if (!jsonStr) continue;
+
+                try {
+                    const event = JSON.parse(jsonStr);
+
+                    // If user navigated away to another session during stream, avoid polluting view
+                    if (currentSessionId !== targetSessionId) break;
+
+                    if (!streamStarted && (event.type === 'metadata' || event.type === 'token' || event.type === 'ats_card')) {
+                        hideTyping();
+                        streamingMsg = createStreamingAssistantMessage(currentMode);
+                        streamStarted = true;
+                    }
+
+                    if (event.type === 'metadata') {
+                        lastMetadata = event;
+                        if (streamingMsg && event.search_type_used) {
+                            streamingMsg.updateSourceBadge(event.search_type_used);
+                        }
+                    } else if (event.type === 'token') {
+                        if (streamingMsg) {
+                            streamingMsg.appendToken(event.chunk);
+                        }
+                        fullAnswer += event.chunk;
+                    } else if (event.type === 'ats_card') {
+                        atsResult = event.resume_analysis;
+                        if (streamingMsg) {
+                            streamingMsg.renderAtsCard(atsResult);
+                        }
+                    } else if (event.type === 'done') {
+                        if (event.full_answer) fullAnswer = event.full_answer;
+                        if (event.resume_analysis) atsResult = event.resume_analysis;
+                        if (event.search_type_used && streamingMsg) {
+                            streamingMsg.updateSourceBadge(event.search_type_used);
+                        }
+                    } else if (event.type === 'error') {
+                        console.error('SSE Stream error:', event.message);
+                        if (!streamStarted) {
+                            hideTyping();
+                            await addMessageToChat('assistant', `⚠️ ${event.message || 'Stream error occurred.'}`);
+                        }
+                    }
+                } catch (pe) {
+                    console.warn('SSE Chunk parse error:', pe, jsonStr);
                 }
             }
-        } else {
-            await addMessageToChat('assistant', 'Sorry, something went wrong.');
+        }
+
+        hideTyping();
+        if (streamingMsg && currentSessionId === targetSessionId) {
+            const finalSearchType = lastMetadata?.search_type_used || currentMode;
+            await streamingMsg.finalize(fullAnswer, finalSearchType, atsResult);
+        } else if (!streamStarted && currentSessionId === targetSessionId) {
+            await addMessageToChat('assistant', fullAnswer || 'No response generated.');
+        }
+
+        // Keep current session at the top of the sidebar list smoothly
+        if (allSessions && allSessions.length > 0) {
+            const sIdx = allSessions.findIndex(s => s.id === targetSessionId);
+            if (sIdx > -1) {
+                const [sObj] = allSessions.splice(sIdx, 1);
+                sObj.updated_at = new Date().toISOString();
+                allSessions.unshift(sObj);
+                renderSessionList(allSessions);
+            }
         }
     } catch (err) {
         hideTyping();
-        await addMessageToChat('assistant', 'Connection error. Please check if the server is running.');
+        console.error('sendMessage stream error:', err);
+        if (streamingMsg) {
+            await streamingMsg.finalize(null, currentMode, null);
+        } else {
+            await addMessageToChat('assistant', 'Connection error. Please check if the server is running.');
+        }
     } finally {
         if (sendBtn) sendBtn.disabled = false;
         updateSendButtonState();

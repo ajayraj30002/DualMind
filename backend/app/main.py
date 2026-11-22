@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from .rag.hybrid import hybrid_search
+from fastapi.responses import StreamingResponse
+from .rag.hybrid import hybrid_search, hybrid_search_stream
+import json
 import os
 import re
 import shutil
@@ -467,6 +469,120 @@ async def send_message(
         sources=result.get("sources"),
         search_type_used=result["search_type_used"],
         resume_analysis=result.get("resume_analysis")
+    )
+
+@app.post("/chat/sessions/{session_id}/messages/stream")
+async def send_message_stream(
+    session_id: str,
+    query_request: QueryRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Stream a chat response over HTTP Server-Sent Events (SSE).
+    Returns text/event-stream chunks formatted as `data: {...}\n\n`.
+    Persists user message immediately, and assistant message upon completion.
+    """
+    session = supabase.table("chat_sessions")\
+        .select("*")\
+        .eq("id", session_id)\
+        .eq("user_id", current_user["user_id"])\
+        .execute()
+    if not session.data:
+        raise HTTPException(404, "Session not found")
+    
+    # Get previous messages for context
+    previous = supabase.table("chat_messages")\
+        .select("*")\
+        .eq("session_id", session_id)\
+        .execute()
+    prev_list = previous.data if previous.data else []
+    prev_list.sort(key=lambda x: x.get('created_at', ''))
+    context_messages = prev_list[-10:] if len(prev_list) > 10 else prev_list
+    conversation = []
+    for msg in context_messages:
+        conversation.append(f"{msg['role'].upper()}: {msg['content']}")
+    conversation_context = "\n".join(conversation)
+    
+    # Save user message immediately with metadata
+    user_message = {
+        "session_id": session_id,
+        "role": "user",
+        "content": query_request.question
+    }
+    if query_request.uploaded_document:
+        user_message["metadata"] = {"filename": query_request.uploaded_document}
+    supabase.table("chat_messages").insert(user_message).execute()
+    
+    effective_mode = query_request.search_type
+    resolved_model = model_service.resolve_model(query_request.model)
+
+    async def event_generator():
+        final_answer = ""
+        final_sources = []
+        try:
+            async for event in hybrid_search_stream(
+                question=query_request.question,
+                user_id=current_user["user_id"],
+                search_type=effective_mode,
+                conversation_context=conversation_context,
+                filename=query_request.uploaded_document,
+                model=resolved_model,
+            ):
+                event_type = event.get("type")
+                if event_type == "metadata":
+                    final_sources = event.get("sources", [])
+                elif event_type == "token":
+                    final_answer += event.get("chunk", "")
+                elif event_type == "done":
+                    if "full_answer" in event and event["full_answer"]:
+                        final_answer = event["full_answer"]
+                    if "sources" in event:
+                        final_sources = event["sources"]
+
+                # Send SSE data frame
+                yield f"data: {json.dumps(event)}\n\n"
+
+            # Save assistant message to Supabase
+            try:
+                supabase.table("chat_messages").insert({
+                    "session_id": session_id,
+                    "role": "assistant",
+                    "content": final_answer,
+                    "sources": final_sources
+                }).execute()
+            except Exception as e:
+                print(f"Error saving assistant streamed message: {e}")
+
+            # Update session updated_at and auto-title if needed
+            try:
+                update_data = {"updated_at": "now()"}
+                if session.data and session.data[0].get("title") in ("New Chat", "New conversation", "Untitled"):
+                    derived_title = query_request.question.strip()
+                    if len(derived_title) > 35:
+                        derived_title = derived_title[:35].rstrip() + "..."
+                    if derived_title:
+                        update_data["title"] = derived_title
+
+                supabase.table("chat_sessions")\
+                    .update(update_data)\
+                    .eq("id", session_id)\
+                    .execute()
+            except Exception as e:
+                print(f"Error updating session title in stream: {e}")
+
+        except Exception as err:
+            print(f"Error during streaming event generation: {err}")
+            err_event = {"type": "error", "message": str(err)}
+            yield f"data: {json.dumps(err_event)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
     )
 
 @app.post("/chat/sessions/{session_id}/attach")

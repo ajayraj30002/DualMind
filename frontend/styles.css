@@ -2391,6 +2391,24 @@ html, body {
     30% { transform: translateY(-6px); opacity: 1; }
 }
 
+/* Real-time Streaming Cursor */
+.streaming-cursor {
+    display: inline-block;
+    width: 7px;
+    height: 15px;
+    margin-left: 3px;
+    background: #ff9d42;
+    border-radius: 2px;
+    vertical-align: -2px;
+    animation: streamBlink 0.8s infinite ease-in-out;
+    box-shadow: 0 0 8px rgba(255, 157, 66, 0.6);
+}
+
+@keyframes streamBlink {
+    0%, 100% { opacity: 1; transform: scaleY(1); }
+    50% { opacity: 0.15; transform: scaleY(0.85); }
+}
+
 /* ────────────────────────────────────────────────────────────────────────────
    ANIMATIONS
    ──────────────────────────────────────────────────────────────────────────── */
